@@ -233,6 +233,43 @@ try {
     );
     await page.getByRole("button", { name: "Discard draft", exact: true }).click();
   });
+  await check("A target dragged on the chart stays under the pointer with the page scrolled down", async () => {
+    // Scrolled to the end, the sticky preview is held in place by its foot: the field being dragged
+    // turning into a draft, and the words around the chart changing length, slid the chart under a
+    // still pointer, and the maintenance trigger ran away (from 55.5 to 30 in one 10 px step).
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await fresh("strategy");
+    await page.evaluate(() => {
+      document.scrollingElement.scrollTop = document.scrollingElement.scrollHeight;
+    });
+    const handle = page.locator("circle.planning-handle[aria-label^='Maintenance']").first();
+    await handle.scrollIntoViewIfNeeded();
+    const chartTop = () => handle.evaluate((h) => h.ownerSVGElement.getBoundingClientRect().top);
+    const handleY = () =>
+      handle.evaluate((h) => {
+        const r = h.getBoundingClientRect();
+        return r.top + r.height / 2;
+      });
+    const box = await handle.boundingBox();
+    const x = box.x + box.width / 2;
+    let y = box.y + box.height / 2;
+    const top = await chartTop();
+    const start = Number(await handle.getAttribute("aria-valuenow"));
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    for (let step = 1; step <= 40; step++) {
+      y += 2;
+      await page.mouse.move(x, y);
+      await page.waitForTimeout(20);
+      assert.ok(Math.abs((await chartTop()) - top) < 2, `the chart moved at step ${step}`);
+      assert.ok(Math.abs((await handleY()) - y) < 4, `the target left the pointer at step ${step}`);
+    }
+    await page.mouse.up();
+    const end = Number(await handle.getAttribute("aria-valuenow"));
+    assert.ok(end < start && end > start - 30, `80 px moved the trigger from ${start} to ${end}`);
+    await page.getByRole("button", { name: "Discard draft", exact: true }).click();
+    await page.setViewportSize({ width: 1600, height: 1100 });
+  });
   await check(
     "Field capacity suggestion names its source, fills only the local draft and is never applied by itself",
     async () => {

@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type PointerEvent } from "react";
+import { useEffect, useId, useRef, useState, type PointerEvent, type ReactNode } from "react";
 import { SlidersHorizontal } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -82,6 +82,30 @@ export function PlanningCurve({
   const dragging = useRef<string | null>(null);
   // The axis follows what is plotted; it must not move under the pointer mid-drag.
   const [heldAxis, setHeldAxis] = useState<{ min: number; max: number } | null>(null);
+  // Nor may anything else move it there. Scrolled down, the sticky preview is held in place by its
+  // foot, so words changing length around the chart slid it under a still pointer: the value under
+  // the pointer moved, the words changed again, and the target ran away. So a drag follows the
+  // pointer's own travel from where it took hold, in the chart's units, and the words that change
+  // with the targets keep what they said then, until it lets go.
+  const grab = useRef<{ clientY: number; localY: number; scale: number } | null>(null);
+  // Where the chart was when the pointer took hold. Other parts of the page change height mid-drag
+  // too (the field being dragged turns into a draft, the draft bar appears): each frame until it
+  // lets go, the page scrolls back by however far the chart slid, before that frame is painted.
+  const svgRef = useRef<SVGSVGElement>(null);
+  const heldTop = useRef<number | null>(null);
+  const [heldWords, setHeldWords] = useState<{ dryback: ReactNode; notes: ReactNode } | null>(null);
+  useEffect(() => {
+    if (!heldAxis) return;
+    let frame = 0;
+    const keep = () => {
+      const top = svgRef.current?.getBoundingClientRect().top;
+      if (top !== undefined && heldTop.current !== null && Math.abs(top - heldTop.current) >= 0.5)
+        window.scrollBy(0, top - heldTop.current);
+      frame = requestAnimationFrame(keep);
+    };
+    frame = requestAnimationFrame(keep);
+    return () => cancelAnimationFrame(frame);
+  }, [heldAxis]);
   useEffect(() => {
     if (!container.current) return;
     const observer = new ResizeObserver((entries) =>
@@ -180,16 +204,21 @@ export function PlanningCurve({
       Number.isFinite(parameters[handle.key]),
   );
   const commit = (key: string, value: number) => changePlanningValue(key, value, limits, onChange);
-  function drag(event: PointerEvent<SVGCircleElement>, handle: (typeof handles)[number]) {
-    if (!onChange || dragging.current !== handle.key) return;
+  function takeHold(event: PointerEvent<SVGCircleElement>) {
     const svg = event.currentTarget.ownerSVGElement;
     const matrix = svg?.getScreenCTM();
-    if (!svg || !matrix) return;
+    if (!svg || !matrix || !matrix.d) return false;
     const point = svg.createSVGPoint();
     point.x = event.clientX;
     point.y = event.clientY;
-    const local = point.matrixTransform(matrix.inverse());
-    const fraction = 1 - (local.y - top) / height;
+    const localY = point.matrixTransform(matrix.inverse()).y;
+    grab.current = { clientY: event.clientY, localY, scale: matrix.d };
+    return true;
+  }
+  function drag(event: PointerEvent<SVGCircleElement>, handle: (typeof handles)[number]) {
+    if (!onChange || dragging.current !== handle.key || !grab.current) return;
+    const { clientY, localY, scale } = grab.current;
+    const fraction = 1 - (localY + (event.clientY - clientY) / scale - top) / height;
     const vwcAt = axis.min + fraction * span;
     const next =
       handle.axis === "ec"
@@ -257,6 +286,78 @@ export function PlanningCurve({
           `${index && !point.breakBefore ? "L" : "M"}${x(point.hour)},${ey(point.value)}`,
       )
       .join(" ");
+  const drybackWords =
+    drybackPeak !== null && drybackVwc !== null ? (
+      <>
+        {" "}
+        Relative dryback: {parameters.dryback_target}% of the {Number(drybackPeak.toFixed(2))}% VWC{" "}
+        {projection ? "projected peak" : "reference"} gives a {Number(drybackVwc.toFixed(2))}% VWC
+        dryback target.
+      </>
+    ) : null;
+  const notes = projection ? (
+    <div className="planning-projection" role="note">
+      <p>
+        <strong>Projected day.</strong> P0 dries on from {trim(projection.lightsOnVwc)}% at
+        lights-on.{" "}
+        {shotCount("P1")
+          ? `P1 fires ${shotCount("P1")} shots, ${parameters.p1_time_between_shots} minutes apart, to ${trim(parameters.p1_target_vwc)}%.`
+          : `P1 climbs to ${trim(parameters.p1_target_vwc)}% (shot count or spacing not set, so no steps are drawn).`}{" "}
+        P2 fires a {trim(parameters.p2_shot_size)}% shot each time VWC falls below{" "}
+        {trim(parameters.p2_vwc_threshold)}%: {shotCount("P2") || "none"} projected.{" "}
+        {nightShots(false) && drybackVwc !== null
+          ? `P3 dries down to the ${trim(drybackVwc)}% dryback target and ${nightShots(false)} shot(s) hold it there, ${trim(projection.lightsOnVwc)}% at lights-on`
+          : `P3 dries down overnight to ${trim(projection.lightsOnVwc)}%`}
+        {nightShots(true) ? `, with ${nightShots(true)} rescue shot(s) at the rescue level` : ""}.
+        Hover any riser for its time and size.
+      </p>
+      <p>
+        Dry-down: {projection.rates.day} points/h lights-on (
+        {projection.measured.day
+          ? "measured from this zone"
+          : "a typical flowering-room rate, until this zone has history"}
+        ), {projection.rates.night} points/h lights-off (
+        {projection.measured.night ? "measured" : "nominal"}). Each shot is drawn retaining{" "}
+        {retention && retention > 0
+          ? `${trim(projection.retention, 2)} points per 1% (this zone's learned gain)`
+          : "all of its water, which is the most it can do"}
+        . Shot timing is a projection from those rates, not a schedule: the engine fires on the
+        probe.
+      </p>
+      {advice && (
+        <p className="planning-projection-warning" data-planning-advice="p2-text">
+          <strong>
+            {advice.shots ? "P2 maintenance starts late." : "No P2 sawtooth with these targets."}
+          </strong>{" "}
+          The engine fires a maintenance shot only once VWC reads below the maintenance trigger.
+          From {trim(advice.pointsToThreshold + parameters.p2_vwc_threshold)}% at the start of P2
+          that is {trim(advice.pointsToThreshold)} points, about {trim(advice.hoursToThreshold)}{" "}
+          hours at {projection.rates.day} points/h
+          {advice.shots
+            ? `, so the first shot is not until ${planningClock(lightsOn, advice.firstShotHour ?? 0)}.`
+            : ", longer than P2 lasts."}{" "}
+          For a sawtooth from the start of P2, drag the maintenance trigger up to about{" "}
+          {trim(advice.suggestedThreshold)}%, just under the peak VWC target. Shots then repeat
+          about every {trim(advice.repeatHours)} hours at this dry-down; a smaller P2 shot gives a
+          finer sawtooth.
+        </p>
+      )}
+      {drybackVwc !== null && nightLow > drybackVwc + 0.5 && (
+        <p className="planning-projection-warning">
+          At this dry-down the zone reaches lights-on at {trim(projection.lightsOnVwc)}%, which is{" "}
+          {trim(projection.lightsOnVwc - drybackVwc)} points short of the {trim(drybackVwc)}%
+          dryback target. P0 would run its full {parameters.p0_maximum_wait_time ?? 60} minutes.
+        </p>
+      )}
+    </div>
+  ) : (
+    plan.p1Windows.length > 0 && (
+      <p className="muted small" style={{ padding: "0 16px 12px", margin: 0 }}>
+        P1 shows all {plan.p1Windows.length} eligible shots as steps,{" "}
+        {parameters.p1_time_between_shots} minutes apart; hover a step for its time and size.
+      </p>
+    )
+  );
   return (
     <section className="panel planning-curve" aria-labelledby={`${id}-title`}>
       <div className="panel-heading">
@@ -347,14 +448,7 @@ export function PlanningCurve({
         VWC is absolute water content (%). Dryback is a relative drop from the reference peak, not
         percentage points. Dashed EC connects configured phase anchors through the night; it does
         not predict EC or salt concentration.
-        {drybackPeak !== null && drybackVwc !== null && (
-          <>
-            {" "}
-            Relative dryback: {parameters.dryback_target}% of the {Number(drybackPeak.toFixed(2))}%
-            VWC {projection ? "projected peak" : "reference"} gives a{" "}
-            {Number(drybackVwc.toFixed(2))}% VWC dryback target.
-          </>
-        )}
+        {heldWords ? heldWords.dryback : drybackWords}
       </p>
       {baseline && (
         <div className="planning-comparison-key">
@@ -371,6 +465,7 @@ export function PlanningCurve({
       )}
       <div ref={container} className="planning-svg-wrap">
         <svg
+          ref={svgRef}
           viewBox={`0 0 ${width} 322`}
           width="100%"
           height="322"
@@ -711,21 +806,29 @@ export function PlanningCurve({
                     }
                     aria-orientation={editable ? "vertical" : undefined}
                     onPointerDown={(event) => {
-                      if (!editable) return;
+                      if (!editable || !takeHold(event)) return;
+                      heldTop.current = svgRef.current?.getBoundingClientRect().top ?? null;
                       dragging.current = handle.key;
                       setHeldAxis(axis);
+                      setHeldWords({ dryback: drybackWords, notes });
                       event.currentTarget.setPointerCapture(event.pointerId);
                     }}
                     onPointerMove={(event) => drag(event, handle)}
                     onPointerUp={(event) => {
                       dragging.current = null;
+                      grab.current = null;
+                      heldTop.current = null;
                       setHeldAxis(null);
+                      setHeldWords(null);
                       if (event.currentTarget.hasPointerCapture(event.pointerId))
                         event.currentTarget.releasePointerCapture(event.pointerId);
                     }}
                     onPointerCancel={() => {
                       dragging.current = null;
+                      grab.current = null;
+                      heldTop.current = null;
                       setHeldAxis(null);
+                      setHeldWords(null);
                     }}
                     onKeyDown={(event) => {
                       const increase = ["ArrowUp", "ArrowRight"].includes(event.key);
@@ -828,73 +931,7 @@ export function PlanningCurve({
           )}
         </svg>
       </div>
-      {projection ? (
-        <div className="planning-projection" role="note">
-          <p>
-            <strong>Projected day.</strong> P0 dries on from {trim(projection.lightsOnVwc)}% at
-            lights-on.{" "}
-            {shotCount("P1")
-              ? `P1 fires ${shotCount("P1")} shots, ${parameters.p1_time_between_shots} minutes apart, to ${trim(parameters.p1_target_vwc)}%.`
-              : `P1 climbs to ${trim(parameters.p1_target_vwc)}% (shot count or spacing not set, so no steps are drawn).`}{" "}
-            P2 fires a {trim(parameters.p2_shot_size)}% shot each time VWC falls below{" "}
-            {trim(parameters.p2_vwc_threshold)}%: {shotCount("P2") || "none"} projected.{" "}
-            {nightShots(false) && drybackVwc !== null
-              ? `P3 dries down to the ${trim(drybackVwc)}% dryback target and ${nightShots(false)} shot(s) hold it there, ${trim(projection.lightsOnVwc)}% at lights-on`
-              : `P3 dries down overnight to ${trim(projection.lightsOnVwc)}%`}
-            {nightShots(true)
-              ? `, with ${nightShots(true)} rescue shot(s) at the rescue level`
-              : ""}
-            . Hover any riser for its time and size.
-          </p>
-          <p>
-            Dry-down: {projection.rates.day} points/h lights-on (
-            {projection.measured.day
-              ? "measured from this zone"
-              : "a typical flowering-room rate, until this zone has history"}
-            ), {projection.rates.night} points/h lights-off (
-            {projection.measured.night ? "measured" : "nominal"}). Each shot is drawn retaining{" "}
-            {retention && retention > 0
-              ? `${trim(projection.retention, 2)} points per 1% (this zone's learned gain)`
-              : "all of its water, which is the most it can do"}
-            . Shot timing is a projection from those rates, not a schedule: the engine fires on the
-            probe.
-          </p>
-          {advice && (
-            <p className="planning-projection-warning" data-planning-advice="p2-text">
-              <strong>
-                {advice.shots
-                  ? "P2 maintenance starts late."
-                  : "No P2 sawtooth with these targets."}
-              </strong>{" "}
-              The engine fires a maintenance shot only once VWC reads below the maintenance trigger.
-              From {trim(advice.pointsToThreshold + parameters.p2_vwc_threshold)}% at the start of
-              P2 that is {trim(advice.pointsToThreshold)} points, about{" "}
-              {trim(advice.hoursToThreshold)} hours at {projection.rates.day} points/h
-              {advice.shots
-                ? `, so the first shot is not until ${planningClock(lightsOn, advice.firstShotHour ?? 0)}.`
-                : ", longer than P2 lasts."}{" "}
-              For a sawtooth from the start of P2, drag the maintenance trigger up to about{" "}
-              {trim(advice.suggestedThreshold)}%, just under the peak VWC target. Shots then repeat
-              about every {trim(advice.repeatHours)} hours at this dry-down; a smaller P2 shot gives
-              a finer sawtooth.
-            </p>
-          )}
-          {drybackVwc !== null && nightLow > drybackVwc + 0.5 && (
-            <p className="planning-projection-warning">
-              At this dry-down the zone reaches lights-on at {trim(projection.lightsOnVwc)}%, which
-              is {trim(projection.lightsOnVwc - drybackVwc)} points short of the {trim(drybackVwc)}%
-              dryback target. P0 would run its full {parameters.p0_maximum_wait_time ?? 60} minutes.
-            </p>
-          )}
-        </div>
-      ) : (
-        plan.p1Windows.length > 0 && (
-          <p className="muted small" style={{ padding: "0 16px 12px", margin: 0 }}>
-            P1 shows all {plan.p1Windows.length} eligible shots as steps,{" "}
-            {parameters.p1_time_between_shots} minutes apart; hover a step for its time and size.
-          </p>
-        )
-      )}
+      {heldWords ? heldWords.notes : notes}
       <p className="muted small" style={{ padding: "0 16px 12px", margin: 0 }}>
         The rescue level stays separate from the dry-down; routine watering stops at the P3
         boundary, and overnight a shot the size of a rescue shot holds the zone at its dryback
