@@ -88,7 +88,7 @@ def test_p3_the_dryback_it_holds_then_the_rescue_level_beneath_it():
         "shot when VWC < 60.55% (now 74.2%), the 30% dryback from the 86.5% peak · rescue shot if VWC < 50%"
         " · P0 at 17:36"
     )
-    # Under it, the next hold shot may still wait out the time between P2 shots.
+    # Under it, the next hold shot may still wait out the time between P3 shots.
     p3[1] = {**hold, "now": 60.4, "in_min": 3}
     assert controller.next_text(p3, AT) == (
         "shot at 07:39 (VWC 60.4% under 60.55%, the 30% dryback from the 86.5% peak) · rescue shot if VWC"
@@ -101,6 +101,18 @@ def test_p3_the_dryback_it_holds_then_the_rescue_level_beneath_it():
     # A reading it could not take: the threshold alone, no empty brackets.
     assert controller.next_text([{**P2[0], "now": None}], AT) == "shot when VWC < 70%"
 
+
+
+def test_p3_under_the_rescue_level_says_when_the_next_rescue_may_fire():
+    rescue = {"rule": "p3_emergency", "shot": True, "metric": "vwc", "op": "<", "value": 45, "now": 44.2,
+              "in_min": 6}
+    on = {"rule": "lights_on", "to": "P0", "in_min": 600}
+    assert controller.next_text([rescue, on], AT) == "rescue shot at 07:42 (VWC 44.2% under 45%) · P0 at 17:36"
+    # Its time between P3 shots has passed, or it reads above the level: as before.
+    assert controller.next_text([{**rescue, "in_min": 0}, on], AT) == (
+        "rescue shot if VWC < 45% (now 44.2%) · P0 at 17:36"
+    )
+    assert controller.next_text([{**rescue, "now": 61}, on], AT) == "rescue shot if VWC < 45% (now 61%) · P0 at 17:36"
 
 # ---------------------------------------------------------------- the notification
 def test_one_room_watering_no_clock_no_live_line_and_what_comes_next():
