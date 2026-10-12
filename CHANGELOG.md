@@ -10,6 +10,33 @@ and code-level detail for developers and AI agents working on the repo.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+- **Overnight shots wait for the probe.** Every P3 shot, a rescue or one holding the dryback target,
+  now waits at least **Time between P3 shots** after the last shot: 10 minutes unless changed, on the
+  P3 card in Today's targets. A rescue used to wait for nothing, so a zone still reading under the
+  rescue level after one got another every minute until the water reached the probe; hold shots
+  waited the time between P2 shots.
+
+### 🔧 Technical notes
+
+- Engine: `ZoneParams.p3_time_between_min`. `decide()` fires a P3 rescue (`p3_emergency`) or dryback
+  hold (`p3_hold`) only once `minutes_since_shot` reaches it, and `waiting_for()` gives each an
+  `in_min`; 0 turns it off. Unset (`None`), both behave as before: a hold waits
+  `p2_time_between_min` and a rescue nothing (`p3_gaps()`). `validate_params` keeps it to 0-120.
+  The app's vendored copy matches.
+- Integration: `number.crop_steering_p3_time_between_shots` and a per-zone
+  `number.crop_steering_zone_N_p3_time_between_shots`, 0-60 minutes, 10 by default. An upgraded
+  room gains both at 10 (`tests_ha/test_p3_time_between_shots.py`, on a fresh install and the
+  seeded 2.17 room).
+- Controller: `_params` reads it as an optional setting (the zone's, the room's, then 10), so under
+  an older integration it waters with 10 minutes and holds nothing for a missing setting. The
+  vitals' Next line and the dashboard's say when a waiting rescue may fire ("rescue shot at 07:42
+  (VWC 44.2% under 45%)"). The engine twin and the log's setting names have it.
+- Dashboard: Time between P3 shots on Today's P3 card, with what it does and how to choose it. The
+  P2 time's words no longer claim the P3 hold. Help's P3 entry and How it works say how P3 shots are
+  spaced, and why several close together overshoot.
+
 ## [1.1.0] - 2026-10-10
 
 Integration and controller **1.1.0**.
