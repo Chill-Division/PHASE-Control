@@ -12,15 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- **Overnight shots wait for the probe.** Every P3 shot, a rescue or one holding the dryback target,
-  now waits at least **Time between P3 shots** after the last shot: 10 minutes unless changed, on the
-  P3 card in Today's targets. A rescue used to wait for nothing, so a zone still reading under the
-  rescue level after one got another every minute until the water reached the probe; hold shots
-  waited the time between P2 shots.
-- **Dragging a target on Today's chart follows the pointer, scrolled down too.** With the Irrigation
-  strategy page scrolled down, a dragged target could run away: the chart slid under the pointer as
-  the words around it changed, and the value went with it (a maintenance trigger dragged from 55%
-  jumped to 30%). The chart now stays put while a target is held, and the value follows the pointer.
+- Overnight shots now wait 10 minutes after the last one, so the water reaches the probe before the next. Change it with Time between P3 shots on the P3 card.
+- Bug fixes and improvements.
 
 ### 🔧 Technical notes
 
