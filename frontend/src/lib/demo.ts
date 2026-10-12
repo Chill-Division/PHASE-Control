@@ -255,6 +255,7 @@ export function createDemo(now = Date.now()): States {
       number(prefix, `${key}plant_count`, 36, 1, 200, 1);
       number(prefix, key + "drippers_per_plant", 1, 1, 20, 1);
       number(prefix, key + "p3_emergency_shot_size", 3, 0.5, 15, 0.5, "%");
+      number(prefix, key + "p3_time_between_shots", 10, 0, 60, 1, "min");
       number(prefix, key + "field_capacity", 70, 40, 100, 1, "%");
       number(prefix, key + "maximum_ec", 9, 1, 20, 0.1, "mS/cm");
       const supervisor = index ? "off" : (["tracking", "learning", "frozen"][id - 1] ?? "off");

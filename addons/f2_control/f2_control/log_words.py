@@ -20,6 +20,7 @@ SETTING_NAMES = {
     "p2_time_between_shots": "Time between P2 shots",
     "p3_emergency_vwc_threshold": "Rescue level",
     "p3_emergency_shot_size": "Rescue shot",
+    "p3_time_between_shots": "Time between P3 shots",
     "field_capacity": "Full saturation",
     "max_daily_volume": "Daily water limit",
     "maximum_ec": "Maximum EC",
