@@ -5,7 +5,7 @@ to P3, which can start the dryback sooner but never stop it. A night that dried 
 went on past the target to the rescue level (seen live on GR2: a 30% dryback from an 86.5% peak should
 end at 60.55%; drying 2.3 points an hour from 74.2% at 21:05, the zone was on course for about 51% by
 07:00, with the next shot at the 50% rescue level). Now each time a P3 zone dries to the day's peak
-less the dryback target it gets a rescue-sized shot, the time between P2 shots apart.
+less the dryback target it gets a rescue-sized shot, the time between P3 shots apart.
 """
 
 import pytest
@@ -51,11 +51,27 @@ def test_below_the_rescue_level_the_rescue_fires_first_and_stays_exempt():
     assert result[4].kind == "p3_emergency"
 
 
-def test_it_waits_out_the_time_between_p2_shots_so_the_reading_can_answer():
+def test_without_a_p3_time_between_shots_it_waits_the_p2_one_as_before():
     p = params(p2_time_between_min=5)
     assert decide(night(vwc=60, minutes_since_shot=4), p)[2] is False
     assert decide(night(vwc=60, minutes_since_shot=5), p)[2] is True
-    # The rescue has never waited, and still does not.
+    # Nor did a rescue wait for anything.
+    assert decide(night(vwc=49, minutes_since_shot=1), p)[4].kind == "p3_emergency"
+
+
+def test_the_p3_time_between_shots_spaces_the_hold_and_the_rescue_alike():
+    """Seen live on GR2: three hold shots a few minutes apart, each before the last had reached the
+    probe, lifted the zone about 6 points past its hold. A rescue waited for nothing at all: a zone
+    still reading under the rescue level after one got another every minute."""
+    p = params(p2_time_between_min=5, p3_time_between_min=10)
+    for vwc, kind in ((60, "p3_hold"), (49, "p3_emergency")):
+        assert decide(night(vwc=vwc, minutes_since_shot=9), p)[2] is False, kind
+        assert decide(night(vwc=vwc, minutes_since_shot=10), p)[4].kind == kind
+
+
+def test_a_p3_time_between_shots_of_0_waits_for_nothing():
+    p = params(p2_time_between_min=5, p3_time_between_min=0)
+    assert decide(night(vwc=60, minutes_since_shot=1), p)[4].kind == "p3_hold"
     assert decide(night(vwc=49, minutes_since_shot=1), p)[4].kind == "p3_emergency"
 
 

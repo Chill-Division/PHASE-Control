@@ -298,6 +298,19 @@ NUMBER_DESCRIPTIONS = [
         native_unit_of_measurement=PERCENTAGE,
         mode="box",
     ),
+    # The least time from the last shot to a P3 shot, a rescue or a hold at the dryback target, so
+    # each can soak down to the probes before moisture is judged again (0 = off). Checked every
+    # minute without it, a zone still reading low after a shot got another one each minute.
+    NumberEntityDescription(
+        key="p3_time_between_shots",
+        name="P3 Time Between Shots",
+        icon="mdi:timer-outline",
+        native_min_value=0.0,
+        native_max_value=60.0,
+        native_step=1.0,
+        native_unit_of_measurement=UnitOfTime.MINUTES,
+        mode="box",
+    ),
     # EC Target Parameters - CRITICAL MISSING ENTITIES
     NumberEntityDescription(
         key="ec_target_veg_p0",
@@ -432,6 +445,7 @@ DEFAULT_VALUES = {
     "p2_ec_low_threshold": 0.8,
     "p3_emergency_vwc_threshold": 40.0,
     "p3_emergency_shot_size": 2.0,
+    "p3_time_between_shots": 10.0,
     "ec_target_veg_p0": 3.0,
     "ec_target_veg_p1": 3.0,
     "ec_target_veg_p2": 3.2,
@@ -466,6 +480,7 @@ PER_ZONE_STEERING_KEYS = [
     "p2_time_between_shots",
     "p3_emergency_vwc_threshold",
     "p3_emergency_shot_size",
+    "p3_time_between_shots",
     "ec_target_veg_p0",
     "ec_target_veg_p1",
     "ec_target_veg_p2",
@@ -514,6 +529,7 @@ PARAM_TO_ENTITY_KEY: dict[str, str] = {
     # P3
     "p3_emergency_vwc": "p3_emergency_vwc_threshold",
     "p3_emergency_shot_size": "p3_emergency_shot_size",
+    "p3_time_between_shots": "p3_time_between_shots",
     # EC targets
     "ec_target_veg_p0": "ec_target_veg_p0",
     "ec_target_veg_p1": "ec_target_veg_p1",

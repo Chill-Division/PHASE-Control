@@ -80,9 +80,15 @@ at lights-off.
 ### P3: overnight
 
 P3 stops routine watering and lets the zone dry back toward its **P3 dryback target**. If it gets
-there, the zone is held there: a **Rescue shot size** shot each time it dries under that level, at
-least **Time between P2 shots** apart. Under the **rescue level**, a rescue shot fires. At lights-on
-the zone goes back to P0, and a new grow day begins.
+there, the zone is held there: a **Rescue shot size** shot each time it dries under that level. Under
+the **rescue level**, a rescue shot fires. At lights-on the zone goes back to P0, and a new grow day
+begins.
+
+Every P3 shot, hold or rescue, waits at least **Time between P3 shots** after the last shot (10
+minutes unless changed), so its water can reach the probe before moisture is read again. The
+controller checks every minute: read sooner, moisture has not moved yet, and a zone still reading
+low would get another shot each minute until the water arrived. Set it longer than a shot takes to
+show on your probes.
 
 Lights-off ends P1 and P2 straight away: no zone carries a half-finished ramp into the night.
 
@@ -109,7 +115,8 @@ How far a zone actually dries overnight comes down to four things:
 ## The rescue level
 
 **Rescue shot when below** is your emergency floor. In P3, a rescue shot fires whenever moisture reads
-under it, even when the day's water limit is spent. Athena: "Caution: make sure to monitor the
+under it, at least **Time between P3 shots** after the last shot, even when the day's water limit is
+spent. Athena: "Caution: make sure to monitor the
 drybacks in larger plants to avoid drying back past wilting point" (p. 41). Set it above the wilting
 point.
 
@@ -300,6 +307,12 @@ lifting moisture has found the zone's peak, and the target drops to it.
 **Why did it water at night?**
 In P3 a zone is held at its dryback target (a rescue-sized shot each time it dries past it) and rescued
 under the rescue level. Neither is routine watering.
+
+**Why did a zone get several shots close together overnight?**
+Each P3 shot waits **Time between P3 shots** after the last one, then moisture is read again; a zone
+still under the level gets another. If your probes take longer than that to show a shot, the next one
+fires before the first has registered and the zone overshoots. Set the time longer than a shot takes
+to show, or make the **Rescue shot size** smaller.
 
 **Why did the maintenance trigger jump during the day?**
 With Auto setpoints on it rises as P2 begins (in steps of up to 10 points a minute) and drops again at

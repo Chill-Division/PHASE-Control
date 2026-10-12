@@ -31,6 +31,7 @@ def params_from(sp):
         stacking_on=False, watchdog_hours=sp.get("watchdog_hours", 3.0),
         p1_min_shots=int(sp.get("p1_minimum_shots", 0)),
         p2_time_between_min=sp.get("p2_time_between_shots", 5.0),
+        p3_time_between_min=sp.get("p3_time_between_shots", 10.0),
         additional_dryback=sp.get("p0_dryback_drop_percent"),
     )
 

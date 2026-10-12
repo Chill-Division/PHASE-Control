@@ -82,6 +82,12 @@ class ZoneParams:
     #                                     it soaks down to the probe before moisture is judged again. Judged
     #                                     sooner, the reading has not moved yet and shots stack a minute apart
     #                                     (seen live: three in four minutes). 0 = off, as before.
+    p3_time_between_min: float | None = None  # min minutes from the last shot to a P3 shot, rescue or
+    #                                     dryback hold, so it soaks down to the probe before moisture is
+    #                                     judged again. Without it a zone still reading under the rescue
+    #                                     level got another rescue every minute until the water arrived.
+    #                                     0 = off. None: as before (a hold waits p2_time_between_min, a
+    #                                     rescue waits for nothing).
     p1_min_shots: int = 0           # P1 cannot graduate on "target reached" until this many ramp shots have
     #                                 landed (0 = off). The ramp runs as configured; max shots still bounds it.
     additional_dryback: float | None = None  # P0 ends once VWC is this % below its lights-on reading:
@@ -122,6 +128,14 @@ class ZoneSnapshot:
 def p0_dryback(p: ZoneParams) -> float:
     """How far below its lights-on reading P0 lets a zone dry before the ramp starts."""
     return p.dryback_target if p.additional_dryback is None else p.additional_dryback
+
+
+def p3_gaps(p: ZoneParams) -> tuple[float, float]:
+    """PURE. The minutes a P3 shot waits after the last shot: (dryback hold, rescue). Both are the P3
+    time between shots; without one, a hold waits the P2 time between shots and a rescue nothing."""
+    if p.p3_time_between_min is None:
+        return p.p2_time_between_min, 0.0
+    return p.p3_time_between_min, p.p3_time_between_min
 
 
 def p3_hold_level(s: ZoneSnapshot, p: ZoneParams) -> float | None:
@@ -284,16 +298,20 @@ def decide(s: ZoneSnapshot, p: ZoneParams):
                 fire, size, ir, kind = True, p.p2_shot_size * 1.5, f"P2 dilute EC {ec:.1f}", "p2_dilute"
             elif topup:
                 fire, size, ir, kind = True, ec_adjust(p.p2_shot_size, ec, p.ec_target_p2), f"P2 top-up VWC {s.vwc:.0f}<{p2_thr:.0f}", "p2_topup"
-    if not fire and phase == "P3" and s.vwc < p.p3_emergency_floor:
+    # A rescue, like every P3 shot, waits the P3 time between shots after the last shot: judged sooner,
+    # the reading has not moved yet and rescues stack a minute apart.
+    hold_gap, rescue_gap = p3_gaps(p)
+    if (not fire and phase == "P3" and s.vwc < p.p3_emergency_floor
+            and s.minutes_since_shot >= rescue_gap):
         fire, size, ir, kind = True, p.p3_emergency_shot, f"P3 emergency VWC {s.vwc:.0f}<{p.p3_emergency_floor:.0f}", "p3_emergency"
     # P3 holds the overnight dryback at its target instead of letting a fast night dry on to the rescue
-    # level: a rescue-sized shot each time the zone dries to the hold level, the time between P2 shots
+    # level: a rescue-sized shot each time the zone dries to the hold level, the P3 time between shots
     # apart. The P2 early move to P3 only ever starts the dryback sooner; this is what stops it. It
     # steers, so a held plan stops it and the daily budget holds it (CAP_EXEMPT); the rescue stays the
     # floor beneath it.
     hold = p3_hold_level(s, p)
     if (not fire and phase == "P3" and not s.steering_held and hold is not None and s.vwc < hold
-            and s.minutes_since_shot >= p.p2_time_between_min):
+            and s.minutes_since_shot >= hold_gap):
         why = f"P3 hold dryback VWC {s.vwc:.1f}<{hold:.1f} ({p.dryback_target:g}% of peak {s.peak_vwc:.1f})"
         fire, size, ir, kind = True, p.p3_emergency_shot, why, "p3_hold"
 
@@ -394,12 +412,13 @@ def waiting_for(s: ZoneSnapshot, p: ZoneParams) -> list:
                 add("p2_dilute", shot=True, metric="ec", op=">", value=p.ec_target_p2 * 1.2, now=ec)
         add("lights_off", to="P3", in_min=s.hours_to_lights_off * 60.0)
     elif s.phase == "P3":
-        add("p3_emergency", shot=True, metric="vwc", op="<", value=p.p3_emergency_floor, now=s.vwc)
+        hold_gap, rescue_gap = p3_gaps(p)
+        add("p3_emergency", shot=True, metric="vwc", op="<", value=p.p3_emergency_floor, now=s.vwc,
+            in_min=rescue_gap - s.minutes_since_shot if rescue_gap > 0 else None)
         hold = p3_hold_level(s, p)
         if hold is not None and not s.steering_held:
             add("p3_hold", shot=True, metric="vwc", op="<", value=hold, now=s.vwc,
-                in_min=(p.p2_time_between_min - s.minutes_since_shot
-                        if p.p2_time_between_min > 0 else None),
+                in_min=hold_gap - s.minutes_since_shot if hold_gap > 0 else None,
                 dryback=round(p.dryback_target, 2), peak=round(s.peak_vwc, 1))
         add("lights_on", to="P0", in_min=s.hours_to_lights_on * 60.0)
     return items
@@ -493,7 +512,7 @@ _PARAM_BOUNDS = {
     "field_capacity": (40.0, 100.0), "max_ec": (3.0, 15.0), "watchdog_hours": (0.0, 12.0),
     "p2_shot_size": (0.5, 20.0), "p1_initial": (0.5, 15.0), "p1_incr": (0.0, 5.0),
     "p1_max_shots": (1.0, 40.0), "p1_time_between_min": (1.0, 120.0),
-    "p2_time_between_min": (0.0, 120.0),
+    "p2_time_between_min": (0.0, 120.0), "p3_time_between_min": (0.0, 120.0),
     "p0_max_wait_min": (5.0, 240.0), "p3_emergency_shot": (0.5, 15.0),
     "max_daily_volume": (10.0, 2000.0), "additional_dryback": (1.0, 40.0),
 }

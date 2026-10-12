@@ -410,9 +410,12 @@ def next_text(conditions, at):
         hold = None  # a rescue level at or over the dryback's end fires first, every time
     if rescue or hold:
         on = find("lights_on")
-        # Under the dryback's end, a hold shot may still wait out the time between P2 shots.
+        # Under the dryback's end, a hold shot may still wait out the time between P3 shots.
         wait = when(hold) if hold else None
         below = wait and hold.get("now") is not None and hold["now"] < (hold.get("value") or 0)
+        # So may a rescue, under the rescue level.
+        due = when(rescue) if rescue else None
+        rescuing = due and rescue.get("now") is not None and rescue["now"] < (rescue.get("value") or 0)
         # Which dryback, from which peak: never a dryback from the reading beside it.
         dryback = (f"the {_num(hold.get('dryback'))}% dryback"
                    + (f" from the {_num(hold['peak'])}% peak" if hold.get("peak") else "")) if hold else ""
@@ -420,7 +423,8 @@ def next_text(conditions, at):
             (f"shot at {wait} (VWC {_num(hold['now'])}% under {_num(hold.get('value'))}%, {dryback})" if below
              else f"shot when {test(hold, '%', 'VWC')}{reading(hold, '%')}, {dryback}") if hold else None,
             # The reading is said once: with the hold, beside it.
-            f"rescue shot if {test(rescue, '%', 'VWC')}{'' if hold else reading(rescue, '%')}" if rescue else None,
+            (f"rescue shot at {due} (VWC {_num(rescue['now'])}% under {_num(rescue.get('value'))}%)" if rescuing
+             else f"rescue shot if {test(rescue, '%', 'VWC')}{'' if hold else reading(rescue, '%')}") if rescue else None,
             f"P0 at {when(on) or 'lights-on'}" if on else None,
         ]
         return " · ".join(part for part in parts if part)
@@ -1833,6 +1837,10 @@ class Controller:
             # default then applies without holding the room for a missing setpoint.
             p2_time_between_min=self._zone_num(
                 room, zone, "p2_time_between_shots", 5, optional=True
+            ),
+            # Every P3 shot waits it, rescue and dryback hold alike. Optional for the same reason.
+            p3_time_between_min=self._zone_num(
+                room, zone, "p3_time_between_shots", 10, optional=True
             ),
             dryback_target=self._zone_num(
                 room,

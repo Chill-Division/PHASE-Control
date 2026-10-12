@@ -144,6 +144,20 @@ def test_p3_hold_waits_out_the_time_between_p2_shots_as_decide_does():
     assert "in_min" not in by_rule(waiting_for(s, P(p3_emergency_floor=40)), "p3_hold")
 
 
+def test_p3_shots_wait_out_the_time_between_p3_shots_as_decide_does():
+    p = P(p3_emergency_floor=40, p2_time_between_min=5, p3_time_between_min=10)
+    s = S(phase="P3", vwc=35, lights_on=False, minutes_since_shot=4)
+    items = waiting_for(s, p)
+    assert by_rule(items, "p3_emergency")["in_min"] == 6.0
+    assert by_rule(items, "p3_hold")["in_min"] == 6.0
+    assert decide(s, p)[2] is False
+    later = S(phase="P3", vwc=35, lights_on=False, minutes_since_shot=10)
+    assert decide(later, p)[4].kind == "p3_emergency"
+    # 0 turns it off, and without one a rescue never waited: nothing to wait out.
+    for none in (P(p3_emergency_floor=40, p3_time_between_min=0), P(p3_emergency_floor=40)):
+        assert "in_min" not in by_rule(waiting_for(s, none), "p3_emergency")
+
+
 def test_a_held_plan_leaves_the_p3_hold_out():
     items = waiting_for(S(phase="P3", vwc=45, lights_on=False, steering_held=True), P())
     assert rules(items) == ["p3_emergency", "lights_on"]

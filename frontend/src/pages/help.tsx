@@ -53,7 +53,7 @@ const glossary = [
   ],
   [
     "P3 · Overnight dryback",
-    "Routine irrigation stops. A rescue shot fires if VWC reads below the rescue level. There is no independent scheduled P3 EC target.",
+    "Routine irrigation stops. The zone is held at its P3 dryback target, and a rescue shot fires if VWC reads below the rescue level; each P3 shot waits at least the time between P3 shots after the last shot. There is no independent scheduled P3 EC target.",
   ],
   [
     "Steering balance",

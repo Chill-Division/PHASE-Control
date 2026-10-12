@@ -35,6 +35,7 @@ export const ZONE_PARAMETERS = new Set([
   "p0_dryback_drop_percent",
   "p3_emergency_vwc_threshold",
   "p3_emergency_shot_size",
+  "p3_time_between_shots",
   "max_daily_volume",
   "field_capacity",
   "maximum_ec",

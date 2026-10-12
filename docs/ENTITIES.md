@@ -43,7 +43,7 @@ scale with your zone count, `N` = 1…zones.
 |---|---|---|---|---|
 | `p2_vwc_threshold` | 10-100 | 60 | % | Shoot a maintenance top-up when VWC falls below this. |
 | `p2_shot_size` | 0.5-30 | 5 | % | Size of a P2 maintenance shot. |
-| `p2_time_between_shots` | 0-60 | 5 | min | Least time from the last shot to a maintenance top-up, so each can soak down to the probes before moisture is read again (0 = off). P3 dryback hold shots wait for it too. EC dilution and flushes wait 45 minutes after the last shot instead, so a settled EC reading can show what the last one did (10 minutes until the zone's first settled reading). |
+| `p2_time_between_shots` | 0-60 | 5 | min | Least time from the last shot to a maintenance top-up, so each can soak down to the probes before moisture is read again (0 = off). EC dilution and flushes wait 45 minutes after the last shot instead, so a settled EC reading can show what the last one did (10 minutes until the zone's first settled reading). |
 | `p2_ec_high_threshold` | 0.5-3.0 | 1.2 | ×target | Display only: `p2_vwc_threshold_adjusted` reads 5 points above the trigger while `ec_ratio` is above this. The controller doesn't read it. |
 | `p2_ec_low_threshold` | 0.2-2.0 | 0.8 | ×target | Display only: `p2_vwc_threshold_adjusted` reads 5 points under the trigger while `ec_ratio` is below this. The controller doesn't read it. |
 
@@ -52,6 +52,7 @@ scale with your zone count, `N` = 1…zones.
 |---|---|---|---|---|
 | `p3_emergency_vwc_threshold` | 10-65 | 40 | % | Overnight emergency floor: a rescue shot fires below this, beneath the level P3 holds the dryback at. |
 | `p3_emergency_shot_size` | 0.1-15 | 2 | % | Size of an emergency rescue shot, and of each P3 shot that holds the dryback target. |
+| `p3_time_between_shots` | 0-60 | 10 | min | Least time from the last shot to a P3 shot, a rescue or a hold at the dryback target, so each can soak down to the probes before moisture is read again (0 = off). Without it a zone still reading low after a shot got another one every minute, the rescue included. |
 
 ### EC targets: vegetative & generative (per phase)
 | Entity | Range | Default | Unit |
@@ -98,7 +99,8 @@ for that zone. (3 zones × 24 = 72 entities on a 3-zone system.)
 `p0_maximum_wait_time`, `p1_initial_shot_size`, `p1_shot_size_increment`,
 `p1_minimum_shots`, `p1_maximum_shots`, `p1_target_vwc`, `p1_time_between_shots`,
 `p2_vwc_threshold`, `p2_shot_size`, `p2_time_between_shots`, `p3_emergency_vwc_threshold`,
-`p3_emergency_shot_size`, `vegetative_dryback_target`, `generative_dryback_target`,
+`p3_emergency_shot_size`, `p3_time_between_shots`, `vegetative_dryback_target`,
+`generative_dryback_target`,
 `ec_target_veg_p0` to `_p2`, `ec_target_gen_p0` to `_p2`, `field_capacity`,
 `maximum_ec` and `watchdog_hours`. Ranges match the globals above.
 

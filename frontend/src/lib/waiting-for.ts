@@ -142,13 +142,20 @@ export function waitingText(waiting: Waiting, format: WaitingFormat): string {
   if (rescue && hold && (hold.value ?? 0) <= (rescue.value ?? 0)) hold = undefined;
   if (rescue || hold) {
     const on = find("lights_on");
-    // Under the dryback's end, a hold shot may still wait out the time between P2 shots.
+    // Under the dryback's end, a hold shot may still wait out the time between P3 shots.
     const wait = hold ? when(hold) : null;
     const below =
       wait !== null &&
       hold?.now !== null &&
       hold?.now !== undefined &&
       hold.now < (hold.value ?? 0);
+    // So may a rescue, under the rescue level.
+    const due = rescue ? when(rescue) : null;
+    const rescuing =
+      due !== null &&
+      rescue?.now !== null &&
+      rescue?.now !== undefined &&
+      rescue.now < (rescue.value ?? 0);
     // Which dryback, from which peak: never a dryback from the reading beside it.
     const dryback =
       `the ${n(hold?.dryback ?? NaN)}% dryback` +
@@ -161,7 +168,9 @@ export function waitingText(waiting: Waiting, format: WaitingFormat): string {
         : null,
       // The reading is said once: with the hold, beside it.
       rescue
-        ? `rescue shot if ${test(rescue, "%", "VWC")}${hold ? "" : ` (${now(rescue, "%")})`}`
+        ? rescuing
+          ? `rescue shot at ${due} (VWC ${n(rescue.now ?? NaN)}% under ${n(rescue.value ?? NaN)}%)`
+          : `rescue shot if ${test(rescue, "%", "VWC")}${hold ? "" : ` (${now(rescue, "%")})`}`
         : null,
       on ? `P0 at ${when(on) ?? "lights-on"}` : null,
     ]

@@ -225,6 +225,14 @@ def test_the_maintenance_spacing_is_kept_to_two_hours_and_never_below_nothing():
         assert warnings == [f"p2_time_between_min={given:g} out of [0,120] -> clamped to {kept:g}"]
 
 
+def test_the_p3_spacing_is_kept_to_two_hours_and_may_be_left_unset():
+    assert validate_params(P(p3_time_between_min=None)) == (P(), [])
+    for given, kept in ((-1, 0.0), (200, 120.0)):
+        p, warnings = validate_params(P(p3_time_between_min=given))
+        assert p.p3_time_between_min == kept
+        assert warnings == [f"p3_time_between_min={given:g} out of [0,120] -> clamped to {kept:g}"]
+
+
 def test_without_a_settled_value_the_raw_reading_behaves_exactly_as_before():
     assert decide(S(phase="P2", vwc=55, ec=10, feed_ec=3, minutes_since_shot=12), P())[4].kind == "flush_high_ec"
     held = decide(S(phase="P2", vwc=55, ec=10, feed_ec=3, minutes_since_shot=3), P())

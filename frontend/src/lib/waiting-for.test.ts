@@ -144,7 +144,7 @@ describe("saying what a zone waits for", () => {
     expect(waitingText(waiting(rescue as Partial<WaitingCondition>, hold, on), format)).toBe(
       "shot when VWC < 60.55% (now 74.2%), the 30% dryback from the 86.5% peak · rescue shot if VWC < 50% · P0 at 17:36",
     );
-    // Under it, the next hold shot may still wait out the time between P2 shots.
+    // Under it, the next hold shot may still wait out the time between P3 shots.
     const under = { ...hold, now: 60.4, in_min: 3 };
     expect(waitingText(waiting(rescue as Partial<WaitingCondition>, under, on), format)).toBe(
       "shot at 07:39 (VWC 60.4% under 60.55%, the 30% dryback from the 86.5% peak) · rescue shot if VWC < 50% · P0 at 17:36",
@@ -153,6 +153,28 @@ describe("saying what a zone waits for", () => {
     const high = { ...rescue, value: 40 } as Partial<WaitingCondition>;
     expect(waitingText(waiting(high, { ...hold, value: 28.7 }, on), format)).toBe(
       "rescue shot if VWC < 40% (now 74.2%) · P0 at 17:36",
+    );
+  });
+  it("P3: under the rescue level, when the next rescue may fire", () => {
+    const rescue: Partial<WaitingCondition> = {
+      rule: "p3_emergency",
+      shot: true,
+      metric: "vwc",
+      op: "<",
+      value: 45,
+      now: 44.2,
+      in_min: 6,
+    };
+    const on = { rule: "lights_on", to: "P0", in_min: 600 };
+    expect(waitingText(waiting(rescue, on), format)).toBe(
+      "rescue shot at 07:42 (VWC 44.2% under 45%) · P0 at 17:36",
+    );
+    // Its time between P3 shots has passed, or it reads above the level: as before.
+    expect(waitingText(waiting({ ...rescue, in_min: 0 }, on), format)).toBe(
+      "rescue shot if VWC < 45% (now 44.2%) · P0 at 17:36",
+    );
+    expect(waitingText(waiting({ ...rescue, now: 61 }, on), format)).toBe(
+      "rescue shot if VWC < 45% (now 61%) · P0 at 17:36",
     );
   });
 });
