@@ -235,6 +235,21 @@ def test_what_the_supervisor_only_shows_goes_too():
     )
 
 
+def test_the_public_main_only_moves_forward():
+    """A commit made straight on the public repository is not in what goes public, and moving its
+    main past it would drop it. For 1.1.1 the dry run said it would push and the push was refused:
+    the app's changelog had been trimmed there. Both --public and --sync now refuse first, and say
+    how such a change comes back."""
+    # No public main yet: its first release makes it.
+    assert release.fast_forward_refusal(None, False, "v1.1.1") is None
+    assert release.fast_forward_refusal("762b40a2f6aaba09", True, "v1.1.1") is None
+    why = release.fast_forward_refusal("762b40a2f6aaba09", False, "v1.1.1")
+    assert why.startswith(
+        f"{release.PUBLIC} main (762b40a2f6aa) has a commit that v1.1.1 does not"
+    )
+    assert "in a pull request based on it" in why
+
+
 @pytest.mark.parametrize(
     "shipped",
     [
