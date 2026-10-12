@@ -24,6 +24,7 @@ version being released.
 ## Unreleased
 
 - Overnight shots now wait 10 minutes after the last one, so the water reaches the probe before the next. Change it with Time between P3 shots on the P3 card.
+- Bug fixes and improvements.
 
 ## 1.1.0 - 2026-10-10
 

@@ -17,6 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   P3 card in Today's targets. A rescue used to wait for nothing, so a zone still reading under the
   rescue level after one got another every minute until the water reached the probe; hold shots
   waited the time between P2 shots.
+- **Dragging a target on Today's chart follows the pointer, scrolled down too.** With the Irrigation
+  strategy page scrolled down, a dragged target could run away: the chart slid under the pointer as
+  the words around it changed, and the value went with it (a maintenance trigger dragged from 55%
+  jumped to 30%). The chart now stays put while a target is held, and the value follows the pointer.
 
 ### 🔧 Technical notes
 
@@ -36,6 +40,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Dashboard: Time between P3 shots on Today's P3 card, with what it does and how to choose it. The
   P2 time's words no longer claim the P3 hold. Help's P3 entry and How it works say how P3 shots are
   spaced, and why several close together overshoot.
+- Dashboard: `PlanningCurve` drags by the pointer's travel since it took hold (`grab`: its
+  `clientY`, its position in the chart's units and the SVG's scale at pointerdown), not by where it
+  is over the chart, which can move. While a target is held, the page scrolls back each frame by
+  however far the chart slid (`heldTop`), and the dryback sentence and the projected-day notes keep
+  their words until release (`heldWords`). Scrolled to the end, the sticky preview is held by its
+  foot, so every height change in the left column (the dragged field turning into a draft is 51 px
+  shorter) or in the notes moved the chart. `verify-steering-visuals.mjs` drags the maintenance
+  trigger 80 px with the page scrolled to the end and holds the chart within 2 px and the target
+  within 4 px of the pointer; it fails on the code before.
 
 ## [1.1.0] - 2026-10-10
 

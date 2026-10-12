@@ -1,6 +1,7 @@
 # Unreleased
 
 - Overnight shots, rescue or dryback hold, now wait at least the zone’s Time between P3 shots after the last shot (10 minutes unless changed), so a zone still reading low no longer gets a shot every minute.
+- Bug fixes and improvements.
 
 # 1.1.0
 
