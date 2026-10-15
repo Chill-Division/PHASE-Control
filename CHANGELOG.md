@@ -27,6 +27,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **A room's review lists what changes.** Saving Rooms & hardware lists only what the save changes,
   such as a zone's new name, in the words Activity records it in, with the rest of the room folded
   away beneath. Before, it showed every zone, the plumbing and the dosers, even for a rename.
+- **Today's events go per plant too.** With Water today set to per plant, each shot in Today's
+  events, yesterday's shots on the grow-day chart and the water so far in Predictions say what each
+  plant got. Before, they always gave the zone's litres.
 
 ### 🔧 Technical notes
 
@@ -59,6 +62,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `tests/fixtures/setup_changes.json` holds cases that `tests/test_setup_changes.py` and
   `setup-changes.test.ts` both run, and the vitest reads `HARDWARE_WORDS` and `ZONE_WORDS` from
   `setup_api.py`. `verify-workspace.mjs` renames a zone and checks the review lists only that.
+- Dashboard: the grow day's lanes give a valve-open time's water as the room's Water today view
+  reads (`Lane.water`, from `useWaterView`): each plant's mL from its drippers' flow, or the zone's
+  litres. Today's events, yesterday's shot marks and the Predictions line use it.
+  `verify-dashboard.mjs`'s per-plant check reads them in both views.
 
 ## [1.1.1] - 2026-10-12
 

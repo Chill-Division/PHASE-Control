@@ -74,6 +74,7 @@ import { waitingText } from "@/lib/waiting-for";
 import type { Controller, Setting, Zone } from "@/lib/types";
 import { errorText } from "@/lib/utils";
 import { estimateRuntime, flowInputs, waterParameters } from "@/lib/water-delivery";
+import { plantText, useWaterView, type WaterView } from "@/lib/water-view";
 import "./day-timeline.css";
 
 const PHASES: Record<string, string> = {
@@ -168,7 +169,10 @@ interface Lane {
   /** Why this zone is not being watered at all, if it is not. */
   stopped: string | null;
   p1Shots: number;
-  litres: (seconds: number) => number | null;
+  /** The water `seconds` of the valve gives at the configured flow, as Water today reads
+   * (Settings): the zone's litres, or each plant's mL. Null without the flow. */
+  water: (seconds: number) => number | null;
+  view: WaterView;
   /** What the controller aims at, phase by phase: as recorded, then along the projection. */
   targets: TargetStep[];
   projection: Projection | null;
@@ -502,6 +506,7 @@ function Timeline({
   const [hover, setHover] = useState<string | null>(null);
   const [picked, setPicked] = useState<string | null>(null);
   const { room, states } = controller;
+  const { view } = useWaterView();
   const decisions = rows[entities.attributeIds[0]] ?? [];
   const settings = new Map(room.settings.map((setting) => [setting.entityId, setting]));
   const found = setpointChanges(rows, [...settings.keys()], day.start, now);
@@ -691,7 +696,11 @@ function Timeline({
       stopped,
       next,
       p1Shots,
-      litres: (seconds) => estimateRuntime(flowInputs(water), seconds).requested?.zoneL ?? null,
+      water: (seconds) => {
+        const given = estimateRuntime(flowInputs(water), seconds).requested;
+        return (view === "plant" ? given?.mlPerPlant : given?.zoneL) ?? null;
+      },
+      view,
       targets: stoppedTargets(
         phaseTargets([...bands, ...ahead.filter((band) => band.end > band.start)], setpoint, [
           ...points,
@@ -1300,11 +1309,7 @@ function LaneChart({
             `Yesterday ${clock(shot.start)}–${clock(shot.end)}`,
             name,
             `shot ${duration(shot.end - shot.start)}`,
-            ...(lane.litres((shot.end - shot.start) / 1000) === null
-              ? []
-              : [
-                  `≈${number(lane.litres((shot.end - shot.start) / 1000))} L at the configured flow`,
-                ]),
+            ...flowText(lane, shot),
           ].join(" · "),
       ),
     ),
@@ -1641,12 +1646,12 @@ function tracking(
         `${target} ${lane.phase === "P0" || lane.phase === "P1" ? "not reached yet" : "not reached today"}${!then ? "" : then.reached !== null ? ` (${who} ${at(then.reached)})` : missed}`,
       );
   }
-  const litres = (seconds: number) => (seconds > 0 ? lane.litres(seconds) : 0);
-  const used = litres(lane.seconds),
-    before = then && litres(then.seconds);
+  const water = (seconds: number) => (seconds > 0 ? lane.water(seconds) : 0);
+  const used = water(lane.seconds),
+    before = then && water(then.seconds);
   parts.push(
     used !== null
-      ? `≈${number(used)} L so far${before != null ? ` (${signed(used - before)} L)` : ""}`
+      ? `≈${amount(lane, used)} so far${before != null ? ` (${signedAmount(lane, used - before)})` : ""}`
       : `${duration(lane.seconds * 1000)} of watering so far${then ? ` (${signed((lane.seconds - then.seconds) / 60, 0)} min)` : ""}`,
   );
   // Overnight, the dryback the P3 target is about: from today's peak. The morning's P0 figure is
@@ -1663,13 +1668,28 @@ function tracking(
 function changeText(change: Change): string {
   return `${clock(change.time)} · ${change.place} · ${changeSentence(change.name, change.unit, change.from, change.to, change.by)}`;
 }
+/** Water as the lane gives it: "1.6 L" for the zone, or "400 mL per plant". */
+function amount(lane: Lane, value: number): string {
+  return lane.view === "plant" ? `${plantText(value)} per plant` : `${number(value)} L`;
+}
+/** A difference in it, against yesterday or the typical day: "+0.4 L", "−120 mL". */
+function signedAmount(lane: Lane, value: number): string {
+  if (lane.view !== "plant") return `${signed(value)} L`;
+  return Math.round(Math.abs(value)) === 0
+    ? "±0 mL"
+    : `${value > 0 ? "+" : "−"}${plantText(Math.abs(value))}`;
+}
+/** What a shot gave at the configured flow, when the flow is known. */
+function flowText(lane: Lane, shot: { start: number; end: number }): string[] {
+  const given = lane.water((shot.end - shot.start) / 1000);
+  return given === null ? [] : [`≈${amount(lane, given)} at the configured flow`];
+}
 function shotText(shot: Shot, lane: Lane): string {
-  const litres = lane.litres((shot.end - shot.start) / 1000);
   return [
     `${clock(shot.start)}–${shot.open ? "now" : clock(shot.end)}`,
     lane.zone.name,
     `${shot.phase ? `${shot.phase} shot` : "shot"} ${duration(shot.end - shot.start)}${shot.open ? " so far" : ""}`,
-    ...(litres === null ? [] : [`≈${number(litres)} L at the configured flow`]),
+    ...flowText(lane, shot),
     ...(shot.reason ? [shot.reason] : []),
   ].join(" · ");
 }

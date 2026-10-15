@@ -26,6 +26,7 @@ version being released.
 - Each zone on the Overview has a ⋯ menu: move it to another phase, pause it, edit its strategy or open its details.
 - Today and the Schedule mark each percentage as a moisture reading or a share of something else, and the daily water limit, watchdog and steering mode explain themselves more clearly.
 - Saving Rooms & hardware lists only what you changed, such as a zone's new name, not the whole room.
+- With Water today set to per plant, the shots in Today's events and the water so far in Predictions are per plant too.
 
 ## 1.1.1 - 2026-10-12
 
