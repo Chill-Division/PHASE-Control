@@ -24,6 +24,7 @@ version being released.
 ## Unreleased
 
 - Each zone on the Overview has a ⋯ menu: move it to another phase, pause it, edit its strategy or open its details.
+- Today and the Schedule mark each percentage as a moisture reading or a share of something else, and the daily water limit, watchdog and steering mode explain themselves more clearly.
 
 ## 1.1.1 - 2026-10-12
 
