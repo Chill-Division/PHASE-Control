@@ -12,24 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- **Every zone's actions in one menu.** On the Overview, each zone's ⋯ moves it to another phase,
-  pauses or enables its scheduling, opens its strategy or opens its details. Before, those were only
-  in a side panel opened by clicking the zone's name, which nothing marked as a button.
-- **Absolute or relative, at a glance.** Every percentage setting on Today and in the Schedule's
-  profiles has a mark beside it: a gauge for a moisture reading, as the probe shows it, and a pie
-  slice for a percentage of something else (the day's peak for a dryback, each plant's substrate
-  for a shot). A legend at the top says which is which.
-- **Clearer words for three settings.** The daily water limit says it is the zone's, for all its
-  plants together, and shows the same limit per plant under the field. The watchdog interval and
-  the zone's steering mode say what they do and when.
-- **No room steering mode on Today.** Nothing watered by it: each zone waters on its own steering
-  mode, set on that zone's tab.
-- **A room's review lists what changes.** Saving Rooms & hardware lists only what the save changes,
-  such as a zone's new name, in the words Activity records it in, with the rest of the room folded
-  away beneath. Before, it showed every zone, the plumbing and the dosers, even for a rename.
-- **Today's events go per plant too.** With Water today set to per plant, each shot in Today's
-  events, yesterday's shots on the grow-day chart and the water so far in Predictions say what each
-  plant got. Before, they always gave the zone's litres.
+- Each zone on the Overview has a ⋯ menu: move it to another phase, pause it, edit its strategy or open its details.
+- Today and the Schedule mark each percentage as a moisture reading or a share of something else, and the daily water limit, watchdog and steering mode explain themselves more clearly.
+- Saving Rooms & hardware lists only what you changed, not the whole room.
+- Bug fixes and improvements.
 
 ### 🔧 Technical notes
 
