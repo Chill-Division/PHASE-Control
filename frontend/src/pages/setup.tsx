@@ -39,6 +39,7 @@ import {
 } from "@/lib/plumbing";
 import { errorText } from "@/lib/utils";
 import { BATCH_SWITCH_KEYS, DOSER_KEYS } from "@/lib/feed";
+import { setupChanges } from "@/lib/setup-changes";
 import type { SetupCandidate, SetupDocument, SetupRoom, SetupZone } from "@/lib/operator-types";
 
 function MappingPicker({
@@ -353,6 +354,63 @@ export function Setup({
     )
       errors.push("Enter valid plant counts, pot volumes and dripper sizing.");
   }
+  // What saving changes, as the integration will store it (names trimmed, the plumbing sent or
+  // kept) and in the words its logbook records: the review lists these, not the whole room.
+  const changes =
+    draft && original && !isNew
+      ? setupChanges(original, {
+          ...draft,
+          room_name: draft.room_name.trim(),
+          zones: draft.zones.map((z) => ({ ...z, name: z.name.trim() })),
+          plumbing: asksPlumbing && plumbing ? plumbing : original.plumbing,
+        })
+      : [];
+  // The room as it will be saved: what a new room's review shows, and an existing room's on request.
+  const wholeRoom = (
+    <>
+      {isNew && <h3>{draft?.room_name}</h3>}
+      <p>
+        {activeZones.length} active zones · {archivedZones.length} archived zones
+      </p>
+      {asksPlumbing && isPlumbingLayout(plumbing) && (
+        <div className="workspace-message">
+          <strong>Plumbing: {PLUMBING_LABELS[plumbing]}</strong>
+          <p className="mapping-id">
+            {[draft?.hardware.pump_switch, draft?.hardware.main_line_switch]
+              .filter(Boolean)
+              .join(" → ") || "No pump or main-line valve: each zone is its one switch."}
+          </p>
+        </div>
+      )}
+      {reservoirFields.some(([key]) => draft?.hardware[key]) && (
+        <div className="workspace-message">
+          <strong>Reservoir & dosers</strong>
+          <p className="mapping-id">
+            {reservoirFields
+              .filter(([key]) => draft?.hardware[key])
+              .map(([key, label]) => `${label}: ${draft?.hardware[key]}`)
+              .join(" · ")}
+          </p>
+        </div>
+      )}
+      {activeZones.map((z) => (
+        <div className="workspace-message" key={z.id}>
+          <strong>
+            {z.name} · ID {z.id}
+          </strong>
+          <p className="mapping-id">{z.valve}</p>
+          <p>
+            {z.vwc_sensors.length} VWC probes · {z.ec_sensors.length} EC probes
+          </p>
+          <p>
+            {z.plant_count} plants × {reviewValue(z.substrate_volume ?? NaN, "substrate_volume")} ·{" "}
+            {z.drippers_per_plant} drippers per plant ×{" "}
+            {reviewValue(z.dripper_flow_rate ?? NaN, "dripper_flow_rate")}
+          </p>
+        </div>
+      ))}
+    </>
+  );
   async function save() {
     if (!draft || !review) return;
     setBusy(true);
@@ -899,7 +957,9 @@ export function Setup({
             <DialogDescription>
               {review === "remove"
                 ? "This removes the room from active control while preserving its identifiers and stored configuration."
-                : "Only the selected room configuration is changed. Watering is not switched on and no valve is actuated."}
+                : isNew
+                  ? "Only the selected room configuration is changed. Watering is not switched on and no valve is actuated."
+                  : "Saving reloads this room in Home Assistant for a moment. Watering is not switched on and no valve is actuated."}
             </DialogDescription>
           </DialogHeader>
           {review === "remove" ? (
@@ -911,50 +971,32 @@ export function Setup({
                 onChange={(e) => setConfirmName(e.target.value)}
               />
             </div>
+          ) : isNew ? (
+            <div className="plan-review-zones">{wholeRoom}</div>
           ) : (
             <div className="plan-review-zones">
               <h3>{draft?.room_name}</h3>
-              <p>
-                {activeZones.length} active zones · {archivedZones.length} archived zones
-              </p>
-              {asksPlumbing && isPlumbingLayout(plumbing) && (
-                <div className="workspace-message">
-                  <strong>Plumbing: {PLUMBING_LABELS[plumbing]}</strong>
-                  <p className="mapping-id">
-                    {[draft?.hardware.pump_switch, draft?.hardware.main_line_switch]
-                      .filter(Boolean)
-                      .join(" → ") || "No pump or main-line valve: each zone is its one switch."}
-                  </p>
-                </div>
+              {changes.length ? (
+                <>
+                  <div className="workspace-message">
+                    <strong>
+                      {changes.length} change{changes.length === 1 ? "" : "s"}
+                    </strong>
+                    <ul className="setup-review-changes">
+                      {changes.map((line) => (
+                        <li key={line}>{line.charAt(0).toUpperCase() + line.slice(1)}</li>
+                      ))}
+                    </ul>
+                  </div>
+                  <p className="muted">Everything else in the room stays as it is.</p>
+                </>
+              ) : (
+                <p>Nothing in the room changes.</p>
               )}
-              {reservoirFields.some(([key]) => draft?.hardware[key]) && (
-                <div className="workspace-message">
-                  <strong>Reservoir & dosers</strong>
-                  <p className="mapping-id">
-                    {reservoirFields
-                      .filter(([key]) => draft?.hardware[key])
-                      .map(([key, label]) => `${label}: ${draft?.hardware[key]}`)
-                      .join(" · ")}
-                  </p>
-                </div>
-              )}
-              {activeZones.map((z) => (
-                <div className="workspace-message" key={z.id}>
-                  <strong>
-                    {z.name} · ID {z.id}
-                  </strong>
-                  <p className="mapping-id">{z.valve}</p>
-                  <p>
-                    {z.vwc_sensors.length} VWC probes · {z.ec_sensors.length} EC probes
-                  </p>
-                  <p>
-                    {z.plant_count} plants ×{" "}
-                    {reviewValue(z.substrate_volume ?? NaN, "substrate_volume")} ·{" "}
-                    {z.drippers_per_plant} drippers per plant ×{" "}
-                    {reviewValue(z.dripper_flow_rate ?? NaN, "dripper_flow_rate")}
-                  </p>
-                </div>
-              ))}
+              <details className="setup-review-room">
+                <summary>The whole room as it will be saved</summary>
+                {wholeRoom}
+              </details>
             </div>
           )}
           {error && (

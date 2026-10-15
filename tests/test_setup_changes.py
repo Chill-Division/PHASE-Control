@@ -1,7 +1,9 @@
 """What a saved room setup change is recorded as: the words setup_api.setup_changes gives the
 logbook and the log, from the room the setup page showed and the room saved."""
 
+import json
 from copy import deepcopy
+from pathlib import Path
 
 from custom_components.crop_steering.setup_api import setup_changes
 
@@ -80,3 +82,31 @@ def test_zones_added_renamed_archived_and_the_room_archived_and_restored():
     archived = {**room(), "active": False}
     assert setup_changes(room(), archived) == ["archived"]
     assert setup_changes(archived, room()) == ["restored"]
+
+
+def built(base, patch):
+    """A room from the shared cases: `base` with each top-level value replaced, and each zone's
+    fields set by id (a new id is a copy of the first zone)."""
+    made = deepcopy(base)
+    for key, value in patch.items():
+        if key != "zones":
+            made[key] = value
+            continue
+        for zone_id, fields in value.items():
+            zone = next((z for z in made["zones"] if z["id"] == int(zone_id)), None)
+            if zone is None:
+                zone = {**deepcopy(base["zones"][0]), "id": int(zone_id)}
+                made["zones"].append(zone)
+            zone.update(fields)
+    return made
+
+
+def test_the_review_before_a_save_says_what_the_logbook_will():
+    """Rooms & hardware lists a save's changes before it is made (frontend/src/lib/setup-changes.ts),
+    held to these same cases by setup-changes.test.ts."""
+    cases = Path(__file__).parent / "fixtures" / "setup_changes.json"
+    shared = json.loads(cases.read_text(encoding="utf-8"))
+    for case in shared["cases"]:
+        old = built(shared["room"], case.get("old", {}))
+        new = built(shared["room"], case["change"])
+        assert setup_changes(old, new) == case["said"], case["what"]
