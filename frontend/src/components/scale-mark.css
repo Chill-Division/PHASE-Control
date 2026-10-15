@@ -1,0 +1,61 @@
+/* Absolute or relative, beside a percentage setting and in the legend that explains both. */
+.scale-mark {
+  display: inline-flex;
+  flex: 0 0 22px;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  vertical-align: middle;
+}
+.scale-mark svg {
+  width: 15px;
+  height: 15px;
+}
+.scale-mark[data-scale="absolute"] {
+  background: color-mix(in srgb, var(--primary) 12%, var(--surface));
+  color: var(--primary-strong);
+}
+.scale-mark[data-scale="relative"] {
+  background: var(--warning-bg);
+  color: var(--warning);
+}
+.scale-legend {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--muted-foreground);
+  font-size: var(--text-xs);
+  line-height: 1.5;
+}
+.scale-legend p {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 0;
+}
+.scale-legend strong {
+  color: var(--foreground);
+}
+/* Today's fields: the mark sits beside the input box, in a column every field keeps, so the boxes
+   line up whether or not a field has one; the line under the box spans both. */
+.setpoint-controls .setting-input {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 22px;
+  column-gap: 6px;
+  align-items: center;
+}
+.setpoint-controls .setting-input > p {
+  grid-column: 1 / -1;
+}
+.setting-field strong .scale-mark {
+  margin-left: 6px;
+}
+.profile-grid .scale-mark {
+  margin-left: 6px;
+}

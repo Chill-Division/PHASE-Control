@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { buildRoom, discoverRooms, ROOM_PARAMETERS, ZONE_PARAMETERS } from "./model";
 import { createDemo } from "./demo";
@@ -11,6 +12,37 @@ const shown = [
 ];
 
 describe("setting words", () => {
+  it("marks every percentage setting absolute or relative, and nothing else", () => {
+    // The integration's own list: every number entity whose unit is a percentage.
+    const source = readFileSync(
+      new URL("../../../custom_components/crop_steering/number.py", import.meta.url),
+      "utf8",
+    );
+    const percent = [
+      ...source.matchAll(/key="(\w+)",[^)]*?native_unit_of_measurement=PERCENTAGE/g),
+    ].map((m) => m[1]);
+    expect(percent).toHaveLength(11);
+    const relativeTo: Record<string, string> = {
+      vegetative_dryback_target: "the day’s peak",
+      generative_dryback_target: "the day’s peak",
+      p0_dryback_drop_percent: "its lights-on reading",
+      p1_initial_shot_size: "each plant’s substrate",
+      p1_shot_size_increment: "each plant’s substrate",
+      p2_shot_size: "each plant’s substrate",
+      p3_emergency_shot_size: "each plant’s substrate",
+    };
+    for (const param of percent) {
+      const words = settingWords(param);
+      if (relativeTo[param])
+        expect(words, param).toMatchObject({ scale: "relative", scaleOf: relativeTo[param] });
+      // A moisture level: what the probe reads.
+      else expect(words?.scale, param).toBe("absolute");
+    }
+    // The Schedule's one dryback target, both modes in one.
+    expect(settingWords("dryback_target")).toMatchObject({ scale: "relative" });
+    for (const param of shown.filter((key) => !percent.includes(key)))
+      expect(settingWords(param)?.scale, param).toBeUndefined();
+  });
   it("names every setting the Irrigation plan can show, with a one-line help", () => {
     for (const param of shown) {
       const words = settingWords(param);
@@ -61,7 +93,14 @@ describe("setting words", () => {
     expect(settingWords("dryback_target")!.detail).toBe(
       settingWords("vegetative_dryback_target")!.detail,
     );
-    expect(settingWords("max_daily_volume")!.detail).toBeUndefined();
+    // The daily water limit and the watchdog say what they count and when they act too.
+    for (const param of ["max_daily_volume", "watchdog_hours"]) {
+      expect(settingWords(param)!.detail?.what, param).toMatch(/\.$/);
+      expect(settingWords(param)!.detail?.when, param).toMatch(/\.$/);
+    }
+    expect(settingWords("max_daily_volume")!.help).toMatch(
+      /all of its plants together, not per plant/,
+    );
   });
   it("cites the handbook's printed page for every Athena line, and shows every part", () => {
     const shownParts = new Set(DETAIL_HEADINGS.map(([key]) => key));

@@ -118,11 +118,11 @@ describe("room model", () => {
       "5",
       { min: 0, max: 100, step: 1 },
     );
-    states["select.crop_steering_steering_mode"] = entity(
+    for (const id of [
       "select.crop_steering_steering_mode",
-      "Vegetative",
-      { options: ["Vegetative", "Generative"] },
-    );
+      "select.crop_steering_zone_1_steering_mode",
+    ])
+      states[id] = entity(id, "Vegetative", { options: ["Vegetative", "Generative"] });
     states["select.crop_steering_recipe_stage"] = entity(
       "select.crop_steering_recipe_stage",
       "Veg",
@@ -130,17 +130,26 @@ describe("room model", () => {
     );
     const view = buildRoom(states, room);
     expect(view.settings.some((s) => s.entityId.includes("intelligence"))).toBe(false);
-    expect(view.choices).toHaveLength(1);
+    // Each zone's mode only: the room's own select is not offered, as nothing waters by it.
+    expect(view.choices.map((c) => c.entityId)).toEqual([
+      "select.crop_steering_zone_1_steering_mode",
+    ]);
     expect(
       validateChange(view, states, {
-        entityId: "select.crop_steering_steering_mode",
+        entityId: "select.crop_steering_zone_1_steering_mode",
         value: "Generative",
       }),
     ).toBeNull();
     expect(
       validateChange(view, states, {
-        entityId: "select.crop_steering_steering_mode",
+        entityId: "select.crop_steering_zone_1_steering_mode",
         value: "other",
+      }),
+    ).toBeTruthy();
+    expect(
+      validateChange(view, states, {
+        entityId: "select.crop_steering_steering_mode",
+        value: "Generative",
       }),
     ).toBeTruthy();
     expect(

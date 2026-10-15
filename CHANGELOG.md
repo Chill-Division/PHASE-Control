@@ -15,6 +15,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Every zone's actions in one menu.** On the Overview, each zone's ⋯ moves it to another phase,
   pauses or enables its scheduling, opens its strategy or opens its details. Before, those were only
   in a side panel opened by clicking the zone's name, which nothing marked as a button.
+- **Absolute or relative, at a glance.** Every percentage setting on Today and in the Schedule's
+  profiles has a mark beside it: a gauge for a moisture reading, as the probe shows it, and a pie
+  slice for a percentage of something else (the day's peak for a dryback, each plant's substrate
+  for a shot). A legend at the top says which is which.
+- **Clearer words for three settings.** The daily water limit says it is the zone's, for all its
+  plants together, and shows the same limit per plant under the field. The watchdog interval and
+  the zone's steering mode say what they do and when.
+- **No room steering mode on Today.** Nothing watered by it: each zone waters on its own steering
+  mode, set on that zone's tab.
 
 ### 🔧 Technical notes
 
@@ -31,6 +40,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the right edge where the table scrolls sideways (1280 px and narrower). `verify-dashboard.mjs`
   checks the menu's items, its accessibility, that a phase move is reviewed first and that the last
   item opens the details.
+- Dashboard: `SettingWords` gains `scale` ("absolute" or "relative") and `scaleOf` for each of the
+  eleven percentage settings, with `SCALE_WORDS` and `scaleTitle`. `ScaleMark`, `ScaleMarkFor` and
+  `ScaleLegend` (`components/scale-mark.tsx`) draw them beside Today's inputs, on the read-only
+  scheduled targets and by the Schedule's profile rows; Today's input column is 28 px wider for
+  the mark (143 px, 138 under 620 px). `setting-words.test.ts` reads the integration's own
+  `PERCENTAGE` numbers from `number.py` and fails a new one without a mark.
+- Dashboard: the daily water limit and the watchdog interval have a "?" explainer; the daily limit's
+  field shows its per-plant share from the zone's plant count. The demo room has a watchdog
+  interval. `buildRoom` lists only the zones' `steering_mode` selects, so Today never offers the
+  room's, and a targets file no longer writes it (an older file's is skipped on import).
 ## [1.1.1] - 2026-10-12
 
 Integration and controller **1.1.1**.
