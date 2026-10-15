@@ -21,6 +21,10 @@ people who build the system:
 `tests/test_whats_new.py` checks the shape and the plain words, and that the newest section is the
 version being released.
 
+## Unreleased
+
+- Each zone on the Overview has a ⋯ menu: move it to another phase, pause it, edit its strategy or open its details.
+
 ## 1.1.1 - 2026-10-12
 
 - Overnight shots now wait 10 minutes after the last one, so the water reaches the probe before the next. Change it with Time between P3 shots on the P3 card.
