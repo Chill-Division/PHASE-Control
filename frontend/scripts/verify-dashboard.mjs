@@ -1040,6 +1040,22 @@ try {
   });
   await check("water today: per plant is the room's choice, made in Settings", async () => {
     const cells = () => page.locator(".zone-table-desktop .water-use").allInnerTexts();
+    // The grow day's shots in Today's events, and its water so far in Predictions, read the same.
+    const timeline = page.locator("[data-day-timeline]");
+    const shots = async () => {
+      const lines = timeline.locator(".timeline-events li", { hasText: "at the configured flow" });
+      await lines.first().waitFor({ state: "attached" });
+      return lines.allTextContents();
+    };
+    const soFar = async () => {
+      await timeline.getByRole("button", { name: "Predictions" }).click();
+      const box = page.locator("[data-predictions]");
+      await expectVisible(box);
+      const text = await box.locator("p[data-zone]").first().textContent();
+      await page.keyboard.press("Escape");
+      await box.waitFor({ state: "detached" });
+      return text;
+    };
     // Within the visit, not a reload: the demo keeps each room's choice as Home Assistant would.
     const visit = async (route) => {
       await page.evaluate((hash) => (location.hash = hash), `#/${route}`);
@@ -1062,11 +1078,15 @@ try {
     // Each zone's total, as always, until someone chooses otherwise.
     await go("overview");
     assert.match((await cells())[0], litres);
+    for (const line of await shots()) assert.match(line, / · ≈[\d.]+ L at the configured flow/);
     await choose("Per plant");
     await axe("settings: water per plant");
     // The demo's zone 1: 5.3 L for 36 plants, a 40 L limit.
     await visit("overview");
     assert.equal((await cells())[0], "147 mL / 1.11 L\n13% of limit");
+    for (const line of await shots())
+      assert.match(line, / · ≈[\d.]+ (mL|L) per plant at the configured flow/);
+    assert.match(await soFar(), / · ≈[\d.]+ (mL|L) per plant so far \([+−±][\d.]+ (mL|L)\)/);
     const water = page.locator(".zone-table-desktop th", { hasText: "Water today" });
     assert.equal((await water.innerText()).replace(/\s+/g, " "), "Water today per plant");
     assert.match(
@@ -1101,6 +1121,7 @@ try {
     await choose("Zone total");
     await visit("overview");
     assert.match((await cells())[0], litres);
+    for (const line of await shots()) assert.match(line, / · ≈[\d.]+ L at the configured flow/);
   });
   await check("what's new: once after an update, on a desktop and a phone, and from Help", async () => {
     const dialog = page.getByRole("dialog", { name: "What’s new in PHASE Control", exact: true });
