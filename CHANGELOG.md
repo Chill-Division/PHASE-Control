@@ -10,6 +10,16 @@ and code-level detail for developers and AI agents working on the repo.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### 🔧 Technical notes
+
+- Scripts: `release.py --public` checks that the public main is behind the release before saying
+  what it would push, in a dry run too, as `--sync` does, with one check for both
+  (`fast_forward_refusal`). For 1.1.1 the dry run said it would push and the push was refused: a
+  commit had been made straight on the public repository. The refusal says how such a change comes
+  back through this one.
+
 ## [1.1.1] - 2026-10-12
 
 Integration and controller **1.1.1**.

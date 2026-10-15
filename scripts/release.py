@@ -300,6 +300,32 @@ def publish_release(slug: str, version: str, changelog: str) -> str:
     return json.loads(created)["html_url"]
 
 
+def fast_forward_refusal(there: str | None, behind: bool, target: str) -> str | None:
+    """Why PUBLIC's main cannot move to `target` (it has no main yet, `there` is None, or is
+    `behind` it), or None. Only a fast-forward goes: a commit made straight on PUBLIC is not in
+    `target`, and moving the main past it would drop it."""
+    if there is None or behind:
+        return None
+    return (
+        f"{PUBLIC} {BRANCH} ({there[:12]}) has a commit that {target} does not, and only a"
+        " fast-forward goes. A commit made straight on the public repository comes here first, in"
+        " a pull request based on it; then the next release, or --sync, takes it public."
+    )
+
+
+def public_main(public: str) -> str | None:
+    """PUBLIC's main, fetched here so it can be compared, or None when it has none yet."""
+    listed = run("git", "ls-remote", public, f"refs/heads/{BRANCH}").split()
+    if not listed:
+        return None
+    run("git", "fetch", "--quiet", public, f"refs/heads/{BRANCH}")
+    return listed[0]
+
+
+def is_behind(there: str, sha: str) -> bool:
+    return not subprocess.run(["git", "merge-base", "--is-ancestor", there, sha], cwd=ROOT).returncode
+
+
 def sync_refusal(changed: list[str]) -> str | None:
     """Why these changed files cannot go to PUBLIC's main without a release, or None. The
     Supervisor builds the app from that main, so a change to it would reach every box that installs
@@ -454,6 +480,10 @@ def release_public(version: str, dry_run: bool) -> None:
         raise Refused(f"{PUBLIC} does not exist (or this login cannot see it)")
     if release_exists(PUBLIC, tag):
         raise Refused(f"{tag} is already released on {PUBLIC}")
+    there = public_main(public_url(origin))
+    why = fast_forward_refusal(there, there is not None and is_behind(there, sha), tag)
+    if why:
+        raise Refused(why)
     changelog = run("git", "show", f"{tag}:{CHANGELOG}")
     if dry_run:
         print(f"Would push {sha[:12]} ({tag}) to {PUBLIC} {BRANCH}, and publish:\n")
@@ -481,18 +511,15 @@ def release_sync(dry_run: bool) -> None:
     if subprocess.run(["gh", "api", f"repos/{PUBLIC}"], capture_output=True).returncode:
         raise Refused(f"{PUBLIC} does not exist (or this login cannot see it)")
     public = public_url(origin)
-    listed = run("git", "ls-remote", public, f"refs/heads/{BRANCH}").split()
-    if not listed:
+    there = public_main(public)
+    if there is None:
         raise Refused(f"{PUBLIC} has no {BRANCH} yet: its first release makes it (--public)")
-    there = listed[0]
     if there == sha:
         print(f"{PUBLIC} {BRANCH} is {sha[:12]} already: nothing to take")
         return
-    run("git", "fetch", "--quiet", public, f"refs/heads/{BRANCH}")
-    if subprocess.run(["git", "merge-base", "--is-ancestor", there, sha], cwd=ROOT).returncode:
-        raise Refused(
-            f"{PUBLIC} {BRANCH} ({there[:12]}) is not behind {BRANCH} here: only a fast-forward goes"
-        )
+    why = fast_forward_refusal(there, is_behind(there, sha), f"{BRANCH} here")
+    if why:
+        raise Refused(why)
     why = sync_refusal(run("git", "diff", "--name-only", there, sha).splitlines())
     if why:
         raise Refused(why)
