@@ -21,7 +21,7 @@ people who build the system:
 `tests/test_whats_new.py` checks the shape and the plain words, and that the newest section is the
 version being released.
 
-## Unreleased
+## 1.2.0 - 2026-10-16
 
 - Each zone on the Overview has a ⋯ menu: move it to another phase, pause it, edit its strategy or open its details.
 - Each percentage on Today and the Schedule is marked as a moisture reading or a share of something else.

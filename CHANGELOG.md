@@ -10,7 +10,9 @@ and code-level detail for developers and AI agents working on the repo.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.2.0] - 2026-10-16
+
+Integration and controller **1.2.0**.
 
 - Each zone on the Overview has a ⋯ menu: move it to another phase, pause it, edit its strategy or open its details.
 - Each percentage on Today and the Schedule is marked as a moisture reading or a share of something else.
