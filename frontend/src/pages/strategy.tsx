@@ -528,12 +528,15 @@ export function Strategy({
                                 {drafts[choice.entityId] && <span className="draft-dot" />}
                               </Label>
                               <p>
-                                Vegetative or Generative. It picks this zone’s P3 dryback target and
-                                its substrate EC targets for P0 to P2, each of which has a
-                                vegetative and a generative value. With Auto setpoints on, it also
-                                sets how early maintenance shots may stop: 3 hours before lights-off
-                                at the earliest when vegetative, from the middle of the day when
-                                generative. Nothing changes until you review and apply.
+                                Vegetative or Generative. Switching it changes only three things for
+                                this zone: its P3 dryback target and its substrate EC targets for P0
+                                to P2, which each have a vegetative and a generative value, and,
+                                with Auto setpoints on, how early its maintenance shots may stop (3
+                                hours before lights-off at the earliest when vegetative, from the
+                                middle of the day when generative). Its peak target, maintenance
+                                trigger, shot sizes and timing stay as they are: change those too if
+                                the new steering calls for it. Nothing changes until you review and
+                                apply.
                               </p>
                             </div>
                             <div>
