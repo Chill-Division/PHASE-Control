@@ -843,6 +843,7 @@ try {
       "Root-zone EC",
       "Dryback",
       "Water today",
+      "Actions",
     ]);
     assert.equal(table.marked, table.rows, "every moisture reading has its bar and target mark");
     const states = {
@@ -856,6 +857,33 @@ try {
     };
     for (const [text, tone] of await pillTones(`${rows} .pill:has(.pill-dot)`))
       assert.equal(tone, states[text], text);
+  });
+  await check("overview: every zone's ⋯ holds its actions, and a phase move is reviewed first", async () => {
+    await go("overview");
+    await page.locator(".zone-table-desktop").getByRole("button", { name: "Actions for Zone 1" }).click();
+    const menu = page.getByRole("menu");
+    await expectVisible(menu);
+    // Zone 1 is in P1: the other three phases, then its scheduling, its strategy and its details.
+    assert.deepEqual(await menu.getByRole("menuitem").allInnerTexts(), [
+      "Move to P0 · Dry-back",
+      "Move to P2 · Maintenance",
+      "Move to P3 · Overnight",
+      "Pause zone scheduling",
+      "Edit Zone 1 strategy",
+      "Open zone details",
+    ]);
+    await axe("zone actions menu");
+    await menu.getByRole("menuitem", { name: "Move to P2 · Maintenance" }).click();
+    const review = page.getByRole("dialog", { name: "Move Zone 1 to P2?" });
+    await expectVisible(review);
+    assert.match(await review.innerText(), /Zone 1 phase\s*P1\s*→\s*P2/);
+    await review.getByRole("button", { name: "Back to editing" }).click();
+    await review.waitFor({ state: "hidden" });
+    // The last item opens the zone's details, as its name does.
+    await page.locator(".zone-table-desktop").getByRole("button", { name: "Actions for Zone 1" }).click();
+    await page.getByRole("menuitem", { name: "Open zone details" }).click();
+    await expectVisible(page.getByRole("dialog").getByRole("heading", { name: "Phase" }));
+    await page.keyboard.press("Escape");
   });
   await check("zone details: a zone with two probes chooses how each reading combines them", async () => {
     await go("overview");

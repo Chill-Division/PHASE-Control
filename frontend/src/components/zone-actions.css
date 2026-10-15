@@ -1,0 +1,27 @@
+/* The ⋯ at the end of each zone's row on the Overview, and beside each zone's title on a phone,
+   that holds every action for the zone. */
+.zone-actions-cell {
+  width: 1%;
+  text-align: right;
+  white-space: nowrap;
+}
+/* Where the table is too wide for its box and scrolls sideways, the ⋯ stays at its right edge. */
+.data-table.zone-table-compact .zone-actions-cell,
+.data-table.zone-table-compact th:last-child {
+  position: sticky;
+  right: 0;
+  padding-left: 4px;
+  background: var(--surface);
+}
+.zone-mobile-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.zone-mobile-head > .zone-mobile-title {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.zone-actions-menu {
+  min-width: 15rem;
+}

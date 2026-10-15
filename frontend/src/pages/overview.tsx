@@ -87,11 +87,13 @@ export function Overview({
           </div>
           {room.zones.length ? (
             <ZoneTable
+              controller={controller}
               zones={room.zones}
               trends={trends}
               limits={limits}
               plants={plants}
               onSelect={(zone) => setSelected(zone.id)}
+              navigate={navigate}
             />
           ) : (
             <Empty

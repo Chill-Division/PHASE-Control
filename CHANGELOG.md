@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Every zone's actions in one menu.** On the Overview, each zone's ⋯ moves it to another phase,
+  pauses or enables its scheduling, opens its strategy or opens its details. Before, those were only
+  in a side panel opened by clicking the zone's name, which nothing marked as a button.
+
 ### 🔧 Technical notes
 
 - Scripts: `release.py --public` checks that the public main is behind the release before saying
@@ -19,7 +23,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`fast_forward_refusal`). For 1.1.1 the dry run said it would push and the push was refused: a
   commit had been made straight on the public repository. The refusal says how such a change comes
   back through this one.
-
+- Dashboard: `ZoneActions`, a non-modal `DropdownMenu` (a new shadcn `ui/dropdown-menu.tsx` on Radix)
+  at the end of each row of the Overview's zones table and beside each zone's title on a phone.
+  Its phase moves and its pause or enable go through the same reviews as the zone's details
+  (`ZonePhaseReview`, `ZoneSchedulingReview`, now shared). The compact table's inner cell padding
+  is 8 px a side (12 at its edges) so the new column fits at 1440 px, and the column is sticky at
+  the right edge where the table scrolls sideways (1280 px and narrower). `verify-dashboard.mjs`
+  checks the menu's items, its accessibility, that a phase move is reviewed first and that the last
+  item opens the details.
 ## [1.1.1] - 2026-10-12
 
 Integration and controller **1.1.1**.

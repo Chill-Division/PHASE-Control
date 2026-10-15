@@ -100,10 +100,19 @@
 .zone-mobile-list .zone-mobile-readings {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
-/* Doubled class: styles.css loads after this file and sets .data-table cell padding. */
+/* Doubled class: styles.css loads after this file and sets .data-table cell padding. 8 px a side
+   between columns and 12 at the table's edges, so each row's ⋯ (zone-actions.css) fits at 1440 px. */
 .data-table.zone-table-compact th,
 .data-table.zone-table-compact td {
+  padding-left: 8px;
+  padding-right: 8px;
+}
+.data-table.zone-table-compact th:first-child,
+.data-table.zone-table-compact td:first-child {
   padding-left: 12px;
+}
+.data-table.zone-table-compact th:last-child,
+.data-table.zone-table-compact td:last-child {
   padding-right: 12px;
 }
 

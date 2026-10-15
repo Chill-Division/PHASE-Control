@@ -1,3 +1,7 @@
+# Unreleased
+
+- Each zone on the Overview has a ⋯ menu: move it to another phase, pause it, edit its strategy or open its details.
+
 # 1.1.1
 
 Pair with integration 1.1.1.
