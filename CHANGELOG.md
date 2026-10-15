@@ -24,6 +24,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the zone's steering mode say what they do and when.
 - **No room steering mode on Today.** Nothing watered by it: each zone waters on its own steering
   mode, set on that zone's tab.
+- **A room's review lists what changes.** Saving Rooms & hardware lists only what the save changes,
+  such as a zone's new name, in the words Activity records it in, with the rest of the room folded
+  away beneath. Before, it showed every zone, the plumbing and the dosers, even for a rename.
 
 ### 🔧 Technical notes
 
@@ -50,6 +53,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   field shows its per-plant share from the zone's plant count. The demo room has a watchdog
   interval. `buildRoom` lists only the zones' `steering_mode` selects, so Today never offers the
   room's, and a targets file no longer writes it (an older file's is skipped on import).
+- Dashboard: `setupChanges` (`lib/setup-changes.ts`) words a save's changes as the integration's
+  `setup_changes` does for the logbook, and Rooms & hardware's review of an existing room lists
+  them, with the whole room in a folded `<details>`; a new room's review still shows the whole room.
+  `tests/fixtures/setup_changes.json` holds cases that `tests/test_setup_changes.py` and
+  `setup-changes.test.ts` both run, and the vitest reads `HARDWARE_WORDS` and `ZONE_WORDS` from
+  `setup_api.py`. `verify-workspace.mjs` renames a zone and checks the review lists only that.
+
 ## [1.1.1] - 2026-10-12
 
 Integration and controller **1.1.1**.
