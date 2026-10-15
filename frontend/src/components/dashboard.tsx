@@ -3,8 +3,13 @@ import {
   Activity,
   ArrowUpRight,
   Droplets,
+  Ellipsis,
   Info,
   LoaderCircle,
+  PanelRight,
+  Pause,
+  Play,
+  SlidersHorizontal,
   TrendingDown,
   TrendingUp,
 } from "lucide-react";
@@ -34,6 +39,16 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import "./zone-actions.css";
 import type { Change, Controller, LogEvent, Metric, Series, Zone } from "@/lib/types";
 import { choiceLabel, type ProbeChoice } from "@/lib/probes";
 import { errorText } from "@/lib/utils";
@@ -828,14 +843,18 @@ export function MoistureCell({ zone, target = true }: { zone: Zone; target?: boo
 }
 
 export function ZoneTable({
+  controller,
   zones,
   onSelect,
+  navigate,
   trends,
   limits = {},
   plants = {},
 }: {
+  controller: Controller;
   zones: Zone[];
   onSelect: (zone: Zone) => void;
+  navigate: (page: Page, zoneId?: number) => void;
   /** Each zone's dryback; null while the readings load. */
   trends?: Record<number, DrybackTrend> | null;
   /** Each zone's daily water limit in litres. */
@@ -863,6 +882,9 @@ export function ZoneTable({
               <th>
                 Water today
                 {view === "plant" && <span className="cell-subtext">per plant</span>}
+              </th>
+              <th>
+                <span className="sr-only">Actions</span>
               </th>
             </tr>
           </thead>
@@ -900,6 +922,14 @@ export function ZoneTable({
                     plants={plants[zone.id] ?? null}
                   />
                 </td>
+                <td className="zone-actions-cell">
+                  <ZoneActions
+                    controller={controller}
+                    zone={zone}
+                    onOpen={onSelect}
+                    navigate={navigate}
+                  />
+                </td>
               </tr>
             ))}
           </tbody>
@@ -908,14 +938,22 @@ export function ZoneTable({
       <div className="zone-mobile-list">
         {zones.map((zone) => (
           <div className="zone-mobile-row" key={zone.id}>
-            <button className="zone-mobile-title" onClick={() => onSelect(zone)}>
-              <span className="zone-icon">
-                <Droplets size={17} />
-              </span>
-              <strong>{zone.name}</strong>
-              <Status enabled={zone.enabled} />
-              <ArrowUpRight size={16} />
-            </button>
+            <div className="zone-mobile-head">
+              <button className="zone-mobile-title" onClick={() => onSelect(zone)}>
+                <span className="zone-icon">
+                  <Droplets size={17} />
+                </span>
+                <strong>{zone.name}</strong>
+                <Status enabled={zone.enabled} />
+                <ArrowUpRight size={16} />
+              </button>
+              <ZoneActions
+                controller={controller}
+                zone={zone}
+                onOpen={onSelect}
+                navigate={navigate}
+              />
+            </div>
             <ZoneOperatingState zone={zone} showScheduling={false} />
             <div className="zone-irrigation-summary">
               <span className="small muted">Last irrigation</span>
@@ -1146,6 +1184,173 @@ function ProbeReview({
   );
 }
 
+/** Pausing or enabling a zone's scheduling, reviewed before it applies: from the zone's details
+ * and from its actions menu. */
+function ZoneSchedulingReview({
+  controller,
+  zone,
+  open,
+  onOpenChange,
+}: {
+  controller: Controller;
+  zone: Zone;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  return (
+    <ReviewDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      controller={controller}
+      title="Review zone scheduling"
+      items={
+        zone.enabledEntity
+          ? [
+              {
+                change: {
+                  entityId: zone.enabledEntity,
+                  value: !zone.enabled,
+                },
+                label: `${zone.name} scheduling`,
+                before: zone.enabled ? "Enabled" : "Paused",
+                after: zone.enabled ? "Paused" : "Enabled",
+              },
+            ]
+          : []
+      }
+      note={
+        zone.enabled
+          ? "Paused, the zone gets no water, not even a rescue shot, and a shot already running in it stops within a few seconds."
+          : "The controller waters the zone again from its next check."
+      }
+    />
+  );
+}
+
+/** Moving a zone to another phase, reviewed before it applies: from the zone's details and from
+ * its actions menu. Nothing for a zone without a phase setting. */
+function ZonePhaseReview({
+  controller,
+  zone,
+  phase,
+  onClose,
+}: {
+  controller: Controller;
+  zone: Zone;
+  phase: string | null;
+  onClose: () => void;
+}) {
+  if (!zone.setPhaseEntity) return null;
+  return (
+    <ReviewDialog
+      open={phase !== null}
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+      controller={controller}
+      title={`Move ${zone.name} to ${phase}?`}
+      items={
+        phase
+          ? [
+              {
+                change: { entityId: zone.setPhaseEntity, value: phase },
+                label: `${zone.name} phase`,
+                before: zone.phase,
+                after: phase,
+              },
+            ]
+          : []
+      }
+      note="The controller moves the zone at its next check, within a minute. Today's water and shot counts stay; a zone moved to P1 ramps from its first shot again."
+    />
+  );
+}
+
+/** Every action for one zone, from the ⋯ at the end of its row on the Overview: move it to
+ * another phase, pause or enable its scheduling, edit its strategy, or open its details. Each
+ * change is reviewed before it applies, as in the details. */
+function ZoneActions({
+  controller,
+  zone,
+  onOpen,
+  navigate,
+}: {
+  controller: Controller;
+  zone: Zone;
+  onOpen: (zone: Zone) => void;
+  navigate: (page: Page, zoneId?: number) => void;
+}) {
+  const [phaseChoice, setPhaseChoice] = useState<string | null>(null);
+  const [scheduling, setScheduling] = useState(false);
+  const connected = ["live", "demo"].includes(controller.connection);
+  return (
+    <>
+      {/* Not modal: the page stays readable around it, and a click elsewhere closes it. */}
+      <DropdownMenu modal={false}>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="outline"
+            size="icon-sm"
+            className="zone-actions-trigger"
+            aria-label={`Actions for ${zone.name}`}
+          >
+            <Ellipsis size={18} />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="zone-actions-menu">
+          {zone.setPhaseEntity && (
+            <DropdownMenuGroup>
+              <DropdownMenuLabel>
+                Phase{zone.phase ? ` · now ${zone.phase} · ${PHASE_NAMES[zone.phase] ?? ""}` : ""}
+              </DropdownMenuLabel>
+              {Object.entries(PHASE_NAMES)
+                .filter(([phase]) => phase !== zone.phase)
+                .map(([phase, name]) => (
+                  <DropdownMenuItem
+                    key={phase}
+                    disabled={!connected}
+                    onSelect={() => setPhaseChoice(phase)}
+                  >
+                    Move to {phase} · {name}
+                  </DropdownMenuItem>
+                ))}
+              <DropdownMenuSeparator />
+            </DropdownMenuGroup>
+          )}
+          <DropdownMenuItem
+            disabled={!zone.enabledEntity || zone.enabled === null || !connected}
+            onSelect={() => setScheduling(true)}
+          >
+            {zone.enabled ? <Pause /> : <Play />}
+            {zone.enabled ? "Pause zone scheduling" : "Enable zone scheduling"}
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => navigate("strategy", zone.id)}>
+            <SlidersHorizontal />
+            Edit {zone.name} strategy
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onSelect={() => onOpen(zone)}>
+            <PanelRight />
+            Open zone details
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <ZonePhaseReview
+        controller={controller}
+        zone={zone}
+        phase={phaseChoice}
+        onClose={() => setPhaseChoice(null)}
+      />
+      <ZoneSchedulingReview
+        controller={controller}
+        zone={zone}
+        open={scheduling}
+        onOpenChange={setScheduling}
+      />
+    </>
+  );
+}
+
 export function ZoneDetails({
   controller,
   zone,
@@ -1372,31 +1577,11 @@ export function ZoneDetails({
         </SheetContent>
       </Sheet>
       {zone && (
-        <ReviewDialog
+        <ZoneSchedulingReview
+          controller={controller}
+          zone={zone}
           open={review}
           onOpenChange={setReview}
-          controller={controller}
-          title="Review zone scheduling"
-          items={
-            zone.enabledEntity
-              ? [
-                  {
-                    change: {
-                      entityId: zone.enabledEntity,
-                      value: !zone.enabled,
-                    },
-                    label: `${zone.name} scheduling`,
-                    before: zone.enabled ? "Enabled" : "Paused",
-                    after: zone.enabled ? "Paused" : "Enabled",
-                  },
-                ]
-              : []
-          }
-          note={
-            zone.enabled
-              ? "Paused, the zone gets no water, not even a rescue shot, and a shot already running in it stops within a few seconds."
-              : "The controller waters the zone again from its next check."
-          }
         />
       )}
       {zone && probeChoice && zone.probes[probeChoice.metric]?.entityId && (
@@ -1408,27 +1593,12 @@ export function ZoneDetails({
           onClose={() => setProbeChoice(null)}
         />
       )}
-      {zone?.setPhaseEntity && (
-        <ReviewDialog
-          open={phaseChoice !== null}
-          onOpenChange={(open) => {
-            if (!open) setPhaseChoice(null);
-          }}
+      {zone && (
+        <ZonePhaseReview
           controller={controller}
-          title={`Move ${zone.name} to ${phaseChoice}?`}
-          items={
-            phaseChoice
-              ? [
-                  {
-                    change: { entityId: zone.setPhaseEntity, value: phaseChoice },
-                    label: `${zone.name} phase`,
-                    before: zone.phase,
-                    after: phaseChoice,
-                  },
-                ]
-              : []
-          }
-          note="The controller moves the zone at its next check, within a minute. Today's water and shot counts stay; a zone moved to P1 ramps from its first shot again."
+          zone={zone}
+          phase={phaseChoice}
+          onClose={() => setPhaseChoice(null)}
         />
       )}
     </>
