@@ -48,6 +48,7 @@ import {
   TAG_TEXT,
   settingWords,
 } from "@/lib/setting-words";
+import { ScaleLegend, ScaleMark } from "@/components/scale-mark";
 import "./setpoint-preview.css";
 
 function download(text: string, name: string) {
@@ -459,11 +460,13 @@ export function Strategy({
                           : ecPhase
                             ? "mS/cm"
                             : (field?.unit ?? "");
+                      const words = settingWords(key);
                       return (
                         <div className="setting-field" key={key}>
                           <span>{label}</span>
                           <strong>
                             {number(value)} {unit}
+                            {words?.scale && <ScaleMark scale={words.scale} of={words.scaleOf} />}
                           </strong>
                         </div>
                       );
@@ -501,6 +504,7 @@ export function Strategy({
                         </button>
                       ))}
                   </nav>
+                  <ScaleLegend />
                   {choices.length > 0 && (
                     <section className="panel settings-group">
                       <div className="settings-group-heading">
@@ -510,9 +514,8 @@ export function Strategy({
                         <div>
                           <h3>Steering mode</h3>
                           <p>
-                            {zone
-                              ? "The selected mode picks which EC and P3 dryback targets below the controller uses."
-                              : "The current engine uses each zone's mode, with legacy growth stage as fallback."}
+                            Some targets below have a vegetative and a generative value: the mode
+                            picks which one this zone runs on.
                           </p>
                         </div>
                       </div>
@@ -525,8 +528,12 @@ export function Strategy({
                                 {drafts[choice.entityId] && <span className="draft-dot" />}
                               </Label>
                               <p>
-                                Uses modes reported by Home Assistant. Review the change before
-                                applying.
+                                Vegetative or Generative. It picks this zone’s P3 dryback target and
+                                its substrate EC targets for P0 to P2, each of which has a
+                                vegetative and a generative value. With Auto setpoints on, it also
+                                sets how early maintenance shots may stop: 3 hours before lights-off
+                                at the earliest when vegetative, from the middle of the day when
+                                generative. Nothing changes until you review and apply.
                               </p>
                             </div>
                             <div>
@@ -653,6 +660,17 @@ export function Strategy({
                                 : null;
                               const auto = managedBy(supervisors, setting.entityId);
                               const words = param ? settingWords(param) : undefined;
+                              // The daily water limit is the zone's, for all its plants: per plant too.
+                              const plants =
+                                param === "max_daily_volume"
+                                  ? (allSettings.find(
+                                      (item) =>
+                                        item.zoneId === setting.zoneId &&
+                                        item.entityId.endsWith("_plant_count"),
+                                    )?.value ?? null)
+                                  : null;
+                              const perPlant =
+                                plants && plants > 0 && typed !== null ? typed / plants : null;
                               const tag = words?.tag;
                               return (
                                 <div
@@ -702,7 +720,7 @@ export function Strategy({
                                         aria-invalid={Boolean(error)}
                                         aria-describedby={
                                           `hint-${setting.entityId}` +
-                                          (hint || auto || order || autoNote
+                                          (hint || auto || order || autoNote || perPlant !== null
                                             ? ` context-${setting.entityId}`
                                             : "")
                                         }
@@ -714,6 +732,9 @@ export function Strategy({
                                       />
                                       <span>{setting.unit}</span>
                                     </div>
+                                    {words?.scale && (
+                                      <ScaleMark scale={words.scale} of={words.scaleOf} />
+                                    )}
                                     <p
                                       id={`hint-${setting.entityId}`}
                                       className={error ? "field-error" : "small muted"}
@@ -726,11 +747,17 @@ export function Strategy({
                                             : "")}
                                     </p>
                                   </div>
-                                  {(hint || auto || order || autoNote) && (
+                                  {(hint || auto || order || autoNote || perPlant !== null) && (
                                     <div
                                       className="setting-context"
                                       id={`context-${setting.entityId}`}
                                     >
+                                      {perPlant !== null && (
+                                        <p className="setting-sensor-hint" data-per-plant>
+                                          {number(perPlant, 2)} L per plant each grow-day, across{" "}
+                                          {plants} plants.
+                                        </p>
+                                      )}
                                       {auto && (
                                         <p className="setting-auto-hint">
                                           Managed automatically – manual edits will be overwritten.

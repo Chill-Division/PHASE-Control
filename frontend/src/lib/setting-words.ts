@@ -15,6 +15,27 @@ export type SettingTag = "fills" | "waters" | "dries" | "rescues" | "ceiling" | 
  * entity says only "%". */
 export const DRYBACK_UNIT = "% below peak";
 
+/** Whether a percentage is a moisture reading or a share of something else: a mark beside its field
+ * says which, and a legend at the top of the page says what each means. Every "%" setting has one. */
+export type SettingScale = "absolute" | "relative";
+export const SCALE_WORDS: Record<SettingScale, { name: string; legend: string }> = {
+  absolute: {
+    name: "Absolute",
+    legend: "a moisture reading, on your probe’s own scale: 40% means the probe reads 40%.",
+  },
+  relative: {
+    name: "Relative",
+    legend:
+      "a percentage of something else: a 30% dryback ends 30% below the day’s peak, and a 3% shot is 3% of each plant’s substrate.",
+  },
+};
+/** What a field's mark says on hover and to a screen reader. */
+export function scaleTitle(scale: SettingScale, of?: string): string {
+  return scale === "absolute"
+    ? "Absolute: a moisture reading, on your probe’s own scale"
+    : `Relative: a percentage of ${of ?? "something else"}`;
+}
+
 export const TAG_TEXT: Record<SettingTag, string> = {
   fills: "fills up to",
   waters: "waters below",
@@ -31,6 +52,9 @@ export interface SettingWords {
   /** One line under the field. */
   help: string;
   tag?: SettingTag;
+  /** For a percentage: a moisture reading (absolute), or a percentage of `scaleOf` (relative). */
+  scale?: SettingScale;
+  scaleOf?: string;
   /** The "?" beside the field. */
   detail?: SettingDetail;
 }
@@ -85,23 +109,30 @@ const WORDS: Record<string, SettingWords> = {
   p0_dryback_drop_percent: {
     label: "Additional dryback",
     short: "Additional dryback",
+    scale: "relative",
+    scaleOf: "its lights-on reading",
     tag: "dries",
     help: "The ramp starts once moisture has dropped this far below its lights-on reading, or at the latest first shot. Athena: 1 to 5%.",
   },
   p1_target_vwc: {
     label: "Peak VWC target",
     short: "Peak target",
+    scale: "absolute",
     tag: "fills",
     help: "The morning ramp waters up to this: the top of the day. It is capped at full saturation.",
   },
   p1_initial_shot_size: {
     label: "First P1 shot",
     short: "First P1 shot",
+    scale: "relative",
+    scaleOf: "each plant’s substrate",
     help: `The ramp’s first shot, ${OF_SUBSTRATE}.`,
   },
   p1_shot_size_increment: {
     label: "Each P1 shot adds",
     short: "Each P1 shot adds",
+    scale: "relative",
+    scaleOf: "each plant’s substrate",
     help: "Every ramp shot is this much bigger than the one before.",
   },
   p1_time_between_shots: {
@@ -117,12 +148,15 @@ const WORDS: Record<string, SettingWords> = {
   p2_vwc_threshold: {
     label: "Maintenance shot when below",
     short: "Maintenance trigger",
+    scale: "absolute",
     tag: "waters",
     help: "Through the day, a maintenance shot fires whenever moisture reads below this. The peak VWC target down to here is the daytime dryback.",
   },
   p2_shot_size: {
     label: "Maintenance shot size",
     short: "Maintenance shot",
+    scale: "relative",
+    scaleOf: "each plant’s substrate",
     help: `Each maintenance shot, ${OF_SUBSTRATE}.`,
   },
   p2_time_between_shots: {
@@ -133,12 +167,15 @@ const WORDS: Record<string, SettingWords> = {
   p3_emergency_vwc_threshold: {
     label: "Rescue shot when below",
     short: "Rescue level",
+    scale: "absolute",
     tag: "rescues",
     help: "In P3, a rescue shot fires whenever moisture reads below this. Keep it above the wilting point.",
   },
   p3_emergency_shot_size: {
     label: "Rescue shot size",
     short: "Rescue shot",
+    scale: "relative",
+    scaleOf: "each plant’s substrate",
     help: `Each rescue shot, and each shot holding the P3 dryback target, ${OF_SUBSTRATE}.`,
   },
   p3_time_between_shots: {
@@ -149,13 +186,14 @@ const WORDS: Record<string, SettingWords> = {
   field_capacity: {
     label: "Full saturation (most it holds)",
     short: "Full saturation",
+    scale: "absolute",
     tag: "ceiling",
     help: "The wettest this substrate gets; the peak VWC target is capped here. It is not Athena’s field capacity, which is lower.",
   },
   max_daily_volume: {
     label: "Daily water limit",
     short: "Daily water limit",
-    help: "The most water a zone gets in one grow-day. Routine shots stop at it; ramp, rescue and watchdog shots and high-EC flushes can go past it.",
+    help: "The most water this zone gets in one grow-day, lights-on to lights-on: litres for all of its plants together, not per plant. Routine shots stop at it; ramp, rescue and watchdog shots and high-EC flushes can go past it.",
   },
   maximum_ec: {
     label: "Maximum substrate EC",
@@ -165,7 +203,7 @@ const WORDS: Record<string, SettingWords> = {
   watchdog_hours: {
     label: "Watchdog interval",
     short: "Watchdog interval",
-    help: "After P0, with lights on, a zone below its maintenance trigger that has had no shot for this long gets one, even past the daily limit. 0 turns it off.",
+    help: "A safety net while the lights are on: a zone below its maintenance trigger that has had no shot for this many hours gets a maintenance-sized shot, even when the daily water limit is spent or a schedule is holding its shots. Never in P0. 0 turns it off.",
   },
   max_shot_duration: {
     label: "Longest shot",
@@ -235,6 +273,8 @@ const EC_WORDS: Record<string, SettingWords> = {
 const DRYBACK_WORDS: SettingWords = {
   label: "P3 dryback target",
   short: "P3 dryback target",
+  scale: "relative",
+  scaleOf: "the day’s peak",
   tag: "dries",
   help: "How far to dry back overnight, relative to the day’s peak: a 30% dryback from a 60% peak ends at 42%, and P3 holds it there.",
 };
@@ -344,6 +384,18 @@ const DETAILS: Record<string, SettingDetail> = {
     auto: AUTO,
     athena:
       "Full saturation: “a substrate can no longer hold anymore water and peak VWC% can no longer increase” (p. 33), and a target above it “is a target that is impossible to reach” (p. 40). That is how this setting behaves. Field capacity, “maximum VWC% of a substrate prior to runoff” (p. 33), is lower: enter that here and a vegetative peak target above it (p. 40) is capped and never reached.",
+  },
+  max_daily_volume: {
+    what: "The most water this zone gets in one grow-day, in litres for all of its plants together: not per plant, and not for the whole room. Each zone has its own.",
+    when: "Every shot’s water counts toward it: its size, times each plant’s substrate, times the plants in the zone. The count starts again at lights-on, not at midnight. Once it is spent, maintenance shots, dilution shots and the shots holding the P3 dryback stop until lights-on.",
+    affects:
+      "Ramp shots, rescue shots, watchdog shots and high-EC flushes still go past it, so a zone is never left to dry out or lock out. Under the field, the same limit is shown per plant.",
+  },
+  watchdog_hours: {
+    what: "A safety net for daytime watering, in hours: a zone that needs water is never left without it for long.",
+    when: "While the lights are on and P0 is over, a zone that reads below its maintenance trigger and has had no shot for longer than this gets a maintenance-sized shot. Normally a maintenance shot comes first, so it fires when routine shots have stopped: the daily water limit spent, a schedule holding the zone, or the zone in P3 before lights-off.",
+    affects:
+      "Neither the daily water limit nor a held schedule stops it. If something blocks watering altogether (watering switched off, a hardware fault, a refill), the controller raises an urgent alert, CS-207, once the zone has gone this long instead. 0 turns off both.",
   },
 };
 const EC_DETAILS: Record<string, SettingDetail> = {

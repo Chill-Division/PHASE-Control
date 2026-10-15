@@ -55,11 +55,9 @@ describe("Today's targets as a file", () => {
   it("keeps each setting by name and zone, both steering modes, not the hardware", () => {
     const file = JSON.parse(exported());
     expect(file.format).toBe(TARGETS_FORMAT);
-    expect(file.room_settings).toMatchObject({
-      p1_target_vwc: 65,
-      lights_on_hour: 10,
-      steering_mode: "Vegetative",
-    });
+    expect(file.room_settings).toMatchObject({ p1_target_vwc: 65, lights_on_hour: 10 });
+    // Each zone's mode, not the room's select, which nothing waters by.
+    expect(file.room_settings).not.toHaveProperty("steering_mode");
     expect(file.zones["1"].settings).toMatchObject({
       p1_target_vwc: 85.3,
       generative_dryback_target: 35,

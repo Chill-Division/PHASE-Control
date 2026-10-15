@@ -26,6 +26,7 @@ import { Heading, Empty, number } from "@/components/dashboard";
 import { PlanningCurve } from "@/components/planning-curve";
 import { PlanCellContext } from "@/components/plan-cell-context";
 import { RecipeLibrary } from "@/components/recipe-library";
+import { ScaleLegend, ScaleMarkFor } from "@/components/scale-mark";
 import {
   FieldSuggestionLine,
   SensorContextCard,
@@ -1059,6 +1060,7 @@ export function GrowPlanner({
                   />
                 </div>
               </div>
+              <ScaleLegend />
               <div className="profile-grid profile-heading">
                 <strong>Parameter</strong>
                 <strong>Vegetative</strong>
@@ -1067,7 +1069,10 @@ export function GrowPlanner({
               {Object.entries(limits).map(([key, limit]) => (
                 <div className="profile-grid" key={key}>
                   <div>
-                    <strong>{parameterLabels[key] || key.replaceAll("_", " ")}</strong>
+                    <strong>
+                      {parameterLabels[key] || key.replaceAll("_", " ")}
+                      <ScaleMarkFor param={key} />
+                    </strong>
                     <p className="muted small">
                       {parameterHelp[key] || "Configured controller parameter."}
                     </p>

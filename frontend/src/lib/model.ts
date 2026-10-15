@@ -441,23 +441,25 @@ export function buildRoom(states: States, room: Room): RoomView {
     )
     .map((e) => setting(e, room))
     .filter((s): s is Setting => s !== null);
+  // Each zone's steering mode. The room's own select is not here: the controller never reads it
+  // (each zone waters on its own mode), so Today does not offer it.
   const choices: Choice[] = entities.flatMap((entity) => {
     const key = entity.entity_id.replace(`select.${ROOT}${room.prefix}`, "");
+    const zone = key.match(/^zone_(\d+)_steering_mode$/);
     if (
       !entity.entity_id.startsWith("select.") ||
-      !/^(zone_\d+_)?steering_mode$/.test(key) ||
+      !zone ||
       !Array.isArray(entity.attributes.options)
     )
       return [];
     const options = entity.attributes.options.filter((v): v is string => typeof v === "string");
-    const zone = key.match(/^zone_(\d+)_/);
     return [
       {
         entityId: entity.entity_id,
-        label: zone ? `Zone ${zone[1]} steering mode` : "Room steering mode",
+        label: `Zone ${zone[1]} steering mode`,
         value: readable(entity) ? entity.state : null,
         options,
-        ...(zone ? { zoneId: Number(zone[1]) } : {}),
+        zoneId: Number(zone[1]),
       },
     ];
   });
