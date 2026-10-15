@@ -600,6 +600,33 @@ try {
     },
   );
   await check(
+    "Setup's review lists only what a save changes, with the whole room folded away",
+    async () => {
+      await fresh("grow-plan");
+      await visible(page.locator("#steering-balance"));
+      await pause();
+      await navigateSetup();
+      const name = page.getByRole("textbox", { name: "Zone 1 name", exact: true });
+      await visible(name);
+      const was = await name.inputValue();
+      await name.fill("Tent 1");
+      await page.getByRole("button", { name: "Review configuration", exact: true }).click();
+      const dialog = page.getByRole("dialog");
+      await visible(dialog.getByText("1 change", { exact: true }));
+      // What the logbook will record for the save (setup_api.setup_changes), and nothing else.
+      assert.deepEqual(await dialog.locator(".setup-review-changes li").allInnerTexts(), [
+        `Zone 1 renamed from “${was}” to “Tent 1”`,
+      ]);
+      const plumbing = dialog.getByText(/^Plumbing: /);
+      assert.equal(await plumbing.isVisible(), false, "The rest of the room starts folded away");
+      await dialog.locator(".setup-review-room summary").click();
+      await visible(plumbing);
+      await dialog.getByRole("button", { name: "Save configuration", exact: true }).click();
+      await dialog.waitFor({ state: "hidden", timeout: 10000 });
+      assert.equal(await name.inputValue(), "Tent 1");
+    },
+  );
+  await check(
     "Substrate presets fill the pot volume in litres, show their litres, and never name a pot from its volume",
     async () => {
       await fresh("setup");

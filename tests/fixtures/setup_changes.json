@@ -1,0 +1,99 @@
+{
+  "room": {
+    "room_name": "Crop Steering System",
+    "active": true,
+    "plumbing": "pump_valves",
+    "hardware": {
+      "pump_switch": "switch.gr2_irrigation_relay",
+      "main_line_switch": "",
+      "waste_switch": "",
+      "light_entity": ""
+    },
+    "zones": [
+      {
+        "id": 1,
+        "name": "GR2",
+        "active": true,
+        "valve": "switch.gr2_solenoid",
+        "vwc_sensors": ["sensor.door_vwc", "sensor.ac_vwc"],
+        "ec_sensors": ["sensor.door_ec", "sensor.ac_ec"],
+        "plant_count": 40,
+        "substrate_volume": 3.2,
+        "drippers_per_plant": 1,
+        "dripper_flow_rate": 4
+      }
+    ]
+  },
+  "cases": [
+    {
+      "what": "a zone renamed says that and nothing else",
+      "change": { "zones": { "1": { "name": "Tent 1" } } },
+      "said": ["zone 1 renamed from “GR2” to “Tent 1”"]
+    },
+    {
+      "what": "the room renamed",
+      "change": { "room_name": "Growroom 2" },
+      "said": ["renamed from “Crop Steering System”"]
+    },
+    {
+      "what": "nothing changed, a whole number sent back as a float and an unmapped switch left out",
+      "change": {
+        "hardware": { "pump_switch": "switch.gr2_irrigation_relay", "light_entity": "" },
+        "zones": { "1": { "plant_count": 40.0 } }
+      },
+      "said": []
+    },
+    {
+      "what": "mappings, probes and sizing say what they were and are",
+      "change": {
+        "plumbing": "valves_only",
+        "hardware": { "pump_switch": "", "light_entity": "light.gr2", "doser_2_switch": "switch.d2" },
+        "zones": {
+          "1": {
+            "valve": "switch.gr2_valve_b",
+            "vwc_sensors": ["sensor.door_vwc"],
+            "substrate_volume": 3.3,
+            "dripper_flow_rate": 2.123456789
+          }
+        }
+      },
+      "said": [
+        "plumbing: zone valves only",
+        "pump switch.gr2_irrigation_relay → none",
+        "lights none → light.gr2",
+        "doser 2 none → switch.d2",
+        "zone 1 valve switch.gr2_solenoid → switch.gr2_valve_b",
+        "zone 1 moisture probes sensor.door_vwc, sensor.ac_vwc → sensor.door_vwc",
+        "zone 1 pot volume (L) 3.2 → 3.3",
+        "zone 1 dripper flow (L/h) 4 → 2.12346"
+      ]
+    },
+    {
+      "what": "a room from before plumbing was asked declares what its switches imply",
+      "old": { "plumbing": "" },
+      "change": {},
+      "said": ["plumbing: a pump, then zone valves"]
+    },
+    {
+      "what": "zones added, renamed and archived",
+      "change": {
+        "zones": {
+          "1": { "name": "GR2 door end", "active": false },
+          "2": { "name": "Zone 2" }
+        }
+      },
+      "said": ["zone 1 archived", "zone 1 renamed from “GR2” to “GR2 door end”", "zone 2 added"]
+    },
+    {
+      "what": "the room archived",
+      "change": { "active": false },
+      "said": ["archived"]
+    },
+    {
+      "what": "the room restored",
+      "old": { "active": false },
+      "change": {},
+      "said": ["restored"]
+    }
+  ]
+}
