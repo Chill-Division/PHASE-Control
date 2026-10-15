@@ -1,7 +1,7 @@
 # Unreleased
 
 - Each zone on the Overview has a ⋯ menu: move it to another phase, pause it, edit its strategy or open its details.
-- Today and the Schedule mark each percentage as a moisture reading or a share of something else, and the daily water limit, watchdog and steering mode explain themselves more clearly.
+- Each percentage on Today and the Schedule is marked as a moisture reading or a share of something else.
 - Saving Rooms & hardware lists only what you changed, not the whole room.
 - Bug fixes and improvements.
 
