@@ -10,6 +10,24 @@ and code-level detail for developers and AI agents working on the repo.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+- **Old controls that did nothing are gone.** Home Assistant no longer shows a room-level
+  Irrigation Phase, a Strategy Stage, two P2 EC thresholds, two P3 EC targets or the three
+  readings worked out from them. None of them watered anything; a Strategy Stage picked in
+  Home Assistant rewrote every zone's targets, past the dashboard's review. Today, the Schedule and
+  saved strategies are where targets change.
+
+### 🔧 Technical notes
+
+- Integration: the room-level `select.crop_steering_<prefix>irrigation_phase` and `…recipe_stage`,
+  the `apply_recipe` / `save_recipe` services and `recipe.py` (the per-room recipe Store, left on
+  disk, unread), `number.…p2_ec_high_threshold`, `…p2_ec_low_threshold`, `…ec_target_veg_p3` and
+  `…ec_target_gen_p3`, and `sensor.…current_phase`, `…ec_ratio` and `…p2_vwc_threshold_adjusted`
+  are no longer created, and setup removes them from an existing room's entity registry
+  (`_RETIRED`). `tests_ha/test_removed_leftovers.py` proves a new room has none of them and an
+  upgraded room loses all of them, with its EC targets kept.
+
 ## [1.2.0] - 2026-10-16
 
 Integration and controller **1.2.0**.

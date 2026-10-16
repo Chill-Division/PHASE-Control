@@ -44,8 +44,7 @@ scale with your zone count, `N` = 1…zones.
 | `p2_vwc_threshold` | 10-100 | 60 | % | Shoot a maintenance top-up when VWC falls below this. |
 | `p2_shot_size` | 0.5-30 | 5 | % | Size of a P2 maintenance shot. |
 | `p2_time_between_shots` | 0-60 | 5 | min | Least time from the last shot to a maintenance top-up, so each can soak down to the probes before moisture is read again (0 = off). EC dilution and flushes wait 45 minutes after the last shot instead, so a settled EC reading can show what the last one did (10 minutes until the zone's first settled reading). |
-| `p2_ec_high_threshold` | 0.5-3.0 | 1.2 | ×target | Display only: `p2_vwc_threshold_adjusted` reads 5 points above the trigger while `ec_ratio` is above this. The controller doesn't read it. |
-| `p2_ec_low_threshold` | 0.2-2.0 | 0.8 | ×target | Display only: `p2_vwc_threshold_adjusted` reads 5 points under the trigger while `ec_ratio` is below this. The controller doesn't read it. |
+| `p2_ec_high_threshold` / `p2_ec_low_threshold` | - | - | - | **Removed** in 1.3.0. Only the display sensor `p2_vwc_threshold_adjusted` read them, and it went with them; setup takes them out of an existing room. EC stacking (`ec_stacking_enabled`) is what moves a zone's trigger by its EC. |
 
 ### P3: pre-lights-off / overnight
 | Entity | Range | Default | Unit | What it does |
@@ -57,8 +56,10 @@ scale with your zone count, `N` = 1…zones.
 ### EC targets: vegetative & generative (per phase)
 | Entity | Range | Default | Unit |
 |---|---|---|---|
-| `ec_target_veg_p0` / `_p1` / `_p2` / `_p3` | 0.5-15 | 3.0 / 3.0 / 3.2 / 3.0 | mS/cm |
-| `ec_target_gen_p0` / `_p1` / `_p2` / `_p3` | 0.5-20 | 4.0 / 5.0 / 6.0 / 4.5 | mS/cm |
+| `ec_target_veg_p0` / `_p1` / `_p2` | 0.5-15 | 3.0 / 3.0 / 3.2 | mS/cm |
+| `ec_target_gen_p0` / `_p1` / `_p2` | 0.5-20 | 4.0 / 5.0 / 6.0 | mS/cm |
+
+The P3 EC targets (`ec_target_veg_p3`, `ec_target_gen_p3`) were **removed** in 1.3.0: the controller has never steered EC overnight, and only the display sensor `ec_ratio` read them.
 
 The controller uses the target for the zone's phase **and** its steering mode, P0 to P2. No
 rule uses a P3 target: only the `ec_ratio` sensor reads them.
@@ -167,10 +168,9 @@ lower of the peak target and full saturation.
 ### Global (`select.crop_steering_*`)
 | Entity | Options | What it does |
 |---|---|---|
-| `steering_mode` | Vegetative · Generative | The room's mode, read by the `ec_ratio` sensor. The controller reads each zone's own `zone_N_steering_mode` instead. |
+| `steering_mode` | Vegetative · Generative | The room's mode: the dashboard and the Schedule fall back on it for a zone whose own mode can't be read. The controller reads each zone's own `zone_N_steering_mode` instead. |
 | `growth_stage` | Vegetative · Generative · Transition | The fallback for a zone whose own steering mode can't be read: only then does the controller read it, Transition counting as Generative. |
-| `irrigation_phase` | P0 · P1 · P2 · P3 | A manual phase indicator, read by `current_phase` and `ec_ratio`. The controller keeps each zone's phase itself and does not read it. |
-| `recipe_stage` | Veg · Transition · Bulk · Ripen · Custom | Picking a stage applies its setpoints to the zones. |
+| `irrigation_phase` / `recipe_stage` | - | **Removed** in 1.3.0, with the `apply_recipe` and `save_recipe` services. The controller keeps each zone's phase itself (`zone_N_set_phase` moves one), and a strategy stage picked in Home Assistant rewrote every zone's targets outside the dashboard's review: the Schedule and saved strategies do that job. Setup takes both out of an existing room. |
 | `water_today_view` | Zone total · Per plant | How Water today reads for the room: each zone's total, or its water and daily limit divided by its plant count. The dashboard shows it that way for everyone (Settings → General → Appearance), and the controller's vitals notification follows it. Zone total by default. |
 | `feed_stage` | The room's feed recipes | The feed recipe the next nutrient batch mixes (Reservoir page): the feed schedule's this week, or one picked by hand. Picking one while the schedule runs holds it until the schedule's next week starts. Unavailable until the room has a feed recipe. |
 
@@ -190,16 +190,14 @@ lower of the peak target and full saturation.
 |---|---|---|
 | `activity_log` | - | The newest line of a rolling feed of shots, holds and phases moved by hand (`idle` before the first). Attribute `feed`: the newest 50 lines; `event_count`: how many are kept (up to 60). One feed covers every room, a named room's lines tagged with its slug. |
 | `app_current_phase` | - | Published by the controller: each zone's phase (e.g. `Z1:P3, Z2:P3, Z3:P3`). |
-| `current_phase` | - | The same, as the integration shows it: `app_current_phase`, else the `irrigation_phase` select. |
 | `current_decision` | - | What the controller decided this cycle. |
 | `app_status` | - | The controller's state for the room: `safe_idle`, `irrigating` (a shot running), `error` (a hardware fault, or a room held fail-closed) or `room_off`. |
 | `system_safety_status` | - | `safe`, `warning` or `unsafe`, from the zones' safety labels (`zone_N_safety_status`). Attributes `unsafe_zones`, `warning_zones` and `safe_zones`: how many of each. |
 | `ai_heartbeat` | - | The controller's heartbeat for the room: `healthy` each pass, `stopped` (with `stopped_at`) when the app stops. Attribute `controller_version`: the controller app that is actually running (shown in the dashboard sidebar beside the descriptor's `integration_version`). |
 | `engine_config` | - | The room's descriptor: what the controller reads to find and drive the room (valves, pump, main line, kill switch, zones, `setup_revision`). Attribute `integration_version`: the integration Home Assistant actually loaded. Attribute `entry_id`: WHICH room this is. A room that is deleted and set up again keeps its entity ids and starts its revision again at 1, so this is how a running controller tells it from the room it already adopted; it then adopts the new setup through the usual gate (kill switch and hardware OFF). Neither attribute enters the setup fingerprint. |
 | `configured_avg_vwc` / `configured_avg_ec` | % / mS/cm | Means across every mapped zone probe. |
-| `ec_ratio` | - | Display only: the room's average EC ÷ the EC target for the `irrigation_phase` select's phase and the room's `steering_mode`. |
 | `p1_shot_duration_seconds` / `p2_shot_duration_seconds` / `p3_shot_duration_seconds` | s | How long the controller runs each phase's shot as set (P1's first ramp shot, the maintenance shot, the rescue shot), before EC scales it: from each zone's pot size, drippers per plant and dripper flow, in whole seconds, at least 5 and at most `max_shot_duration`. The longest of the room's zones; attribute `zones`: each zone's. |
-| `p2_vwc_threshold_adjusted` | % | Display only: the room's `p2_vwc_threshold`, 5 points higher while `ec_ratio` is above `p2_ec_high_threshold` and 5 lower while it is under `p2_ec_low_threshold`. The controller's trigger is each zone's own, moved only by EC stacking. |
+| `current_phase` / `ec_ratio` / `p2_vwc_threshold_adjusted` | - | **Removed** in 1.3.0: display-only figures built on the room-level phase select and EC settings that went with them. `app_current_phase` has each zone's phase. |
 | `stock_low` | - | How many of the room's stock tanks are at or below their low mark (0 when none). Attribute `tanks`: each tank's `name`, `level_l`, `capacity_l`, `percent`, `low_l`, `dose_ml` (what one batch takes now: what the feed recipe in use gives from its doser; 0 on none), `doser` (the Reservoir doser it is on, or null), `batches_left` and `low`. Attribute `last_batch`: the newest batch counted. The tanks are kept by the integration (Feed → Stock tanks, or the `stock_get`, `stock_save` and `stock_refill` services): each is its name, capacity, level, low mark and doser. A tank on a Reservoir doser loses what that doser gave in each batch the controller mixes; one on none changes only when it is refilled or its level is set. Automate a phone alert on it going above 0. |
 | `feed_plan` | - | What the room's next nutrient batch runs, from the Reservoir page: the stage's recipe name, or `none`. Attributes: `stage`, `stage_id`, `feed_ec` (the EC the stage's recipe mixes to, mS/cm, or null when it gives none: the controller's feed EC for its flush and dilution tests), `fill_s`, `batch_l` (the litres the fill adds), `full_mm` and `empty_mm` (the level sensor's distance to the water when full and when empty; 0 = not set), `min_pct` (the minimum the reservoir keeps; 0 = off), `remind_pct` (the level a reminder to refill by hand comes at, CS-706; 0 = off), `pause_s`, `mix_s`, `doses` (each `doser`, `label`, `ml`, to the whole mL, and `seconds`, in the order of the stage's recipe) and `problem` (why no batch can run, or null), with the settings' `revision`, and `mix_force_until` (for two minutes after a test refill run anyway, until when; otherwise null). The feed schedule: `week` (its week today, null when none runs), `weeks` (how many it has), `schedule_start` (the day Week 1 starts), `held_until` (until when a stage picked by hand holds over it, or null) and `source` (`schedule`, `held` or `hand`); the sensor is rewritten at Home Assistant's midnight, when a new week may start. The integration keeps the settings (`feed_get` / `feed_save`); the controller app runs batches from this. |
 | `batch_status` | - | Published by the controller app for a room with a reservoir mapped: `idle`, or the step of the refill running (`filling`, then from half-way `filling_mixing` with the pump and recirculation on, for one pause before the first dose, then `dosing`, `pausing`, and `mixing` after the last dose, until the fill's end and at least its recirculation time). The fresh water runs until the fill's end whatever the step, so the doses go in while it fills. Attributes: `stage`, `until` (when the step ends), `fill_until` (when the fresh water stops; null once it has), `doser` and `nutrient` (while dosing), `doses` (the plan's doses, each with `dosed`: the mL it gave), `level_mm`, `level_pct` (how full, %; both null when the sensor reads nothing: unavailable, unknown or not a number), `full_mm`, `empty_mm`, `min_pct`, `litres_per_pct` (what 1% holds, learned from refills; null before one), `due` (whether the room's next round of shots would take it under its minimum; null when it can't tell), `next_round_l` (that round's litres), `auto`, `armed` (false after an automatic refill until it reads enough again), `last` (`at`, `result`: `done` or `stopped: <why>`, `stage`, `dosed`), `blocked` (why no batch could start now) and `updated`. |

@@ -1,3 +1,7 @@
+# Unreleased
+
+- Old controls Home Assistant showed that didn't water anything are gone, among them Irrigation Phase and Strategy Stage.
+
 # 1.2.0
 
 Pair with integration 1.2.0.
