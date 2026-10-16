@@ -54,14 +54,31 @@ try {
   await frame.getByRole("heading", { name: "Flower 2 overview" }).waitFor();
   const box = await page.locator("crop-steering-panel iframe").boundingBox();
   assert.ok(box.y === 0 && box.height === 1000 && box.width === 1440, JSON.stringify(box));
-  await frame.getByRole("button", { name: "Open Home Assistant menu", exact: true }).click();
+  // Home Assistant's menu opens from the foot of the dashboard's own menu, and only there: the top
+  // bar has no second button for it.
+  assert.equal(
+    await frame
+      .locator(".topbar")
+      .getByRole("button", { name: /Home Assistant/ })
+      .count(),
+    0,
+  );
+  await frame
+    .locator(".desktop-sidebar")
+    .getByRole("button", { name: "Home Assistant", exact: true })
+    .click();
   assert.equal(
     await page.evaluate(() => document.querySelector("home-assistant").hass.kioskMode),
     true,
   );
   assert.ok(await page.evaluate(() => events.some((e) => e[0] === "menu")));
   await page.setViewportSize({ width: 390, height: 844 });
-  await frame.getByRole("button", { name: "Open Home Assistant menu", exact: true }).click();
+  await frame.getByRole("button", { name: "Open navigation", exact: true }).click();
+  await frame
+    .locator(".mobile-sidebar")
+    .getByRole("button", { name: "Home Assistant", exact: true })
+    .click();
+  assert.equal(await page.evaluate(() => events.filter((e) => e[0] === "menu").length), 2);
   const panel = await page.locator("crop-steering-panel iframe").elementHandle();
   await fitsWidth(await panel.contentFrame());
   await page.evaluate(() => {
@@ -73,7 +90,10 @@ try {
     false,
   );
   await page.goto(origin + "/crop-steering?existing=1");
-  await frame.getByRole("button", { name: "Open Home Assistant menu", exact: true }).waitFor();
+  await frame
+    .locator(".sidebar-footer button", { hasText: "Home Assistant" })
+    .first()
+    .waitFor({ state: "attached" });
   await page.evaluate(() => {
     history.pushState({}, "", "/lovelace");
     dispatchEvent(new Event("location-changed"));
@@ -85,7 +105,7 @@ try {
   await page.goto(origin + "/dashboard.html?demo=1");
   await page.getByRole("heading", { name: "Flower 2 overview" }).waitFor();
   assert.equal(
-    await page.getByRole("button", { name: "Open Home Assistant menu", exact: true }).count(),
+    await page.locator(".sidebar-footer button", { hasText: "Home Assistant" }).count(),
     0,
   );
   assert.deepEqual(errors, []);
