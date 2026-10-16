@@ -1,8 +1,8 @@
-"""System Enabled and Auto Irrigation Enabled, retired: the engine switch is the one switch.
+"""System Enabled and Auto Irrigation Enabled are gone: the room's engine switch is the one switch.
 
-They stay, hidden, for controllers from 2.24.0 or before, which still stop every shot while one of
-them reads off and treat a missing one as off. A newer controller switches the engine switch off
-while one of them is off (CS-208), so a room someone stopped with one of them stays stopped.
+Retired in 2.25.0 and kept, hidden, for controllers from 2.24.0 or before. While one read off,
+the controller kept watering switched off in its place (CS-208), and only Home Assistant could put
+it right: a room set up again came back with one off, and nothing watered until someone found it.
 """
 
 from homeassistant.helpers import entity_registry as er
@@ -15,23 +15,21 @@ RETIRED = {
 }
 
 
-def _hidden_and_on(hass):
+def _gone(hass):
     registry = er.async_get(hass)
     for entity_id in RETIRED:
-        item = registry.async_get(entity_id)
-        assert item is not None, entity_id  # the same id an older controller reads
-        assert item.hidden_by is er.RegistryEntryHider.INTEGRATION, entity_id
-        state = hass.states.get(entity_id)
-        assert state.state == "on", entity_id
-        assert state.attributes["friendly_name"].endswith("(retired)"), entity_id
+        assert registry.async_get(entity_id) is None, entity_id
+        assert hass.states.get(entity_id) is None, entity_id
 
 
-async def test_a_new_room_has_them_hidden_and_on(hass):
+async def test_a_new_room_has_neither(hass):
     await _install(hass)
-    _hidden_and_on(hass)
+    _gone(hass)
+    # The switch that does stop watering is there.
+    assert er.async_get(hass).async_get("switch.crop_steering_engine_enabled") is not None
 
 
-async def test_an_upgraded_room_keeps_their_ids_and_hides_them(hass):
-    """In-place upgrade: an older install registered both, visible."""
+async def test_an_upgraded_room_loses_both(hass):
+    """In-place upgrade: an older install registered both."""
     await _upgrade(hass, "entry_2_17_wizard.json", registry_ids=RETIRED)
-    _hidden_and_on(hass)
+    _gone(hass)

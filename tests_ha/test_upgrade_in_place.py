@@ -216,12 +216,7 @@ async def test_the_controller_carries_straight_on_after_the_upgrade_without_a_di
     # A state file from before nutrient batches: no batch, and a room without a reservoir has none.
     assert room.batch["step"] == "idle" and room.hw.get("reservoir") is None
     # ...and it still drives the room the way it always did: pump, mainline, valve.
-    for switch in (
-        "switch.crop_steering_system_enabled",
-        "switch.crop_steering_auto_irrigation_enabled",
-        "switch.crop_steering_zone_1_enabled",
-    ):
-        fake.set_state(switch, "on")
+    fake.set_state("switch.crop_steering_zone_1_enabled", "on")
     fake.calls.clear()
     c._execute_shot(room, 1, 10, 5, flow_lps=0.05)
     assert switch_calls(fake) == [
