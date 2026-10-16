@@ -45,7 +45,7 @@ const glossary = [
   ],
   [
     "P1 · Ramp-up",
-    "Progressive shots bring substrate moisture to the peak VWC target, subject to the most P1 shots, timing and safety limits.",
+    "Progressive shots bring substrate moisture to the peak VWC target, subject to the maximum P1 shots, timing and safety limits.",
   ],
   [
     "P2 · Maintenance",

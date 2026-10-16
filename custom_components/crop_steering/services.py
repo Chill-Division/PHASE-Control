@@ -16,10 +16,7 @@ from .const import (
     DOMAIN,
     MIN_ZONES,
     MAX_ZONES,
-    RECIPE_STAGES,
     SERVICE_SET_MANUAL_OVERRIDE,
-    SERVICE_APPLY_RECIPE,
-    SERVICE_SAVE_RECIPE,
 )
 from .room import room_prefix
 
@@ -59,27 +56,7 @@ MANUAL_OVERRIDE_SCHEMA = vol.Schema(
     }
 )
 
-# Named-stage recipes
-APPLY_RECIPE_SCHEMA = vol.Schema(
-    {
-        vol.Optional("stage"): vol.In(RECIPE_STAGES),
-    }
-)
-SAVE_RECIPE_SCHEMA = vol.Schema(
-    {
-        vol.Required("recipe"): dict,
-    }
-)
-
 SERVICES = {
-    SERVICE_APPLY_RECIPE: {
-        "schema": APPLY_RECIPE_SCHEMA,
-        "method": "async_apply_recipe",
-    },
-    SERVICE_SAVE_RECIPE: {
-        "schema": SAVE_RECIPE_SCHEMA,
-        "method": "async_save_recipe",
-    },
     SERVICE_SET_MANUAL_OVERRIDE: {
         "schema": MANUAL_OVERRIDE_SCHEMA,
         "method": "async_set_manual_override",
@@ -147,55 +124,6 @@ async def async_setup_services(hass: HomeAssistant) -> None:
 
         _LOGGER.info(
             f"Manual override set for Zone {zone}: {'Enabled' if enable else 'Disabled'}"
-        )
-
-    def _recipe_managers():
-        """Every room's RecipeManager (the recipe is per config entry / room)."""
-        return list(hass.data.get(DOMAIN, {}).get("_recipe", {}).values())
-
-    async def async_apply_recipe(call: ServiceCall) -> None:
-        """Apply a recipe stage's setpoints to the zone numbers (all rooms)."""
-        stage = call.data.get("stage")
-        managers = _recipe_managers()
-        if not managers:
-            raise HomeAssistantError(
-                "apply_recipe: recipe store not loaded — no setpoints were applied"
-            )
-        for mgr in managers:
-            applied = await mgr.async_apply(stage)
-            _LOGGER.info(
-                "apply_recipe: stage=%s wrote %d entities",
-                stage or mgr.active_stage,
-                applied,
-            )
-            # Keep the recipe_stage select in sync with what was applied.
-            try:
-                from .room import room_prefix
-
-                await hass.services.async_call(
-                    "select",
-                    "select_option",
-                    {
-                        "entity_id": f"select.{DOMAIN}_{room_prefix(mgr.entry)}recipe_stage",
-                        "option": mgr.active_stage,
-                    },
-                    blocking=False,
-                )
-            except Exception:  # pragma: no cover - the select may not exist yet
-                pass
-
-    async def async_save_recipe(call: ServiceCall) -> None:
-        """Replace the recipe table (dashboard authoring) for every room."""
-        recipe = call.data["recipe"]
-        managers = _recipe_managers()
-        if not managers:
-            raise HomeAssistantError(
-                "save_recipe: recipe store not loaded — recipe was not saved"
-            )
-        for mgr in managers:
-            await mgr.async_save(recipe)
-        _LOGGER.info(
-            "save_recipe: stored recipe with %d stages", len(recipe.get("stages", {}))
         )
 
     # Register services

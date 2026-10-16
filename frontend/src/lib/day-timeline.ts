@@ -387,7 +387,7 @@ export function changedBy(
 }
 
 /** A setting change in words: who, which way, the new value and the one it replaced. "Sam raised
- * Most P1 shots to 10 (was 6)"; with nobody known, "Most P1 shots raised to 10 (was 6)". */
+ * Maximum P1 shots to 10 (was 6)"; with nobody known, "Maximum P1 shots raised to 10 (was 6)". */
 export function changeSentence(
   name: string,
   unit: string,

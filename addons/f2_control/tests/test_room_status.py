@@ -14,8 +14,6 @@ from test_controller import _build, _desc
 ROOM_ACTIVE = "switch.crop_steering_room_active"
 FLAGS = {  # everything else says GO: only the room status differs between tests
     "input_boolean.kill": ("on", {}),
-    "switch.crop_steering_system_enabled": ("on", {}),
-    "switch.crop_steering_auto_irrigation_enabled": ("on", {}),
     "switch.crop_steering_zone_1_enabled": ("on", {}),
 }
 

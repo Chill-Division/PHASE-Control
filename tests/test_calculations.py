@@ -9,7 +9,6 @@ from custom_components.crop_steering.calculations import (
 from custom_components.crop_steering.const import (
     SECONDS_PER_HOUR,
     PERCENTAGE_TO_RATIO,
-    VWC_ADJUSTMENT_PERCENT,
 )
 
 
@@ -119,92 +118,6 @@ class TestShotCalculator:
         assert result == 0.0
 
 
-class TestECRatioCalculations:
-    """Test EC ratio calculations."""
-
-    def test_normal_ec_ratio(self):
-        """Test normal EC ratio calculation."""
-        # Current EC 2.5, Target EC 2.5
-        # Expected ratio: 1.0
-        current_ec = 2.5
-        target_ec = 2.5
-        ratio = round(current_ec / target_ec, 2)
-        assert ratio == 1.0
-
-    def test_high_ec_ratio(self):
-        """Test high EC ratio (needs flushing)."""
-        # Current EC 3.5, Target EC 2.5
-        # Expected ratio: 1.4
-        current_ec = 3.5
-        target_ec = 2.5
-        ratio = round(current_ec / target_ec, 2)
-        assert ratio == 1.4
-
-    def test_low_ec_ratio(self):
-        """Test low EC ratio (needs concentration)."""
-        # Current EC 1.5, Target EC 2.5
-        # Expected ratio: 0.6
-        current_ec = 1.5
-        target_ec = 2.5
-        ratio = round(current_ec / target_ec, 2)
-        assert ratio == 0.6
-
-
-class TestThresholdAdjustments:
-    """Test VWC threshold adjustments based on EC ratio."""
-
-    def test_no_adjustment_normal_ec(self):
-        """Test no adjustment with normal EC ratio."""
-        base_threshold = 60.0
-        ec_ratio = 1.0
-        ec_high = 1.3
-        ec_low = 0.7
-
-        # No adjustment needed
-        if ec_ratio > ec_high:
-            adjusted = base_threshold + VWC_ADJUSTMENT_PERCENT
-        elif ec_ratio < ec_low:
-            adjusted = base_threshold - VWC_ADJUSTMENT_PERCENT
-        else:
-            adjusted = base_threshold
-
-        assert adjusted == 60.0
-
-    def test_increase_threshold_high_ec(self):
-        """Test threshold increase when EC is high."""
-        base_threshold = 60.0
-        ec_ratio = 1.5  # High EC
-        ec_high = 1.3
-        ec_low = 0.7
-
-        # Should increase by VWC_ADJUSTMENT_PERCENT (5%)
-        if ec_ratio > ec_high:
-            adjusted = base_threshold + VWC_ADJUSTMENT_PERCENT
-        elif ec_ratio < ec_low:
-            adjusted = base_threshold - VWC_ADJUSTMENT_PERCENT
-        else:
-            adjusted = base_threshold
-
-        assert adjusted == 65.0
-
-    def test_decrease_threshold_low_ec(self):
-        """Test threshold decrease when EC is low."""
-        base_threshold = 60.0
-        ec_ratio = 0.5  # Low EC
-        ec_high = 1.3
-        ec_low = 0.7
-
-        # Should decrease by VWC_ADJUSTMENT_PERCENT (5%)
-        if ec_ratio > ec_high:
-            adjusted = base_threshold + VWC_ADJUSTMENT_PERCENT
-        elif ec_ratio < ec_low:
-            adjusted = base_threshold - VWC_ADJUSTMENT_PERCENT
-        else:
-            adjusted = base_threshold
-
-        assert adjusted == 55.0
-
-
 class TestAveragingCalculations:
     """Test sensor averaging."""
 
@@ -246,10 +159,6 @@ class TestConstants:
     def test_percentage_to_ratio(self):
         """Test PERCENTAGE_TO_RATIO constant."""
         assert PERCENTAGE_TO_RATIO == 0.01
-
-    def test_vwc_adjustment(self):
-        """Test VWC_ADJUSTMENT_PERCENT constant."""
-        assert VWC_ADJUSTMENT_PERCENT == 5.0
 
 
 class TestEdgeCases:

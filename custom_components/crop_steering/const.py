@@ -23,9 +23,6 @@ DEFAULT_NUM_ZONES = 1
 # Calculation constants
 SECONDS_PER_HOUR = 3600
 PERCENTAGE_TO_RATIO = 0.01
-DEFAULT_EC_RATIO = 1.0
-DEFAULT_EC_FALLBACK = 3.0
-VWC_ADJUSTMENT_PERCENT = 5.0
 
 # The four moisture levels, (lowest, highest) %: each setting accepts exactly this, and grow plans,
 # Auto Setpoints and the engine (crop-steering-engine _PARAM_BOUNDS) use the same range, so the
@@ -60,95 +57,6 @@ STEERING_MODES = ["Vegetative", "Generative"]
 # Growth stages (for growth_stage select entity)
 GROWTH_STAGES = ["Vegetative", "Generative", "Transition"]
 
-# ---------------------------------------------------------------------------
-# Named-stage recipes
-# ---------------------------------------------------------------------------
-# A recipe is a small DATA table (growth stage -> the handful of setpoints that
-# actually change by stage). Selecting a stage *applies* its row into the
-# existing per-zone `number.crop_steering_*` entities the engine already reads —
-# no new per-stage entities (that sprawl is what produced fat-finger setpoints),
-# no engine change. Stored server-side per room via the HA Store helper.
-RECIPE_STORAGE_VERSION = 1
-RECIPE_STAGES = ["Veg", "Transition", "Bulk", "Ripen", "Custom"]
-
-# The curated knobs a stage drives. Each exists both globally
-# (`number.crop_steering_<param>`) and per zone
-# (`number.crop_steering_zone_N_<param>`); apply writes whichever exist.
-RECIPE_PARAMS = [
-    "p1_target_vwc",
-    "p2_vwc_threshold",
-    "generative_dryback_target",
-    "p0_dryback_drop_percent",
-    "ec_target_gen_p1",
-    "ec_target_gen_p2",
-    "maximum_ec",
-    "p2_shot_size",
-]
-
-# Sane cannabis starting defaults: veg -> ripen drops VWC targets, deepens the
-# dryback, and climbs EC + the EC ceiling (the generative push). Starting points
-# the grower tunes — never claimed as optimal. The P0 additional dryback stays in
-# Athena's 1-5% (p. 39).
-DEFAULT_RECIPE = {
-    "version": RECIPE_STORAGE_VERSION,
-    "active_stage": "Veg",
-    "stages": {
-        "Veg": {
-            "p1_target_vwc": 70.0,
-            "p2_vwc_threshold": 60.0,
-            "generative_dryback_target": 15.0,
-            "p0_dryback_drop_percent": 2.0,
-            "ec_target_gen_p1": 2.0,
-            "ec_target_gen_p2": 2.5,
-            "maximum_ec": 7.0,
-            "p2_shot_size": 5.0,
-        },
-        "Transition": {
-            "p1_target_vwc": 66.0,
-            "p2_vwc_threshold": 56.0,
-            "generative_dryback_target": 22.0,
-            "p0_dryback_drop_percent": 3.0,
-            "ec_target_gen_p1": 2.6,
-            "ec_target_gen_p2": 3.0,
-            "maximum_ec": 8.0,
-            "p2_shot_size": 5.0,
-        },
-        "Bulk": {
-            "p1_target_vwc": 62.0,
-            "p2_vwc_threshold": 50.0,
-            "generative_dryback_target": 32.0,
-            "p0_dryback_drop_percent": 3.0,
-            "ec_target_gen_p1": 3.0,
-            "ec_target_gen_p2": 3.5,
-            "maximum_ec": 9.0,
-            "p2_shot_size": 6.0,
-        },
-        "Ripen": {
-            "p1_target_vwc": 58.0,
-            "p2_vwc_threshold": 46.0,
-            "generative_dryback_target": 42.0,
-            "p0_dryback_drop_percent": 5.0,
-            "ec_target_gen_p1": 3.4,
-            "ec_target_gen_p2": 4.0,
-            "maximum_ec": 10.0,
-            "p2_shot_size": 6.0,
-        },
-        # Custom starts as a copy of Bulk; the operator edits it freely.
-        "Custom": {
-            "p1_target_vwc": 62.0,
-            "p2_vwc_threshold": 50.0,
-            "generative_dryback_target": 32.0,
-            "p0_dryback_drop_percent": 3.0,
-            "ec_target_gen_p1": 3.0,
-            "ec_target_gen_p2": 3.5,
-            "maximum_ec": 9.0,
-            "p2_shot_size": 6.0,
-        },
-    },
-}
-
 # Service names — the single source of truth for the domain's registered services.
 # These MUST match the keys of the SERVICES dict in services.py.
 SERVICE_SET_MANUAL_OVERRIDE = "set_manual_override"
-SERVICE_APPLY_RECIPE = "apply_recipe"
-SERVICE_SAVE_RECIPE = "save_recipe"

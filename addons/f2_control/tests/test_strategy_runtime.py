@@ -221,8 +221,6 @@ def test_archived_default_is_gated_before_first_loop_even_if_flags_are_on(monkey
     fake.set_state("sensor.crop_steering_engine_config", "ready", descriptor)
     for flag in (
         "input_boolean.kill",
-        "switch.crop_steering_system_enabled",
-        "switch.crop_steering_auto_irrigation_enabled",
         "switch.crop_steering_zone_1_enabled",
     ):
         fake.set_state(flag, "on")

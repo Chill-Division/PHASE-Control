@@ -29,7 +29,7 @@ The app's **Log** tab has a line a minute for every zone, each dated and named a
 2026-10-01 07:00:03 GR2 · Bench 1 (Z1) · P3 → P0: lights on
 2026-10-01 07:01:04 GR2 · Bench 1 (Z1) · P0 → P1: VWC 61% is at or under the maintenance trigger (63%), no morning dryback needed
 2026-10-01 07:01:04 GR2 · Bench 1 (Z1) · P1 ramp shot 2.5% for 72 s (~0.9 L): VWC 61% under the 88% peak target
-2026-10-01 07:04:12 GR2 · Bench 1 (Z1) · Sam raised Most P1 shots to 10 (was 6)
+2026-10-01 07:04:12 GR2 · Bench 1 (Z1) · Sam raised Maximum P1 shots to 10 (was 6)
 ```
 
 ## Updating

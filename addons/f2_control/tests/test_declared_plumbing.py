@@ -24,8 +24,6 @@ VALVE = "switch.v1"
 DESCRIPTOR = "sensor.crop_steering_engine_config"
 FLAGS = {
     KILL: ("on", {}),
-    "switch.crop_steering_system_enabled": ("on", {}),
-    "switch.crop_steering_auto_irrigation_enabled": ("on", {}),
     "switch.crop_steering_zone_1_enabled": ("on", {}),
 }
 

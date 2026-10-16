@@ -20,7 +20,12 @@ import {
   SensorContextCard,
   useSensorContext,
 } from "@/components/sensor-context";
-import { AutoBadge, AutoSetpointsControl, AutoZoneChip } from "@/components/room-controls";
+import {
+  AutoBadge,
+  AutoSetpointsControl,
+  AutoZoneChip,
+  EcStackingControl,
+} from "@/components/room-controls";
 import { SettingHelp } from "@/components/setting-help";
 import { managedBy } from "@/lib/auto-setpoints";
 import { TODAY_IDLE, scheduleStatus, todayMeaning } from "@/lib/schedule-words";
@@ -277,6 +282,7 @@ export function Strategy({
         action={
           <div className="heading-actions">
             <AutoSetpointsControl controller={controller} />
+            <EcStackingControl controller={controller} />
             <Button
               variant="outline"
               onClick={exportFile}

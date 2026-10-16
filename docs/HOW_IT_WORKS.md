@@ -37,7 +37,7 @@ Where the [Athena Handbook](https://athenaag.com) gives guidance, its page numbe
 | Phase                  | What happens                                                                 | What ends it                                                                                                                    |
 | ---------------------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
 | **P0** morning dryback | No routine watering. The plants start drinking before the first shot.        | The first of: moisture down by the **Additional dryback**; the **Latest first shot** time; moisture at the maintenance trigger. |
-| **P1** ramp            | A shot every **Time between P1 shots**, up to the **Peak VWC target**.       | The peak target reached (with substrate EC back near its target), or **Most P1 shots** fired. Lights-off.                       |
+| **P1** ramp            | A shot every **Time between P1 shots**, up to the **Peak VWC target**.       | The peak target reached (with substrate EC back near its target), or **Maximum P1 shots** fired. Lights-off.                    |
 | **P2** maintenance     | A shot each time moisture falls below the maintenance trigger.               | Lights-off, or a little earlier when the overnight dryback needs the time.                                                      |
 | **P3** overnight       | No routine watering. The zone dries back, and is held at its dryback target. | Lights-on: the next day's P0.                                                                                                   |
 
@@ -62,7 +62,7 @@ adds**, until moisture reaches the **Peak VWC target**. Athena: "2%-6% shots, sp
 apart allows the substrate to gradually build up to target VWC%" (p. 36).
 
 The ramp ends when moisture reaches the peak target and substrate EC is back within 15% of the P1 EC
-target (with no EC reading, once at least one shot is in), or when **Most P1 shots** have fired.
+target (with no EC reading, once at least one shot is in), or when **Maximum P1 shots** have fired.
 There is deliberately no time limit: a ramp that is held up (a refill in progress, say) waits and
 carries on. Lights-off is the only other way out. The peak target is capped at **Full saturation**,
 the most the substrate can hold: a target above it could never be reached.
@@ -300,9 +300,9 @@ slow morning reaches the additional dryback later; the **Latest first shot** cap
 take.
 
 **Why did P1 stop short of the peak target, or keep going?**
-It stops at **Most P1 shots** even below the target. It keeps going at the target while substrate EC
-is still more than 15% over the P1 EC target. With Auto setpoints on, a ramp whose last two shots stop
-lifting moisture has found the zone's peak, and the target drops to it.
+It stops at **Maximum P1 shots** even below the target. It keeps going at the target while substrate
+EC is still more than 15% over the P1 EC target. With Auto setpoints on, a ramp whose last two shots
+stop lifting moisture has found the zone's peak, and the target drops to it.
 
 **Why did it water at night?**
 In P3 a zone is held at its dryback target (a rescue-sized shot each time it dries past it) and rescued

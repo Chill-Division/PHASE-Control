@@ -34,8 +34,7 @@ def rig(monkeypatch, tmp_path):
     room = c.rooms[0]
     room.state[1].update(last_daily_reset=FixedDateTime.instant.date(),
                          last_shot=FixedDateTime.instant - timedelta(hours=1))
-    for key in ("system_enabled", "auto_irrigation_enabled", "zone_1_enabled"):
-        fake.set_state(f"switch.crop_steering_{key}", "on")
+    fake.set_state("switch.crop_steering_zone_1_enabled", "on")
     fake.set_state(room.enable_flag, "on")
     for switch in ("switch.p", "switch.m", "switch.v1"):  # the feed path exists, switched off
         fake.set_state(switch, "off")

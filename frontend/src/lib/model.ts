@@ -28,6 +28,7 @@ export const ZONE_PARAMETERS = new Set([
   "p1_initial_shot_size",
   "p1_shot_size_increment",
   "p1_maximum_shots",
+  "p1_minimum_shots",
   "p1_time_between_shots",
   "vegetative_dryback_target",
   "generative_dryback_target",
@@ -77,6 +78,14 @@ export function numeric(entity?: EntityState): number | null {
 }
 export function readable(entity?: EntityState): boolean {
   return !!entity && !!entity.state.trim() && !["unknown", "unavailable"].includes(entity.state);
+}
+/** When a zone's manual override on a timer ends: its switch's `manual_override_expires_at` (the
+ * integration sets it for a timed pause), epoch ms. Null while it is off, or on with no end. */
+function overrideUntil(entity?: EntityState): number | null {
+  if (boolean(entity) !== true) return null;
+  const raw = entity!.attributes.manual_override_expires_at;
+  const at = typeof raw === "string" ? Date.parse(raw) : NaN;
+  return Number.isFinite(at) ? at : null;
 }
 function boolean(entity?: EntityState): boolean | null {
   return entity?.state === "on" ? true : entity?.state === "off" ? false : null;
@@ -508,6 +517,9 @@ export function buildRoom(states: States, room: Room): RoomView {
   const activeSwitch = room.id ? states[roomActiveId(room)] : undefined;
   const roomActive = !room.id || roomIsActive(states, room);
   const autoSwitch = room.id ? resolve(states, room, "switch", "auto_setpoints") : undefined;
+  const stackingSwitch = room.id
+    ? resolve(states, room, "switch", "ec_stacking_enabled")
+    : undefined;
   const batchSwitch = room.id ? resolve(states, room, "switch", "auto_batches") : undefined;
   const predictSwitch = room.id ? resolve(states, room, "switch", "notify_predictions") : undefined;
   const waterSelect = room.id ? resolve(states, room, "select", "water_today_view") : undefined;
@@ -518,6 +530,7 @@ export function buildRoom(states: States, room: Room): RoomView {
     const vwcSensor = resolve(states, room, "sensor", `vwc_zone_${id}`, `${z}vwc`);
     const ecSensor = resolve(states, room, "sensor", `ec_zone_${id}`, `${z}ec`);
     const enabled = resolve(states, room, "switch", `${z}enabled`);
+    const override = resolve(states, room, "switch", `${z}manual_override`);
     const status = resolve(states, room, "sensor", `${z}status`, `${z}safety_status`);
     const mappedValve =
       valves && typeof valves === "object" && !Array.isArray(valves)
@@ -576,6 +589,9 @@ export function buildRoom(states: States, room: Room): RoomView {
       name: typeof names?.[id] === "string" ? String(names[id]) : "Zone " + id,
       enabledEntity: enabled?.entity_id || null,
       enabled: boolean(enabled),
+      overrideEntity: override?.entity_id || null,
+      override: boolean(override),
+      overrideUntil: overrideUntil(override),
       setPhaseEntity: setPhase?.entity_id || null,
       valveEntity,
       valveOn: valveEntity ? boolean(states[valveEntity]) : null,
@@ -837,6 +853,10 @@ export function buildRoom(states: States, room: Room): RoomView {
       entityId: autoSwitch?.entity_id ?? null,
       enabled: boolean(autoSwitch),
     },
+    ecStacking: {
+      entityId: stackingSwitch?.entity_id ?? null,
+      enabled: boolean(stackingSwitch),
+    },
     autoBatches: {
       entityId: batchSwitch?.entity_id ?? null,
       enabled: boolean(batchSwitch),
@@ -932,24 +952,6 @@ export function roomStatus(states: States, room: Room, now = Date.now()): RoomSt
         ? `${pending}. Switch watering off, wait up to 5 minutes for the controller to adopt the setup, then switch it back on.`
         : `${pending}. Correct the room in Settings → Rooms & hardware.`,
     );
-  // System Enabled and Auto Irrigation Enabled are retired: while one reads off, the controller
-  // keeps the engine switch off (CS-208), and an older controller holds every shot itself. Named
-  // first, because switching watering on would not last while one of them is off.
-  for (const [key, fallback] of [
-    ["system_enabled", "System Enabled"],
-    ["auto_irrigation_enabled", "Auto Irrigation Enabled"],
-  ]) {
-    const id = `switch.${ROOT}${room.prefix}${key}`;
-    const entity = states[id];
-    if (entity?.state !== "off") continue;
-    const name = String(entity.attributes.friendly_name || fallback);
-    return say(
-      "stopped",
-      "Not watering",
-      `Home Assistant's “${name}” switch (${id}) is off, and nothing is watered in this room while it is. Switch it back on in Home Assistant, then switch watering on in Overview if it is off.`,
-      { label: "Open Overview", route: "overview" },
-    );
-  }
   // The room's engine switch (the "watering" switch here): off, or unreadable, stops every shot.
   const flag = beat.attributes.enable_flag ?? descriptor(states, room)?.attributes.enable_flag;
   const flagId = typeof flag === "string" && /^(switch|input_boolean)\./.test(flag) ? flag : null;
@@ -1073,6 +1075,7 @@ export function validateChange(room: RoomView, states: States, change: Change): 
     room.engine.entityId,
     room.roomActiveEntity,
     room.autoSetpoints.entityId,
+    room.ecStacking.entityId,
     room.autoBatches.entityId,
     room.notifyPredictions.entityId,
     ...room.zones.flatMap((z) => [

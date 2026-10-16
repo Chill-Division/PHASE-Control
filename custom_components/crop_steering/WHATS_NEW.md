@@ -23,7 +23,11 @@ version being released.
 
 ## Unreleased
 
+- The top bar's Home Assistant button is gone; Home Assistant's menu opens from the bottom of the side menu (☰ on a phone).
+- Two old, hidden switches are gone, so only the room's own Watering switch ever switches watering on and off.
+- Old controls Home Assistant showed that didn't water anything are gone, among them Irrigation Phase and Strategy Stage.
 - Rooms & hardware no longer asks for the room's lights, which nothing used: day and night come from the lights-on and lights-off times.
+- Today can switch EC stacking on and set the minimum P1 shots, and a zone paused by hand in Home Assistant shows it and can be resumed.
 - Setting up a room in Home Assistant asks less: each zone's valve and probes, the plumbing and the lights; the rest is on Rooms & hardware.
 
 ## 1.2.0 - 2026-10-16

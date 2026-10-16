@@ -1,6 +1,11 @@
 # Unreleased
 
+- The top bar's Home Assistant button is gone; Home Assistant's menu opens from the bottom of the side menu (☰ on a phone).
+- Two old, hidden switches are gone, so only the room's own Watering switch ever switches watering on and off.
+- Old controls Home Assistant showed that didn't water anything are gone, among them Irrigation Phase and Strategy Stage.
 - Rooms & hardware no longer asks for the room's lights, which nothing used: day and night come from the lights-on and lights-off times.
+- Today can switch EC stacking on and set the minimum P1 shots, and a zone paused by hand in Home Assistant shows it and can be resumed.
+- The log names the P1 shot limits Minimum P1 shots and Maximum P1 shots, as the dashboard does.
 
 # 1.2.0
 
