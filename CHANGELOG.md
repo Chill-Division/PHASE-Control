@@ -10,6 +10,24 @@ and code-level detail for developers and AI agents working on the repo.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+- **No hidden switch can stop watering.** Two on/off switches left over from older versions,
+  System Enabled and Auto Irrigation Enabled, are gone. Hidden in Home Assistant, either one, off,
+  kept a room from watering: switching watering on in PHASE Control never lasted, and only Home
+  Assistant could put it right. Now only the room's own Watering switch turns watering on and off.
+
+### 🔧 Technical notes
+
+- Integration: `switch.crop_steering_<prefix>system_enabled` and `…auto_irrigation_enabled`, retired
+  in 2.25.0 and kept hidden for controllers from 2.24.0 or before, are no longer created, and setup
+  removes them from an existing room's entity registry (`_RETIRED`). `tests_ha/test_retired_switches.py`
+  proves a new room has neither and an upgraded room loses both.
+- Controller: `RETIRED_SWITCHES` and `_carry_retired_switches` are gone, so one an older integration
+  left behind, off, neither holds a shot nor switches the engine switch off; CS-208 leaves the
+  error-code list, and CS-207 no longer names Auto Irrigation among its causes.
+- Dashboard: the status line no longer says "Not watering" for an off retired switch.
+
 ## [1.2.0] - 2026-10-16
 
 Integration and controller **1.2.0**.

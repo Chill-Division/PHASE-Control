@@ -1,3 +1,7 @@
+# Unreleased
+
+- Two old, hidden switches are gone, so only the room's own Watering switch ever switches watering on and off.
+
 # 1.2.0
 
 Pair with integration 1.2.0.
