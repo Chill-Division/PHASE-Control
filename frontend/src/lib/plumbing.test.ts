@@ -57,18 +57,18 @@ describe("declared plumbing", () => {
   it("shows only the switches the layout has, and keeps every other mapping", () => {
     expect(plumbingUses("valves_only", "pump_switch")).toBe(false);
     expect(plumbingUses("mainline_valves", "main_line_switch")).toBe(true);
-    expect(plumbingUses("valves_only", "light_entity")).toBe(true);
+    expect(plumbingUses("valves_only", "fresh_water_switch")).toBe(true);
     expect(plumbingUses("", "pump_switch")).toBe(true); // undeclared: both still offered
     expect(
       hardwareForLayout("mainline_valves", {
         pump_switch: "switch.p",
         main_line_switch: "switch.m",
-        light_entity: "light.room",
+        fresh_water_switch: "switch.fresh",
       }),
     ).toEqual({
       pump_switch: "",
       main_line_switch: "switch.m",
-      light_entity: "light.room",
+      fresh_water_switch: "switch.fresh",
     });
   });
 });
