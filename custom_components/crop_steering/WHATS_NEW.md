@@ -21,6 +21,10 @@ people who build the system:
 `tests/test_whats_new.py` checks the shape and the plain words, and that the newest section is the
 version being released.
 
+## Unreleased
+
+- Rooms & hardware no longer asks for the room's lights, which nothing used: day and night come from the lights-on and lights-off times.
+
 ## 1.2.0 - 2026-10-16
 
 - Each zone on the Overview has a ⋯ menu: move it to another phase, pause it, edit its strategy or open its details.

@@ -10,6 +10,24 @@ and code-level detail for developers and AI agents working on the repo.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+- **Rooms & hardware asks only for what the controller uses.** The Room lights picker is gone:
+  nothing ever read it, and day and night come from the lights-on and lights-off times (Irrigation
+  strategy → Today → the whole room). Home Assistant's own setup form no longer asks for a waste
+  valve either, which nothing ever switched. A room that recorded either loses it on its next save.
+
+### 🔧 Technical notes
+
+- Integration: `light_entity` and `waste_switch` leave `HARDWARE_DOMAINS`, the configure flow's
+  hardware step and its strings, and join `RETIRED_HARDWARE`, so a setup save drops them, and so
+  does a save of the configure flow's zones and hardware. The pump and main line no longer need to
+  differ from a waste valve, and setup offers no light entities as candidates.
+  `tests_ha/test_configure.py` proves the form no longer asks for them and an older room's go on
+  its next save.
+- Dashboard: Rooms & hardware has no Room lights picker, and its batch-switch check no longer
+  names a waste valve; the setup-change words (`setup-changes.ts`, from `HARDWARE_WORDS`) drop both.
+
 ## [1.2.0] - 2026-10-16
 
 Integration and controller **1.2.0**.

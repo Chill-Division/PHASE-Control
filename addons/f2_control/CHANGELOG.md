@@ -1,3 +1,7 @@
+# Unreleased
+
+- Rooms & hardware no longer asks for the room's lights, which nothing used: day and night come from the lights-on and lights-off times.
+
 # 1.2.0
 
 Pair with integration 1.2.0.
