@@ -1,0 +1,429 @@
+/* Irrigation strategy › Today: which targets are in charge, whose targets these are, the day they
+   draw beside the phase cards that set them, and the bar that holds a draft until it is applied. */
+.strategy-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.strategy-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 12px;
+}
+.target-chips {
+  flex: 1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.target-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 44px;
+  padding: 0 16px;
+  border-radius: 22px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--foreground);
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.target-chip:hover {
+  border-color: var(--tone-info-line);
+}
+.target-chip[aria-pressed="true"] {
+  background: var(--tone-info-bg);
+  border-color: var(--tone-info-line);
+}
+.target-chip > i {
+  width: 9px;
+  height: 9px;
+  border-radius: 5px;
+  flex: none;
+}
+.target-chip > i.target-chip-room {
+  background: var(--muted-foreground);
+}
+.chip-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: 10px;
+  background: #e9b949;
+  color: #16202a;
+  font-size: 12px;
+  font-weight: 700;
+}
+.strategy-toolbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.strategy-modes {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+}
+.strategy-modes-gap {
+  flex: 1;
+}
+.steering-choice {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0 6px 0 14px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+.steering-choice label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--tone-paused-ink);
+  white-space: nowrap;
+}
+.steering-choice select {
+  height: 34px;
+  border: 0;
+  background: transparent;
+  font-weight: 600;
+  padding-left: 4px;
+}
+.strategy-modes .room-power {
+  min-height: 44px;
+}
+
+.strategy-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 400px;
+  gap: 20px;
+  align-items: start;
+}
+.strategy-main,
+.strategy-side {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+.strategy-curve {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.strategy-curve .planning-curve,
+.strategy-curve .panel {
+  margin: 0;
+  border: 0;
+  padding: 0;
+}
+.strategy-curve .setpoint-preview-note {
+  margin: 0;
+}
+.strategy-auto {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.strategy-side .scale-legend {
+  margin: 0;
+  border-radius: 12px;
+}
+
+/* A phase card: closed, its phase and two of its values; open, every setting in it. */
+.phase-card {
+  --phase-color: var(--muted-foreground);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+  overflow: hidden;
+}
+.phase-card[data-phase="P0"] {
+  --phase-color: var(--phase-p0);
+}
+.phase-card[data-phase="P1"] {
+  --phase-color: var(--phase-p1);
+}
+.phase-card[data-phase="P2"] {
+  --phase-color: var(--phase-p2);
+}
+.phase-card[data-phase="P3"] {
+  --phase-color: var(--phase-p3);
+}
+.phase-card.is-open {
+  border: 2px solid var(--phase-color);
+}
+.phase-card.scheduled-targets {
+  --phase-color: var(--schedule);
+}
+.phase-card-head {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 0;
+  background: transparent;
+  color: var(--foreground);
+  text-align: left;
+}
+.phase-card-head:hover {
+  background: color-mix(in srgb, var(--phase-color) 5%, var(--surface));
+}
+.phase-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 26px;
+  flex: none;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #ffffff;
+  background: var(--phase-color);
+}
+.dark .phase-badge {
+  color: #0f1419;
+}
+.phase-card-title {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.phase-card-title strong {
+  font-size: 15px;
+  font-weight: 600;
+}
+.phase-card-title small {
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--muted-foreground);
+}
+.phase-card-chevron {
+  flex: none;
+  color: var(--muted-foreground);
+  transition: transform 0.15s;
+}
+.phase-card.is-open .phase-card-chevron {
+  transform: rotate(90deg);
+}
+.phase-card .setting-fields {
+  padding: 0 16px 8px;
+}
+.phase-card .setting-field {
+  grid-template-columns: minmax(0, 1fr) 132px;
+  gap: 6px 12px;
+  padding: 12px 0;
+  border-bottom: 0;
+  border-top: 1px solid var(--hairline);
+}
+.phase-card .setting-field label {
+  font-size: 13px;
+  font-weight: 600;
+}
+.phase-card .setting-field > div > p {
+  margin: 3px 0 0;
+  font-size: 12px;
+  line-height: 1.45;
+}
+.phase-card .setting-input {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 4px 6px;
+}
+.phase-card .setting-input > p {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+.phase-card .setting-input > p:empty {
+  display: none;
+}
+.phase-card .setting-input input {
+  height: 38px;
+  font-size: 15px;
+  font-weight: 600;
+}
+.setting-field > .setting-context > p.scale-words,
+.scale-words {
+  color: var(--tone-paused-ink);
+}
+/* The schedule's values today: read only, one line each. */
+.scheduled-targets .setting-field {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+.scheduled-targets .setting-field > span {
+  font-size: 13px;
+}
+.scheduled-targets .setting-field > strong {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}
+.scheduled-targets .setting-field > .scale-words {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: 12px;
+}
+.phase-badge[data-schedule] {
+  background: var(--schedule);
+}
+
+/* The draft: dark, pinned to the foot of the window, with what it holds and the way to apply it. */
+.strategy-page .draft-bar {
+  position: sticky;
+  bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 14px 12px 18px;
+  border: 0;
+  border-radius: 16px;
+  background: #16202a;
+  color: #ffffff;
+  box-shadow: 0 10px 30px rgb(22 32 42 / 25%);
+  z-index: 20;
+}
+.dark .strategy-page .draft-bar {
+  background: #e6eaee;
+  color: #16202a;
+}
+.draft-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 26px;
+  height: 26px;
+  padding: 0 6px;
+  border-radius: 13px;
+  background: #e9b949;
+  color: #16202a;
+  font-size: 13px;
+  font-weight: 700;
+}
+.draft-bar-text {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+}
+.draft-bar-text strong {
+  display: inline;
+  font-size: 14px;
+  font-weight: 600;
+}
+.strategy-page .draft-bar .draft-bar-text span {
+  color: inherit;
+  opacity: 0.8;
+  font-size: 14px;
+}
+.draft-bar-discard,
+.draft-bar-review {
+  height: 44px;
+  padding: 0 16px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.draft-bar-discard {
+  border: 1px solid rgb(255 255 255 / 30%);
+  background: transparent;
+  color: inherit;
+}
+.dark .draft-bar-discard {
+  border-color: rgb(22 32 42 / 30%);
+}
+.draft-bar-review {
+  border: 0;
+  background: #ffffff;
+  color: #16202a;
+  font-weight: 600;
+}
+.dark .draft-bar-review {
+  background: #16202a;
+  color: #ffffff;
+}
+.draft-bar-review:disabled {
+  opacity: 0.5;
+}
+
+@media (max-width: 1279px) {
+  .strategy-columns {
+    grid-template-columns: minmax(0, 1fr) 360px;
+  }
+}
+@media (max-width: 1023px) {
+  .strategy-columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 767px) {
+  .strategy-page {
+    gap: 12px;
+  }
+  .target-chips {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    flex-basis: 100%;
+  }
+  .target-chip {
+    flex: none;
+  }
+  .strategy-toolbar-actions {
+    width: 100%;
+  }
+  .strategy-toolbar-actions > button {
+    flex: 1;
+  }
+  .strategy-modes-gap {
+    display: none;
+  }
+  .strategy-page .draft-bar {
+    bottom: 96px;
+    gap: 10px;
+    padding: 8px 8px 8px 14px;
+  }
+  .strategy-page .draft-bar .draft-bar-text span {
+    display: none;
+  }
+  .draft-bar-discard {
+    padding: 0 12px;
+  }
+  .draft-bar-review {
+    padding: 0 14px;
+  }
+}
+/* One column: the day, then the phase cards that set it, then what the probes recorded. */
+@media (max-width: 1023px) {
+  .strategy-columns {
+    display: flex;
+    flex-direction: column;
+  }
+  .strategy-main {
+    display: contents;
+  }
+  .strategy-curve {
+    order: 1;
+  }
+  .strategy-side {
+    order: 2;
+  }
+  .strategy-main > :not(.strategy-curve) {
+    order: 3;
+  }
+}

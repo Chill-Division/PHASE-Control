@@ -1,0 +1,87 @@
+.day-dial {
+  position: relative;
+  flex: none;
+}
+.day-dial svg {
+  display: block;
+  overflow: visible;
+}
+.day-dial path,
+.day-dial circle {
+  fill: none;
+}
+.dial-lights-on {
+  stroke: var(--lights-on);
+}
+.dial-lights-off {
+  stroke: var(--lights-off);
+}
+.dial-track {
+  stroke: var(--well);
+}
+.dial-band {
+  stroke-linecap: butt;
+}
+.dial-ahead {
+  opacity: 0.32;
+}
+.dial-shot {
+  stroke: var(--surface);
+  stroke-width: 1.5;
+}
+.day-dial-mini .dial-shot {
+  stroke-width: 0.8;
+}
+.dial-hand {
+  stroke: var(--foreground);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+}
+.day-dial-mini .dial-hand {
+  stroke-width: 1;
+}
+.dial-hand-dot {
+  fill: var(--foreground) !important;
+  stroke: var(--surface);
+  stroke-width: 2;
+}
+.dial-hour {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  font-size: 12px;
+  line-height: 1;
+  color: var(--muted-foreground);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.dial-center {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  text-align: center;
+}
+.dial-center strong {
+  font-size: 30px;
+  line-height: 1.1;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.dial-center strong small {
+  margin-left: 3px;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0;
+  color: var(--muted-foreground);
+}
+.dial-center small {
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--muted-foreground);
+}

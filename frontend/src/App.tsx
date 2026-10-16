@@ -1,17 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import {
-  CalendarRange,
-  ChartNoAxesCombined,
-  ArrowUpRight,
-  Beaker,
-  ChevronRight,
-  CircleHelp,
-  House,
-  Menu,
-  RefreshCw,
-  Settings2,
-  X,
-} from "lucide-react";
+import { ArrowUpRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -21,28 +9,28 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
 import { useController } from "@/lib/use-controller";
 import { useHaTheme } from "@/lib/ha-theme";
 import { useHaShell } from "@/lib/ha-shell";
 import { errorText } from "@/lib/utils";
-import { descriptor, roomIsActive, runningVersions } from "@/lib/model";
+import { descriptor } from "@/lib/model";
 import { RESERVOIR_KEYS } from "@/lib/feed";
 import { RoomOffBanner } from "@/components/room-controls";
-import { ActivityPanel } from "@/components/activity-panel";
 import { StatusLines } from "@/components/status-line";
 import { WaterViewProvider } from "@/lib/water-view";
 import { WhatsNewOnUpdate } from "@/components/whats-new";
 import { Tour } from "@/components/tour";
-import { BrandGlyph } from "@/components/brand-glyph";
 import { tourSteps } from "@/lib/tour";
-import { time, type Page } from "@/components/dashboard";
+import { type Page } from "@/components/dashboard";
+import {
+  PhoneTabs,
+  Rail,
+  RoomChips,
+  RoomsColumn,
+  SectionHeader,
+  Utilities,
+  type SectionId,
+} from "@/components/shell";
 import { Overview } from "@/pages/overview";
 import { Strategy, type Drafts } from "@/pages/strategy";
 import { ActivityPage } from "@/pages/activity";
@@ -55,14 +43,14 @@ import { Water } from "@/pages/water";
 import { Comparison } from "@/pages/comparison";
 import { StockTanks } from "@/pages/stock";
 import { Reservoir } from "@/pages/reservoir";
+import { More } from "@/pages/more";
 
-/** The menu: six sections, each one page or a few tabs. A tab is a page with its own address. */
+/** The sections, each one page or a few tabs. A tab is a page with its own address. */
 const sections = [
-  { id: "overview", label: "Overview", icon: House, tabs: [{ id: "overview", label: "Overview" }] },
+  { id: "overview", label: "Overview", tabs: [{ id: "overview", label: "Overview" }] },
   {
     id: "plan",
     label: "Irrigation strategy",
-    icon: CalendarRange,
     tabs: [
       { id: "strategy", label: "Today" },
       { id: "grow-plan", label: "Schedule" },
@@ -71,7 +59,6 @@ const sections = [
   {
     id: "insights",
     label: "Insights",
-    icon: ChartNoAxesCombined,
     tabs: [
       { id: "insights", label: "Zone" },
       { id: "water", label: "Water" },
@@ -82,41 +69,39 @@ const sections = [
   {
     id: "feed",
     label: "Feed",
-    icon: Beaker,
     tabs: [
       { id: "reservoir", label: "Reservoir" },
+      { id: "recipes", label: "Recipes" },
       { id: "stock", label: "Stock tanks" },
     ],
   },
   {
     id: "settings",
     label: "Settings",
-    icon: Settings2,
     tabs: [
       { id: "settings", label: "General" },
       { id: "setup", label: "Rooms & hardware" },
     ],
   },
-  { id: "help", label: "Help", icon: CircleHelp, tabs: [{ id: "help", label: "Help" }] },
+  { id: "help", label: "Help", tabs: [{ id: "help", label: "Help" }] },
 ] as const satisfies readonly {
-  id: string;
+  id: SectionId;
   label: string;
-  icon: typeof House;
   tabs: readonly { id: Page; label: string }[];
 }[];
 type Section = (typeof sections)[number];
+const SHARED_DRAFT: readonly Page[] = ["reservoir", "recipes"];
 const sectionOf = (page: Page): Section =>
   sections.find((section) => section.tabs.some((tab) => tab.id === page)) ?? sections[0];
 function readPage(): Page {
   const hash = window.location.hash.replace(/^#\/?/, "").split("?")[0];
-  return sections.some((section) => section.tabs.some((tab) => tab.id === hash))
+  return hash === "more" || sections.some((section) => section.tabs.some((tab) => tab.id === hash))
     ? (hash as Page)
     : "overview";
 }
 export default function App() {
   const controller = useController();
   const [page, setPage] = useState<Page>(readPage);
-  const [mobile, setMobile] = useState(false);
   const [drafts, setDrafts] = useState<Drafts>({});
   const [zoneId, setZoneId] = useState<number | undefined>();
   const [workspaceDirty, setWorkspaceDirty] = useState(false);
@@ -136,23 +121,30 @@ export default function App() {
     else action();
   }
   function navigate(next: Page, nextZone?: number) {
-    if (next === page && nextZone === undefined) {
-      setMobile(false);
-      return;
-    }
-    confirmNavigation(() => {
+    if (next === page && nextZone === undefined) return;
+    // Feed's Reservoir and Recipes are one draft, saved together: moving between them keeps it.
+    const sameDraft = SHARED_DRAFT.includes(page) && SHARED_DRAFT.includes(next);
+    (sameDraft ? (action: () => void) => action() : confirmNavigation)(() => {
       setPage(next);
       setZoneId(nextZone);
       window.history.pushState(null, "", `#/${next}`);
-      setMobile(false);
       window.scrollTo({ top: 0 });
+    });
+  }
+  function chooseRoom(id: string) {
+    if (id === controller.roomId) return;
+    confirmNavigation(() => {
+      setDrafts({});
+      setZoneId(undefined);
+      controller.changeRoom(id);
     });
   }
   useEffect(() => {
     const hashChange = () => {
       const next = readPage();
       if (next === pageRef.current) return;
-      if (dirtyRef.current) {
+      const sameDraft = SHARED_DRAFT.includes(pageRef.current) && SHARED_DRAFT.includes(next);
+      if (dirtyRef.current && !sameDraft) {
         window.history.replaceState(null, "", `#/${pageRef.current}`);
         setPending(() => () => {
           setPage(next);
@@ -184,10 +176,16 @@ export default function App() {
     (key) => descriptor(controller.states, controller.room.room)?.attributes?.[key],
   );
   const tabsOf = (item: Section) =>
-    item.tabs.filter((tab) => tab.id !== "reservoir" || reservoirMapped || page === "reservoir");
+    item.tabs.filter(
+      (tab) => !SHARED_DRAFT.includes(tab.id) || reservoirMapped || SHARED_DRAFT.includes(page),
+    );
   const tab = section.tabs.find((item) => item.id === page);
   const pageLabel =
-    section.tabs.length > 1 && tab ? `${section.label} › ${tab.label}` : section.label;
+    page === "more"
+      ? "More"
+      : section.tabs.length > 1 && tab
+        ? `${section.label} › ${tab.label}`
+        : section.label;
   useEffect(() => {
     document.title = `${pageLabel} · ${controller.room.room.name} · PHASE Control`;
   }, [pageLabel, controller.room.room.name]);
@@ -202,111 +200,23 @@ export default function App() {
       setRefreshing(false);
     }
   }
-  const versions = runningVersions(controller.states, controller.room.room);
-  const sidebar = (variant: string) => (
-    <>
-      <a
-        href="#/overview"
-        className="brand"
-        onClick={(event) => {
-          event.preventDefault();
-          navigate("overview");
-        }}
-      >
-        <span className="brand-mark">
-          <BrandGlyph />
-        </span>
-        <span>
-          <span className="brand-name">
-            <b>PHASE</b> Control
-          </span>
-          <small>Crop steering</small>
-        </span>
-      </a>
-      <div className="room-selector">
-        <label htmlFor={variant + "-room"}>Room</label>
-        <select
-          id={variant + "-room"}
-          value={controller.roomId}
-          disabled={!controller.rooms.length}
-          onChange={(event) => {
-            const id = event.target.value;
-            confirmNavigation(() => {
-              setDrafts({});
-              setZoneId(undefined);
-              controller.changeRoom(id);
-              setMobile(false);
-            });
-          }}
-        >
-          {!controller.roomId && (
-            <option value="" disabled>
-              {controller.rooms.length ? "Room unavailable - choose a room" : "No room discovered"}
-            </option>
-          )}
-          {controller.rooms.map((room) => (
-            <option key={room.id} value={room.id}>
-              {room.name}
-              {roomIsActive(controller.states, room) ? "" : " · off"}
-            </option>
-          ))}
-        </select>
-        <span>
-          <span className={`connection-dot ${controller.connection}`} />
-          {controller.demo ? "Isolated demo data" : "Home Assistant controller"}
-        </span>
-      </div>
-      <nav aria-label="Main navigation">
-        {sections.map((item) => (
-          <button
-            key={item.id}
-            className={`${section.id === item.id ? "active" : ""} ${item.id === "settings" ? "nav-separated" : ""}`}
-            aria-current={section.id === item.id ? "page" : undefined}
-            onClick={() =>
-              section.id === item.id ? setMobile(false) : navigate(tabsOf(item)[0].id)
-            }
-          >
-            <item.icon size={19} />
-            <span>{item.label}</span>
-            {item.id === "plan" && Object.keys(drafts).length > 0 && (
-              <i className="nav-draft-count">{Object.keys(drafts).length}</i>
-            )}
-          </button>
-        ))}
-      </nav>
-      <div className="sidebar-footer">
-        {haShell.available && (
-          <Button
-            variant="outline"
-            onClick={() => {
-              setMobile(false);
-              haShell.toggle();
-            }}
-          >
-            <House size={17} /> Home Assistant
-          </Button>
-        )}
-        {!controller.demo && (
-          <dl
-            className="sidebar-versions"
-            aria-label="Running versions"
-            title="Reported by the running integration and controller, not by this page"
-          >
-            <div>
-              <dt>Integration</dt>
-              <dd>{versions.integration ?? "not reported"}</dd>
-            </div>
-            <div>
-              <dt>Controller</dt>
-              <dd>{versions.controller ?? "not reported"}</dd>
-            </div>
-          </dl>
-        )}
-      </div>
-    </>
+  const draftCount = Object.keys(drafts).length;
+  const haMenu = haShell.available ? haShell.toggle : null;
+  const openSection = (id: SectionId) => {
+    const target = sections.find((item) => item.id === id) ?? sections[0];
+    if (target.id === section.id && page !== "more") return;
+    navigate(tabsOf(target)[0].id);
+  };
+  const utilities = (
+    <Utilities
+      controller={controller}
+      refresh={refresh}
+      refreshing={refreshing}
+      openLog={() => navigate("activity")}
+    />
   );
   const shell = (
-    <div className="app-shell">
+    <div className="app-frame">
       <a
         href="#main-content"
         className="skip-link"
@@ -317,58 +227,21 @@ export default function App() {
       >
         Skip to content
       </a>
-      <aside className="desktop-sidebar">{sidebar("desktop")}</aside>
-      <Sheet open={mobile} onOpenChange={setMobile}>
-        <SheetContent side="left" className="mobile-sidebar">
-          <SheetHeader className="sr-only">
-            <SheetTitle>Navigation</SheetTitle>
-            <SheetDescription>Choose a room or dashboard page.</SheetDescription>
-          </SheetHeader>
-          {sidebar("mobile")}
-        </SheetContent>
-      </Sheet>
-      <div className="app-main">
-        <header className="topbar">
-          <div className="breadcrumbs">
-            <Button
-              className="mobile-menu"
-              variant="ghost"
-              size="icon"
-              aria-label="Open navigation"
-              onClick={() => setMobile(true)}
-            >
-              <Menu size={21} />
-            </Button>
-            <span>{controller.room.room.name}</span>
-            <ChevronRight size={14} />
-            <strong>{pageLabel}</strong>
-          </div>
-          <div className="connection-info">
-            <span className={`connection-label ${controller.connection}`}>
-              <span className={`connection-dot ${controller.connection}`} />
-              {controller.connection === "live"
-                ? "Connected"
-                : controller.connection === "demo"
-                  ? "Demo mode"
-                  : controller.connection === "connecting"
-                    ? "Connecting…"
-                    : "Offline"}
-            </span>
-            <span className="last-updated">Updated {time(controller.lastUpdated)}</span>
-            <ActivityPanel controller={controller} openLog={() => navigate("activity")} />
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label="Refresh controller data"
-              disabled={refreshing || controller.connection === "connecting"}
-              onClick={refresh}
-            >
-              <RefreshCw size={17} className={refreshing ? "spin" : ""} />
-            </Button>
-          </div>
-        </header>
+      <Rail section={section.id} open={openSection} drafts={draftCount} haMenu={haMenu} />
+      {controller.rooms.length > 1 && <RoomsColumn controller={controller} choose={chooseRoom} />}
+      <div className="app-page">
+        <RoomChips controller={controller} choose={chooseRoom} />
         <main id="main-content" tabIndex={-1}>
           <div className="main-inner">
+            {page !== "overview" && (
+              <SectionHeader
+                title={page === "more" ? "More" : section.label}
+                tabs={page === "more" ? [] : tabsOf(section)}
+                current={page}
+                choose={(id) => navigate(id as Page)}
+                utilities={utilities}
+              />
+            )}
             {controller.demo && (
               <div className="demo-banner">
                 <span>
@@ -383,7 +256,7 @@ export default function App() {
                 <div>
                   <strong>
                     {controller.connection === "offline"
-                      ? "Controller disconnected"
+                      ? "Can’t reach Home Assistant"
                       : "Connection needs attention"}
                   </strong>
                   <p>
@@ -402,28 +275,27 @@ export default function App() {
                 )}
               </div>
             )}
-            <StatusLines controller={controller} />
+            <StatusLines
+              controller={controller}
+              problemsOnly
+              skip={page === "overview" ? controller.roomId : null}
+            />
             <RoomOffBanner controller={controller} switchable={page !== "overview"} />
             {page === "overview" && (
-              <Overview key={controller.roomId} controller={controller} navigate={navigate} />
+              <Overview
+                key={controller.roomId}
+                controller={controller}
+                navigate={navigate}
+                utilities={utilities}
+              />
             )}
-            {tabsOf(section).length > 1 && (
-              <div
-                className="toolbar section-tabs"
-                role="navigation"
-                aria-label={`${section.label} views`}
-              >
-                {tabsOf(section).map((item) => (
-                  <Button
-                    key={item.id}
-                    variant={page === item.id ? "default" : "outline"}
-                    aria-current={page === item.id ? "page" : undefined}
-                    onClick={() => navigate(item.id)}
-                  >
-                    {item.label}
-                  </Button>
-                ))}
-              </div>
+            {page === "more" && (
+              <More
+                controller={controller}
+                navigate={navigate}
+                startTour={() => setTour(0)}
+                haMenu={haMenu}
+              />
             )}
             {page === "strategy" && (
               <Strategy
@@ -462,12 +334,13 @@ export default function App() {
             {page === "activity" && (
               <ActivityPage key={controller.roomId} controller={controller} />
             )}
-            {page === "reservoir" && (
+            {(page === "reservoir" || page === "recipes") && (
               <Reservoir
                 key={controller.roomId}
                 controller={controller}
                 navigate={navigate}
                 onDirtyChange={setWorkspaceDirty}
+                view={page}
               />
             )}
             {page === "stock" && (
@@ -485,11 +358,14 @@ export default function App() {
             {page === "help" && <Help controller={controller} startTour={() => setTour(0)} />}
           </div>
         </main>
-        <footer className="page-footer">
-          <span>PHASE Control</span>
-          <span>{controller.room.room.name} · Controller-reported data</span>
-        </footer>
       </div>
+      <PhoneTabs
+        section={section.id}
+        more={page === "more"}
+        open={openSection}
+        openMore={() => navigate("more")}
+        drafts={draftCount}
+      />
       <WhatsNewOnUpdate controller={controller} onTour={() => setTour(0)} />
       {tour !== null && (
         <Tour

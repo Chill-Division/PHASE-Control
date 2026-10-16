@@ -1,0 +1,63 @@
+/* The room's page: its name and how it runs, its line, then its day, zones, reservoir and events. */
+.overview {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.room-header {
+  display: flex;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.room-header-text {
+  flex: 1 1 280px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.room-header h1 {
+  font-size: 30px;
+  line-height: 1.15;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  overflow-wrap: anywhere;
+}
+.room-header-text p {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--muted-foreground);
+}
+.room-header-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+@media (max-width: 767px) {
+  .overview {
+    gap: 12px;
+  }
+  /* A phone: the name on the left and how the room runs on the right; the live status, refresh
+     and recent activity are under More. */
+  .room-header {
+    flex-wrap: nowrap;
+    align-items: center;
+  }
+  .room-header-text {
+    flex: 1 1 auto;
+    gap: 4px;
+  }
+  .room-header h1 {
+    font-size: 24px;
+  }
+  .room-header-actions .page-utilities {
+    display: none;
+  }
+}

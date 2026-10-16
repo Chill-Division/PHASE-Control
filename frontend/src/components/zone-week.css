@@ -1,0 +1,126 @@
+/* Insights › Zone: what the readings show, the week as small charts, and its numbers. */
+.findings ul {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+}
+.findings li {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 9px 0;
+  border-top: 1px solid var(--hairline);
+  font-size: 14px;
+  line-height: 1.45;
+}
+.findings li > svg {
+  flex: none;
+  margin-top: 1px;
+  color: var(--primary);
+}
+.findings li[data-tone="good"] > svg {
+  color: var(--good);
+}
+.findings li[data-tone="warn"] > svg {
+  color: var(--warning);
+}
+.findings p {
+  margin-top: 8px;
+  font-size: 13px;
+}
+.zone-week {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.zone-week-head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+}
+.zone-week-head h2 {
+  font-size: 17px;
+  font-weight: 600;
+}
+.zone-week-head span {
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+.zone-week-days {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+  gap: 10px;
+}
+.zone-week-days li {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 10px 8px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  font-size: 12px;
+  color: var(--tone-paused-ink);
+  min-width: 0;
+}
+.zone-week-days li[data-today] {
+  border-color: var(--tone-info-line);
+}
+.zone-week-days strong {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--foreground);
+}
+.zone-week-days svg {
+  display: block;
+  width: 100%;
+  height: 70px;
+  margin: 2px 0;
+}
+.zone-week-days b {
+  font-weight: 600;
+  color: var(--foreground);
+}
+.trend-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 14px;
+}
+.trend-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 16px;
+}
+.trend-tile > span {
+  font-size: 13px;
+  color: var(--muted-foreground);
+}
+.trend-tile > strong {
+  font-size: 26px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.trend-tile > small {
+  font-size: 12px;
+  color: var(--tone-paused-ink);
+}
+.trend-tile svg {
+  display: block;
+  width: 100%;
+  height: 24px;
+  margin-top: 6px;
+  overflow: visible;
+}
+.trend-tile polyline {
+  fill: none;
+  stroke: var(--primary);
+  stroke-width: 1.75;
+  vector-effect: non-scaling-stroke;
+  stroke-linejoin: round;
+}

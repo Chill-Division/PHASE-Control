@@ -30,8 +30,11 @@ function boxOf(selectors: readonly string[]): Box | null {
   }
   return null;
 }
-/** The menu's entry for the page on show, where the menu is on the screen (not on a phone). */
-const MENU = [".desktop-sidebar nav button[aria-current='page']"];
+/** The menu's entry for the page on show: the rail's on a tablet or a desktop, the tab's on a phone. */
+const MENU = [
+  ".app-rail .rail-item[aria-current='page']",
+  ".phone-tabs .phone-tab[aria-current='page']",
+];
 const still = () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
 
 /** Scroll `box` up under the top of the window, when the card or the window's edge hides it. */

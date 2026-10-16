@@ -248,14 +248,19 @@
   font-size: var(--text-xs);
   margin-top: 5px;
 }
+/* A cell's colour is its balance: vegetative green to generative indigo, as the key under the grid. */
 .calendar-cell {
-  min-height: 70px;
+  min-height: 64px;
   /* A day column is 45px: its input needs the width for "100%". */
   padding: 9px 2px;
-  background: color-mix(in srgb, var(--primary) calc(10% + var(--bias) * 0.2%), var(--card));
+  background: color-mix(in srgb, var(--phase-p3) calc(var(--bias) * 1%), var(--phase-p1));
+  color: #ffffff;
   border: 2px solid transparent;
   text-align: center;
   cursor: pointer;
+}
+.dark .calendar-cell {
+  color: #0f1419;
 }
 .calendar-cell input {
   display: block;
@@ -278,11 +283,15 @@
 }
 .calendar-cell small {
   font-size: var(--text-xs);
-  color: var(--muted-foreground);
+  color: inherit;
+  opacity: 0.8;
+}
+.calendar-cell input::placeholder {
+  color: inherit;
 }
 .calendar-cell.selected {
-  border-color: var(--primary-strong);
-  background: color-mix(in srgb, var(--primary) 28%, var(--card));
+  border-color: var(--foreground);
+  box-shadow: inset 0 0 0 2px #e9b949;
 }
 .calendar-cell:focus-within {
   outline: 2px solid var(--primary-strong);
@@ -291,6 +300,7 @@
 /* A typed balance not applied yet. */
 .calendar-cell.editing {
   background: var(--card);
+  color: var(--foreground);
 }
 .calendar-cell.invalid {
   border-color: var(--destructive);
@@ -766,4 +776,89 @@
   .plan-cell-table small {
     display: block;
   }
+}
+
+/* The Schedule tab: what it is for and its file actions, its status as a chip, the balance key. */
+.schedule-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.schedule-page > .workspace-card,
+.schedule-page > .panel {
+  margin-bottom: 0;
+}
+.schedule-intro {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+}
+.schedule-intro p {
+  flex: 1 1 360px;
+  font-size: 14px;
+  color: var(--tone-paused-ink);
+}
+.plan-state {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.plan-status-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 14px;
+  border-radius: 12px;
+  background: var(--tone-paused-bg);
+  color: var(--tone-paused-ink);
+  font-size: 15px;
+  font-weight: 600;
+}
+.plan-status-chip i {
+  width: 9px;
+  height: 9px;
+  border-radius: 5px;
+  border: 2px solid currentColor;
+}
+.plan-status-chip[data-status="armed"],
+.plan-status-chip[data-status="active"],
+.plan-status-chip[data-status="disarming"] {
+  background: var(--schedule-bg);
+  color: var(--schedule);
+}
+.plan-status-chip[data-status="active"] i {
+  background: currentColor;
+}
+.plan-status-chip[data-status="error"] {
+  background: var(--tone-critical-bg);
+  color: var(--tone-critical-ink);
+}
+.plan-unsaved {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 9px;
+  border-radius: 12px;
+  background: var(--tone-warning-bg);
+  color: var(--tone-warning-ink);
+  font-size: 12px;
+  font-weight: 600;
+}
+.plan-balance-key {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin: 12px 0 0;
+  font-size: 12px;
+  color: var(--tone-paused-ink);
+}
+.plan-balance-key i {
+  width: 180px;
+  height: 10px;
+  border-radius: 5px;
+  background: linear-gradient(90deg, var(--phase-p1), var(--phase-p3));
 }

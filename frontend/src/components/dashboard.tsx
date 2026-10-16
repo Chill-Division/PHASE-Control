@@ -89,8 +89,10 @@ export type Page =
   | "activity"
   | "settings"
   | "reservoir"
+  | "recipes"
   | "stock"
-  | "help";
+  | "help"
+  | "more";
 export const number = (value: number | null, digits = 1) =>
   value === null || !Number.isFinite(value)
     ? "Unavailable"
@@ -122,12 +124,12 @@ export function Heading({
   description?: string;
   action?: ReactNode;
 }) {
+  // The section's title and tab name the page: its own title is for a screen reader.
+  if (!description && !action) return <h2 className="sr-only">{title}</h2>;
   return (
     <div className="page-heading">
-      <div>
-        <h1>{title}</h1>
-        {description && <p>{description}</p>}
-      </div>
+      <h2 className="sr-only">{title}</h2>
+      {description ? <p>{description}</p> : <span />}
       {action}
     </div>
   );
@@ -341,7 +343,8 @@ export function HistoryChart({ controller, zones }: { controller: Controller; zo
       current = false;
     };
   }, [controller.roomId, controller.connection, key, hours, retry]);
-  const palette = ["#03a9f4", "#e5a43b", "#a57bf3", "#e97d98", "#43bdab"];
+  // The zones' own colours, as their dots and rings everywhere else.
+  const palette = [1, 2, 3, 4, 5, 6].map((n) => `var(--zone-${n})`);
   const visibleZones = zones.filter((zone) => !hiddenZones.includes(zone.id));
   const lines = visibleZones.flatMap((zone) =>
     (["vwc", "ec"] as const).map((kind) => {
@@ -1322,7 +1325,7 @@ function ZonePhaseReview({
 /** Every action for one zone, from the ⋯ at the end of its row on the Overview: move it to
  * another phase, pause or enable its scheduling, edit its strategy, or open its details. Each
  * change is reviewed before it applies, as in the details. */
-function ZoneActions({
+export function ZoneActions({
   controller,
   zone,
   onOpen,
@@ -1409,11 +1412,14 @@ export function ZoneDetails({
   zone,
   close,
   navigate,
+  chart,
 }: {
   controller: Controller;
   zone: Zone | null;
   close: () => void;
   navigate: (page: Page, zoneId?: number) => void;
+  /** The zone's own grow-day, drawn by the page that has the day's history loaded. */
+  chart?: ReactNode;
 }) {
   const { view } = useWaterView();
   const [review, setReview] = useState(false);
@@ -1443,6 +1449,9 @@ export function ZoneDetails({
           Date.now(),
         )
       : undefined;
+  const connected = ["live", "demo"].includes(controller.connection);
+  const index = zone ? controller.room.zones.findIndex((item) => item.id === zone.id) : -1;
+  const plants = zone ? zonePlants(controller, zone.id) : null;
   return (
     <>
       <Sheet
@@ -1453,22 +1462,63 @@ export function ZoneDetails({
       >
         <SheetContent className="zone-sheet">
           <SheetHeader>
-            <SheetTitle>{zone?.name}</SheetTitle>
-            <SheetDescription>{controller.room.room.name} · zone details</SheetDescription>
+            <SheetTitle className="zone-sheet-title">
+              <i
+                style={{ background: `var(--zone-${(Math.max(0, index) % 6) + 1})` }}
+                aria-hidden="true"
+              />
+              {zone?.name}
+            </SheetTitle>
+            <SheetDescription>
+              {controller.room.room.name}
+              {plants ? ` · ${number(plants, 0)} ${plants === 1 ? "plant" : "plants"}` : ""} · zone
+              details
+            </SheetDescription>
           </SheetHeader>
           {zone && (
             <div className="sheet-body">
               <ZoneOperatingState zone={zone} />
-              <div className="zone-irrigation-summary">
-                <span className="small muted">Last irrigation</span>
-                <LastIrrigation zone={zone} />
-              </div>
               {zone.waiting && (
                 <p className="zone-waiting">
                   <WaitingFor zone={zone} />
                 </p>
               )}
+              {zone.override === true && (
+                <div className="zone-override" data-zone-override>
+                  <p>
+                    <strong>
+                      Paused by hand
+                      {zone.overrideUntil ? ` until ${time(zone.overrideUntil)}` : ""}.
+                    </strong>{" "}
+                    {zone.name}&rsquo;s manual override is on in Home Assistant, so the controller
+                    fires no shot in it
+                    {zone.overrideUntil ? " until then" : " until it is switched off"}. Its probes
+                    are still read.
+                  </p>
+                  <Button
+                    variant="outline"
+                    className="full-width"
+                    disabled={!zone.overrideEntity || !connected}
+                    onClick={() => setResume(true)}
+                  >
+                    Resume {zone.name} now
+                  </Button>
+                </div>
+              )}
+              {chart}
               <div className="detail-metrics">
+                <div>
+                  <span>Last irrigation</span>
+                  <strong className="detail-text">
+                    <LastIrrigation zone={zone} />
+                  </strong>
+                </div>
+                <div>
+                  <span>Shots today</span>
+                  <strong>
+                    <MetricValue metric={zone.shots} />
+                  </strong>
+                </div>
                 <div>
                   <span>Moisture</span>
                   <strong>
@@ -1501,76 +1551,48 @@ export function ZoneDetails({
                 <div>
                   <span>{waterTodayLabel(view)}</span>
                   <strong>
-                    <WaterUse
-                      zone={zone}
-                      limit={dailyLimit(controller, zone.id)}
-                      plants={zonePlants(controller, zone.id)}
-                    />
+                    <WaterUse zone={zone} limit={dailyLimit(controller, zone.id)} plants={plants} />
                   </strong>
                 </div>
                 <div>
-                  <span>Shots today</span>
-                  <strong>
-                    <MetricValue metric={zone.shots} />
-                  </strong>
-                </div>
-                <div className="detail-wide">
                   <span>Dryback · last {DRYBACK_WINDOW_H} hours</span>
-                  <DrybackRate zone={zone} trend={trend} width={180} />
+                  <DrybackRate zone={zone} trend={trend} width={150} />
                 </div>
               </div>
-              <h3>Configuration</h3>
-              <p className="muted">Review phase targets and timing in irrigation strategy.</p>
-              <Button
-                className="full-width"
-                onClick={() => {
-                  close();
-                  navigate("strategy", zone.id);
-                }}
-              >
-                Edit {zone.name} strategy <ArrowUpRight size={16} />
-              </Button>
-              <Button
-                variant="outline"
-                className="full-width"
-                disabled={
-                  !zone.enabledEntity ||
-                  zone.enabled === null ||
-                  !["live", "demo"].includes(controller.connection)
-                }
-                onClick={() => setReview(true)}
-              >
-                {zone.enabled ? "Pause zone scheduling" : "Enable zone scheduling"}
-              </Button>
+              <h3>Actions</h3>
+              <div className="zone-sheet-actions">
+                <button
+                  type="button"
+                  className="action-tile"
+                  onClick={() => {
+                    close();
+                    navigate("strategy", zone.id);
+                  }}
+                >
+                  <strong>Edit {zone.name} strategy</strong>
+                  <span>Its targets, on Today in Irrigation strategy</span>
+                </button>
+                <button
+                  type="button"
+                  className="action-tile"
+                  disabled={!zone.enabledEntity || zone.enabled === null || !connected}
+                  onClick={() => setReview(true)}
+                >
+                  <strong>
+                    {zone.enabled ? "Pause zone scheduling" : "Enable zone scheduling"}
+                  </strong>
+                  <span>
+                    {zone.enabled
+                      ? "No water at all until it is enabled"
+                      : "It is watered by its targets again"}
+                  </span>
+                </button>
+              </div>
               <p className="small muted">
                 Paused, the zone gets no water at all, not even a rescue shot, and a shot already
                 running in it stops within a few seconds. It is not an emergency stop: use the
                 installation's physical shut-off for that.
               </p>
-              {zone.override === true && (
-                <div className="zone-override" data-zone-override>
-                  <p>
-                    <strong>
-                      Paused by hand
-                      {zone.overrideUntil ? ` until ${time(zone.overrideUntil)}` : ""}.
-                    </strong>{" "}
-                    {zone.name}&rsquo;s manual override is on in Home Assistant, so the controller
-                    fires no shot in it
-                    {zone.overrideUntil ? " until then" : " until it is switched off"}. Its probes
-                    are still read.
-                  </p>
-                  <Button
-                    variant="outline"
-                    className="full-width"
-                    disabled={
-                      !zone.overrideEntity || !["live", "demo"].includes(controller.connection)
-                    }
-                    onClick={() => setResume(true)}
-                  >
-                    Resume {zone.name} now
-                  </Button>
-                </div>
-              )}
               {zone.setPhaseEntity && (
                 <>
                   <h3>Phase</h3>
@@ -1585,9 +1607,7 @@ export function ZoneDetails({
                         size="sm"
                         variant="outline"
                         aria-pressed={phase === zone.phase}
-                        disabled={
-                          phase === zone.phase || !["live", "demo"].includes(controller.connection)
-                        }
+                        disabled={phase === zone.phase || !connected}
                         onClick={() => setPhaseChoice(phase)}
                       >
                         {phase} · {name}
@@ -1617,7 +1637,7 @@ export function ZoneDetails({
                           <select
                             id={`probe-${zone.id}-${metric}`}
                             value={choice.method}
-                            disabled={!["live", "demo"].includes(controller.connection)}
+                            disabled={!connected}
                             onChange={(event) =>
                               event.target.value !== choice.method &&
                               setProbeChoice({ metric, option: event.target.value })

@@ -28,6 +28,7 @@ import type { Controller } from "@/lib/types";
 import { errorText } from "@/lib/utils";
 import { RoomPower } from "@/components/room-controls";
 import type { ThemePreference, ThemeSource } from "@/lib/ha-theme";
+import { defaultRoomChoice, setDefaultRoomChoice } from "@/lib/default-room";
 import { useWaterView, type WaterView } from "@/lib/water-view";
 
 /** The connection in the top bar's words, with the colour of its state. */
@@ -53,6 +54,7 @@ export function Settings({
   embedded: boolean;
 }) {
   const water = useWaterView();
+  const [openOn, setOpenOn] = useState(defaultRoomChoice);
   const [waterBusy, setWaterBusy] = useState(false);
   const [waterError, setWaterError] = useState("");
   async function chooseWater(view: WaterView) {
@@ -239,6 +241,33 @@ export function Settings({
                 </button>
               ))}
             </div>
+            {controller.rooms.length > 1 && (
+              <div className="default-room">
+                <label htmlFor="default-room">
+                  <h3>Open on</h3>
+                </label>
+                <select
+                  id="default-room"
+                  value={openOn}
+                  onChange={(event) => {
+                    setOpenOn(event.target.value);
+                    setDefaultRoomChoice(event.target.value);
+                  }}
+                >
+                  <option value="">The first room, {controller.rooms[0].name}</option>
+                  <option value="last">The room I looked at last</option>
+                  {controller.rooms.map((room) => (
+                    <option key={room.id} value={room.id}>
+                      {room.name}
+                    </option>
+                  ))}
+                </select>
+                <p className="small muted mt-3">
+                  The room this dashboard opens on, on this device only, like its appearance. A link
+                  to a room still opens that room.
+                </p>
+              </div>
+            )}
             <div>
               <h3 id="water-view-label">Water today, shown as</h3>
               <div

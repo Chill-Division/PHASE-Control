@@ -119,3 +119,107 @@ export function TankStatus({
     </section>
   );
 }
+
+/** The reservoir at a glance, for the Overview: how full it is against its minimum, what its refill
+ * is doing, and the way to Feed (or to map it, where nothing is). */
+export function ReservoirSummary({
+  controller,
+  open,
+  configure,
+}: {
+  controller: Controller;
+  open: () => void;
+  configure: () => void;
+}) {
+  const tank = tankTelemetry(controller.states, controller.room.room);
+  const { refill, source } = tank;
+  const connected = ["live", "demo"].includes(controller.connection);
+  const level = tank.level.value;
+  const remind = source?.remindPct ?? null;
+  const soon = remind !== null && level !== null && level <= remind;
+  const min = source?.minPct ?? null;
+  const mapped = !!(tank.level.entityId || tank.pump.entityId || refill);
+  if (!mapped)
+    return (
+      <section
+        className="card reservoir-summary"
+        aria-labelledby="reservoir-title"
+        data-tank-status
+      >
+        <div className="reservoir-text">
+          <h2 id="reservoir-title">Reservoir</h2>
+          <span className="muted">
+            No reservoir is mapped: its level sensor and pump show here once they are.
+          </span>
+        </div>
+        <button type="button" className="button-quiet" onClick={configure}>
+          Map sensors
+        </button>
+      </section>
+    );
+  const state = refill?.running
+    ? (refill.now ?? "Refilling")
+    : tank.pump.on
+      ? "Pump on"
+      : refill?.now === "Not running"
+        ? "Idle"
+        : (refill?.now ?? (tank.pump.on === false ? "Pump off" : null));
+  const line = [
+    refill?.lastAt &&
+      `last refill ${new Date(refill.lastAt).toLocaleString([], { dateStyle: "short", timeStyle: "short" })}${refill.lastStopped ? " (stopped)" : ""}`,
+    min !== null && `minimum ${Math.round(min)}%`,
+    remind !== null && `reminder at ${Math.round(remind)}%`,
+  ].filter(Boolean);
+  return (
+    <section className="card reservoir-summary" aria-labelledby="reservoir-title" data-tank-status>
+      <div
+        className="reservoir-vessel"
+        role="img"
+        data-tank-level={level ?? "unknown"}
+        aria-label={
+          level === null
+            ? `Reservoir level: ${tank.level.issue ?? "unknown"}`
+            : `Reservoir ${Math.round(level)}% full${min !== null ? `; its minimum ${Math.round(min)}%` : ""}`
+        }
+      >
+        {level !== null && <span className="reservoir-water" style={{ height: `${level}%` }} />}
+        {min !== null && <span className="reservoir-min" style={{ bottom: `${min}%` }} />}
+      </div>
+      <div className="reservoir-text">
+        <span className="reservoir-head">
+          <h2 id="reservoir-title">Reservoir</h2>
+          {state && (
+            <span
+              className="tone-badge"
+              data-tone={refill?.running || tank.pump.on ? "info" : undefined}
+              data-pump-state={tank.pump.on === null ? "unknown" : tank.pump.on ? "on" : "off"}
+            >
+              {state}
+              {connected ? "" : " · last known"}
+            </span>
+          )}
+          {soon && (
+            <span className="tone-badge" data-tone="warning" data-refill-soon>
+              Refill soon
+            </span>
+          )}
+        </span>
+        <span className="reservoir-level">
+          <strong>{level === null ? "–" : `${Math.round(level)}%`}</strong>
+          <span>{level === null ? tank.level.issue : "full"}</span>
+        </span>
+        {line.length > 0 && <span className="reservoir-line">{line.join(" · ")}</span>}
+      </div>
+      {/* The reservoir's own page once it has one; a room with only a pump maps the rest first. */}
+      {tank.level.entityId || refill ? (
+        <button type="button" className="link-button" onClick={open}>
+          Feed
+        </button>
+      ) : (
+        <button type="button" className="link-button" onClick={configure}>
+          Map sensors
+        </button>
+      )}
+    </section>
+  );
+}

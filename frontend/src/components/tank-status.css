@@ -154,3 +154,74 @@
     gap: 16px;
   }
 }
+
+/* The Overview's reservoir card: the tank drawn as a jar, its level and minimum. */
+.reservoir-summary {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 16px 18px;
+}
+.reservoir-vessel {
+  position: relative;
+  width: 48px;
+  height: 84px;
+  flex: none;
+  border-radius: 12px;
+  border: 2px solid color-mix(in srgb, var(--primary) 25%, var(--border));
+  background: color-mix(in srgb, var(--primary) 4%, var(--surface));
+  overflow: hidden;
+}
+.reservoir-water {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--primary);
+}
+.reservoir-min {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-top: 2px solid var(--destructive);
+}
+.reservoir-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 13px;
+}
+.reservoir-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.reservoir-head h2,
+.reservoir-text > h2 {
+  font-size: 15px;
+  font-weight: 600;
+}
+.reservoir-level {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  color: var(--tone-paused-ink);
+}
+.reservoir-level strong {
+  font-size: 28px;
+  line-height: 1.15;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  color: var(--foreground);
+}
+.reservoir-line {
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+.reservoir-summary > .link-button {
+  align-self: flex-start;
+}

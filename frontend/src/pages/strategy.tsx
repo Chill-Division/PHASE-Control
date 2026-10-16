@@ -1,16 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import {
-  ArrowRight,
-  Check,
-  Download,
-  SlidersHorizontal,
-  TriangleAlert,
-  Upload,
-} from "lucide-react";
+import { CalendarRange, Check, ChevronRight, Download, TriangleAlert, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Empty, Heading, ReviewDialog, number, type ReviewItem } from "@/components/dashboard";
+import { Empty, ReviewDialog, number, type ReviewItem } from "@/components/dashboard";
+import { TargetsBanner } from "@/components/targets-banner";
+import { zoneColor } from "@/lib/room-mode";
+import { duration } from "@/lib/day-timeline";
+import { estimatePercent, waterParameters } from "@/lib/water-delivery";
+import { plantText } from "@/lib/water-view";
 import type { Controller, Setting } from "@/lib/types";
 import { PlanningCurve } from "@/components/planning-curve";
 import { buildSetpointPreview, validateSetpoint } from "@/lib/setpoint-preview";
@@ -28,7 +26,7 @@ import {
 } from "@/components/room-controls";
 import { SettingHelp } from "@/components/setting-help";
 import { managedBy } from "@/lib/auto-setpoints";
-import { TODAY_IDLE, scheduleStatus, todayMeaning } from "@/lib/schedule-words";
+import { scheduleStatus } from "@/lib/schedule-words";
 import { localDate } from "@/lib/grow-plan";
 import {
   exportTargets,
@@ -55,6 +53,7 @@ import {
 } from "@/lib/setting-words";
 import { ScaleLegend, ScaleMark } from "@/components/scale-mark";
 import "./setpoint-preview.css";
+import "./strategy.css";
 
 function download(text: string, name: string) {
   const url = URL.createObjectURL(new Blob([text], { type: "application/json" }));
@@ -97,9 +96,9 @@ export function Strategy({
   );
   const [review, setReview] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [phase, setPhase] = useState("All");
+  // The phase card open on the right; null: all closed.
+  const [openGroup, setOpenGroup] = useState<string | null>(null);
   const [showInactive, setShowInactive] = useState(false);
-  const [expanded, setExpanded] = useState(false);
   const [roomPreviewZone, setRoomPreviewZone] = useState(controller.room.zones[0]?.id);
   // What the last targets file loaded into the draft, or why it could not be read.
   const [loaded, setLoaded] = useState<{ from: string; result: LoadedTargets } | null>(null);
@@ -113,7 +112,6 @@ export function Strategy({
   const reported = scheduleStatus(controller.room.strategy.status);
   const scheduleState =
     planEngaged && !["active", "disarming", "error"].includes(reported) ? "active" : reported;
-  const scheduleNote = todayMeaning(scheduleState);
   const allSettings = controller.room.settings;
   const zone = controller.room.zones.find((z) => String(z.id) === zoneId);
   const fields =
@@ -160,10 +158,14 @@ export function Strategy({
       }
     : null;
   const groups = [...new Set(visibleFields.map(fieldGroup))];
-  const shownGroups = groups.filter(
-    (group) =>
-      phase === "All" || (phase === "Other" ? !/^P[0-3]/.test(group) : group.startsWith(phase)),
-  );
+  // The card open by default: the zone's phase now, else the first.
+  const group =
+    openGroup !== null && groups.includes(openGroup)
+      ? openGroup
+      : openGroup === null && groups.length
+        ? (groups.find((item) => zone && item.startsWith(zone.phase)) ?? groups[0])
+        : null;
+  const phase = group?.match(/^P[0-3]/)?.[0];
   const invalid = validateSetpoint;
   const canEdit = !planEngaged && ["live", "demo"].includes(controller.connection);
   // Recorded probe behaviour for the zone being previewed. The chart lines and the hints
@@ -274,77 +276,56 @@ export function Strategy({
     }
   }
   const drafted = Object.keys(drafts).length;
+  const connected = ["live", "demo"].includes(controller.connection);
+  // Draft values over the controller's, for what a percentage works out to.
+  const overrides = Object.fromEntries(
+    Object.entries(drafts)
+      .filter(([, draft]) => draft.value.trim() && Number.isFinite(Number(draft.value)))
+      .map(([id, draft]) => [id, Number(draft.value)]),
+  );
+  const water =
+    previewZoneId === undefined
+      ? null
+      : waterParameters(controller, previewZoneId, undefined, overrides);
+  const scaleWords = (param: string, value: number | null): string | null => {
+    const words = settingWords(param);
+    if (!words?.scale || value === null) return null;
+    if (words.scale === "absolute") return "A moisture reading, on the probe’s own scale.";
+    if (words.scaleOf === "each plant’s substrate") {
+      const given = water && estimatePercent(water, value);
+      const shot = given?.effective ?? given?.requested;
+      return shot
+        ? `${number(value)}% of each plant’s substrate: ≈ ${plantText(shot.mlPerPlant)} a plant, ${duration(shot.seconds * 1000)} at the drippers.`
+        : `${number(value)}% of each plant’s substrate.`;
+    }
+    if (param.endsWith("dryback_target")) {
+      const peak = preview.draft.parameters.p1_target_vwc;
+      return Number.isFinite(peak)
+        ? `${number(value)}% of the day’s peak: from a ${number(peak)}% peak, down to ${number(peak * (1 - value / 100))}%.`
+        : `${number(value)}% of the day’s peak.`;
+    }
+    return `${number(value)}% of ${words.scaleOf}.`;
+  };
+  const summary = (items: Setting[]) =>
+    items
+      .slice(0, 2)
+      .map((setting) => {
+        const value = drafts[setting.entityId]?.value ?? setting.value;
+        return `${setting.short ?? setting.label} ${value === null || value === "" ? "–" : number(Number(value))}${setting.unit === "%" ? "%" : setting.unit ? ` ${setting.unit}` : ""}`;
+      })
+      .join(" · ");
+  const firstDraft = Object.values(drafts)[0];
   return (
-    <>
-      <Heading
-        title="Today’s targets"
-        description={scheduleNote ? "The room’s targets and their daily curve." : TODAY_IDLE}
-        action={
-          <div className="heading-actions">
-            <AutoSetpointsControl controller={controller} />
-            <EcStackingControl controller={controller} />
-            <Button
-              variant="outline"
-              onClick={exportFile}
-              disabled={planEngaged || !allSettings.length}
-              title={
-                planEngaged
-                  ? "While a schedule runs the room follows it: export the schedule instead"
-                  : "Save these targets to a file, both steering modes, for another room or a tester"
-              }
-            >
-              <Download size={16} /> Export
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => fileRef.current?.click()}
-              disabled={!canEdit || drafted > 0}
-              title={
-                drafted
-                  ? "Review or discard your draft first"
-                  : "Load a targets file into the draft, to review before anything changes"
-              }
-            >
-              <Upload size={16} /> Import
-            </Button>
-            <Button
-              disabled={
-                !items.length ||
-                Boolean(errors.length) ||
-                planEngaged ||
-                !["live", "demo"].includes(controller.connection)
-              }
-              onClick={() => setReview(true)}
-            >
-              Review {Object.keys(drafts).length || ""}{" "}
-              {Object.keys(drafts).length === 1 ? "change" : "changes"} <ArrowRight size={16} />
-            </Button>
-          </div>
+    <div className="strategy-page">
+      <TargetsBanner
+        controller={controller}
+        status={scheduleState}
+        open={
+          planEngaged || scheduleState === "armed"
+            ? { label: "Open schedule", href: "#/grow-plan" }
+            : undefined
         }
       />
-      {scheduleNote && (
-        <div className="workspace-message schedule-note" role="status">
-          <p>{scheduleNote}</p>
-          {planEngaged && (
-            <Button asChild variant="outline">
-              <a href="#/grow-plan">Open schedule</a>
-            </Button>
-          )}
-        </div>
-      )}
-      {!planEngaged && (
-        <div className="workflow-steps">
-          <span className="active">
-            <i>1</i>Edit draft
-          </span>
-          <span>
-            <i>2</i>Review changes
-          </span>
-          <span>
-            <i>3</i>Apply & verify
-          </span>
-        </div>
-      )}
       <input
         ref={fileRef}
         type="file"
@@ -383,45 +364,240 @@ export function Strategy({
           )}
         </div>
       )}
-      <div className="strategy-layout setpoint-workspace">
-        <aside className="strategy-zone-picker">
-          <span className="eyebrow">Configure</span>
-          {controller.room.zones.map((z) => (
-            <button
-              key={z.id}
-              className={zoneId === String(z.id) ? "selected" : ""}
-              onClick={() => {
-                setZoneId(String(z.id));
-                setPhase("All");
-              }}
-            >
-              <span>{z.name}</span>
-              <span className="small">
-                {Object.values(drafts).filter((d) => d.zone === z.name).length || z.phase}
-              </span>
-            </button>
-          ))}
+      <div className="strategy-toolbar">
+        <div className="target-chips" role="group" aria-label="Targets of">
+          {controller.room.zones.map((z, index) => {
+            const count = Object.values(drafts).filter((d) => d.zone === z.name).length;
+            return (
+              <button
+                key={z.id}
+                type="button"
+                className="target-chip"
+                aria-pressed={zoneId === String(z.id)}
+                onClick={() => {
+                  setZoneId(String(z.id));
+                  setOpenGroup(null);
+                }}
+              >
+                <i style={{ background: zoneColor(index) }} aria-hidden="true" />
+                {z.name}
+                {count > 0 && (
+                  <b className="chip-count" aria-label={`${count} unsaved`}>
+                    {count}
+                  </b>
+                )}
+              </button>
+            );
+          })}
           <button
-            className={zoneId === "room" ? "selected" : ""}
+            type="button"
+            className="target-chip"
+            aria-pressed={zoneId === "room"}
             onClick={() => {
               setZoneId("room");
-              setPhase("All");
+              setOpenGroup(null);
             }}
           >
-            <span>Room settings</span>
-            <SlidersHorizontal size={16} />
+            <i className="target-chip-room" aria-hidden="true" />
+            Whole room
+            {Object.values(drafts).filter((d) => d.zone === "Room settings").length > 0 && (
+              <b className="chip-count">
+                {Object.values(drafts).filter((d) => d.zone === "Room settings").length}
+              </b>
+            )}
           </button>
-          <p>Each setting uses the limits and units reported by your controller.</p>
-        </aside>
-        <div className="strategy-content">
-          <div className="section-title">
-            <div>
-              <h2>{zone?.name || "Room settings"}</h2>
-              <p>
-                {zone
-                  ? "Phase targets, timing and limits for this zone."
-                  : "Shared controller settings for this room. A zone’s own value, where it has one, takes precedence."}
+        </div>
+        <div className="strategy-toolbar-actions">
+          <Button
+            variant="outline"
+            onClick={exportFile}
+            disabled={planEngaged || !allSettings.length}
+            title={
+              planEngaged
+                ? "While a schedule runs the room follows it: export the schedule instead"
+                : "Save these targets to a file, both steering modes, for another room or a tester"
+            }
+          >
+            <Download size={16} /> Export targets
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => fileRef.current?.click()}
+            disabled={!canEdit || drafted > 0}
+            title={
+              drafted
+                ? "Review or discard your draft first"
+                : "Load a targets file into the draft, to review before anything changes"
+            }
+          >
+            <Upload size={16} /> Import
+          </Button>
+        </div>
+      </div>
+      <div className="strategy-modes">
+        {!planEngaged &&
+          choices.map((choice) => (
+            <div className="steering-choice" key={choice.entityId}>
+              <Label htmlFor={`choice-${choice.entityId}`}>
+                {choice.label}
+                {drafts[choice.entityId] && <span className="draft-dot" />}
+              </Label>
+              <select
+                id={`choice-${choice.entityId}`}
+                value={drafts[choice.entityId]?.value ?? choice.value ?? ""}
+                disabled={!connected}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  setSaved(false);
+                  setDrafts((current) => {
+                    const next = { ...current };
+                    if (value === (current[choice.entityId]?.original ?? choice.value))
+                      delete next[choice.entityId];
+                    else
+                      next[choice.entityId] = {
+                        value,
+                        original: current[choice.entityId]?.original ?? choice.value,
+                        label: choice.label,
+                        zone: zone?.name || "Room settings",
+                      };
+                    return next;
+                  });
+                }}
+              >
+                <option value="" disabled>
+                  Select a mode
+                </option>
+                {choice.options.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+              <SettingHelp
+                label={choice.label}
+                param={choice.entityId.replace(/^select\.crop_steering_/, "")}
+                detail={{
+                  what: "Vegetative or Generative: which of their two values this zone's P3 dryback target and its substrate EC targets for P0 to P2 use, and, with Auto setpoints on, how early its maintenance shots may stop (3 hours before lights-off at the earliest when vegetative, from the middle of the day when generative).",
+                  when: "From the controller's next check after you apply it.",
+                  affects:
+                    "Only those. Its peak target, maintenance trigger, shot sizes and timing stay as they are: change those too if the new steering calls for it. Nothing changes until you review and apply.",
+                }}
+              />
+              {drafts[choice.entityId] && (
+                <span className="small muted">Now {choice.value || "unavailable"}</span>
+              )}
+            </div>
+          ))}
+        {zone && activeMode && !planEngaged && (
+          <label className="setpoint-mode-visibility">
+            <input
+              type="checkbox"
+              checked={showInactive}
+              onChange={(event) => setShowInactive(event.target.checked)}
+            />
+            Show both modes
+          </label>
+        )}
+        <span className="strategy-modes-gap" />
+        <AutoSetpointsControl controller={controller} />
+        <EcStackingControl controller={controller} />
+      </div>
+      {saved && (
+        <div className="success-banner" role="status">
+          <Check size={18} />
+          Changes applied and verified by controller readback.
+        </div>
+      )}
+      <div className="strategy-columns setpoint-workspace">
+        <div className="strategy-main">
+          <section
+            className="card strategy-curve setpoint-preview"
+            aria-label="Setpoint planning preview"
+          >
+            <div className="card-head">
+              <h2>
+                {controller.room.zones.find((z) => z.id === previewZoneId)?.name ?? "No zone"}’s day
+              </h2>
+              <span>
+                {preview.readOnly
+                  ? "The schedule’s targets today · read only"
+                  : `${preview.draft.mode ?? "Mode unavailable"} · drag a line, or type in the phase cards`}
+              </span>
+            </div>
+            {zoneId === "room" && (
+              <div className="setpoint-preview-zone">
+                <Label htmlFor="setpoint-preview-zone">The room’s values, drawn on</Label>
+                <select
+                  id="setpoint-preview-zone"
+                  value={previewZoneId ?? ""}
+                  onChange={(event) => setRoomPreviewZone(Number(event.target.value))}
+                >
+                  {controller.room.zones.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.name}
+                    </option>
+                  ))}
+                </select>
+                <p>A zone’s own value, where it has one, wins over the room’s.</p>
+              </div>
+            )}
+            <PlanningCurve
+              recorded={recorded}
+              retention={sensorZone?.auto?.gain}
+              parameters={preview.draft.parameters}
+              lightsOn={preview.draft.lightsOn}
+              lightsOff={preview.draft.lightsOff}
+              baseline={preview.readOnly ? undefined : preview.saved}
+              bounds={preview.bounds}
+              showEditors={false}
+              selectedPhase={phase as PlanningPhaseId | undefined}
+              description={
+                preview.readOnly
+                  ? "Today’s active scheduled targets. Open Schedule to edit the dated strategy."
+                  : "Drag a target or adjust the controls beside this graph. Nothing is written until you review and apply."
+              }
+              onChange={
+                canEdit
+                  ? (key, value) => {
+                      const setting = preview.fields[key];
+                      if (setting) edit(setting, String(value));
+                    }
+                  : undefined
+              }
+            />
+            <p className="setpoint-preview-note">
+              Your targets run across the whole day; the dark lines are what this zone’s probe
+              recorded, today and on earlier days. The P3 boundary is shown at lights-off; the
+              controller may stop earlier on the dryback it measures, and P2 can also move for EC
+              and safety limits.
+            </p>
+            {preview.notes.map((note) => (
+              <p className="setpoint-preview-note" key={note}>
+                {note}
               </p>
+            ))}
+            {preview.issues.length > 0 && (
+              <div className="workspace-message" role="status">
+                {preview.issues.map((issue) => (
+                  <p key={issue}>{issue}</p>
+                ))}
+              </div>
+            )}
+          </section>
+          <SensorContextCard
+            context={sensor}
+            lines={sensorLines}
+            disabledNote={
+              planEngaged
+                ? "The active schedule owns today’s targets, so nothing can be typed here. Recorded sensor behaviour is shown while manual targets are editable."
+                : undefined
+            }
+          />
+          {(zone ? [zone] : controller.room.zones).some((item) => item.auto) && (
+            <section className="card strategy-auto" aria-label="Auto setpoints">
+              <div className="card-head">
+                <h2>Auto setpoints</h2>
+              </div>
               {(zone ? [zone] : controller.room.zones).map(
                 (item) =>
                   item.auto && (
@@ -432,527 +608,315 @@ export function Strategy({
                     />
                   ),
               )}
-            </div>
-          </div>
-          {saved && (
-            <div className="success-banner" role="status">
-              <Check size={18} />
-              Changes applied and verified by controller readback.
-            </div>
+            </section>
           )}
-          <div className="setpoint-editor-grid">
-            <div className="setpoint-controls">
-              {planEngaged ? (
-                <section className="panel settings-group">
-                  <div className="settings-group-heading">
-                    <h3>Active scheduled targets</h3>
-                  </div>
-                  <div className="setting-fields">
-                    {Object.entries(preview.draft.parameters).map(([key, value]) => {
-                      const field =
-                        allSettings.find(
-                          (item) =>
-                            item.zoneId === previewZoneId && item.entityId.endsWith(`_${key}`),
-                        ) ??
-                        allSettings.find(
-                          (item) => item.zoneId === undefined && item.entityId.endsWith(`_${key}`),
-                        );
-                      const ecPhase = key.match(/^ec_target_p([012])$/);
-                      const label =
-                        settingWords(key)?.label ?? field?.label ?? key.replaceAll("_", " ");
-                      const unit =
-                        key === "dryback_target"
-                          ? DRYBACK_UNIT
-                          : ecPhase
-                            ? "mS/cm"
-                            : (field?.unit ?? "");
-                      const words = settingWords(key);
-                      return (
-                        <div className="setting-field" key={key}>
-                          <span>{label}</span>
-                          <strong>
-                            {number(value)} {unit}
-                            {words?.scale && <ScaleMark scale={words.scale} of={words.scaleOf} />}
-                          </strong>
-                        </div>
-                      );
-                    })}
-                    {preview.source === "unavailable-plan" && (
-                      <p>
-                        Scheduled targets are unavailable. Reconnect to verify the active schedule.
-                      </p>
-                    )}
-                  </div>
-                </section>
-              ) : (
-                <>
-                  <nav className="setpoint-phase-picker" aria-label="Setpoint phase">
-                    {["All", "P0", "P1", "P2", "P3", "Other"]
-                      .filter(
-                        (item) =>
-                          item === "All" ||
-                          (item === "Other"
-                            ? groups.some((group) => !/^P[0-3]/.test(group))
-                            : groups.some((group) => group.startsWith(item))),
-                      )
-                      .map((item) => (
-                        <button
-                          type="button"
-                          key={item}
-                          aria-pressed={phase === item}
-                          onClick={() => setPhase(item)}
-                        >
-                          {item === "Other"
-                            ? "Room & limits"
-                            : item === "All"
-                              ? "All settings"
-                              : item}
-                        </button>
-                      ))}
-                  </nav>
-                  <ScaleLegend />
-                  {choices.length > 0 && (
-                    <section className="panel settings-group">
-                      <div className="settings-group-heading">
-                        <span className="phase-marker">
-                          <SlidersHorizontal size={16} />
-                        </span>
-                        <div>
-                          <h3>Steering mode</h3>
-                          <p>
-                            Some targets below have a vegetative and a generative value: the mode
-                            picks which one this zone runs on.
-                          </p>
-                        </div>
-                      </div>
-                      <div className="setting-fields">
-                        {choices.map((choice) => (
-                          <div className="setting-field" key={choice.entityId}>
+        </div>
+        <div className="strategy-side setpoint-controls">
+          <ScaleLegend />
+          {planEngaged ? (
+            <section className="phase-card is-open scheduled-targets">
+              <div className="phase-card-head">
+                <span className="phase-badge" data-schedule="">
+                  <CalendarRange size={15} aria-hidden="true" />
+                </span>
+                <span className="phase-card-title">
+                  <strong>The schedule’s targets today</strong>
+                  <small>Read only: edit them in the Schedule</small>
+                </span>
+              </div>
+              <div className="setting-fields">
+                {Object.entries(preview.draft.parameters).map(([key, value]) => {
+                  const field =
+                    allSettings.find(
+                      (item) => item.zoneId === previewZoneId && item.entityId.endsWith(`_${key}`),
+                    ) ??
+                    allSettings.find(
+                      (item) => item.zoneId === undefined && item.entityId.endsWith(`_${key}`),
+                    );
+                  const ecPhase = key.match(/^ec_target_p([012])$/);
+                  const label =
+                    settingWords(key)?.label ?? field?.label ?? key.replaceAll("_", " ");
+                  const unit =
+                    key === "dryback_target"
+                      ? DRYBACK_UNIT
+                      : ecPhase
+                        ? "mS/cm"
+                        : (field?.unit ?? "");
+                  const words = settingWords(key);
+                  const said = scaleWords(key, value);
+                  return (
+                    <div className="setting-field" key={key}>
+                      <span>{label}</span>
+                      <strong>
+                        {number(value)} {unit}
+                        {words?.scale && <ScaleMark scale={words.scale} of={words.scaleOf} />}
+                      </strong>
+                      {said && <p className="scale-words">{said}</p>}
+                    </div>
+                  );
+                })}
+                {preview.source === "unavailable-plan" && (
+                  <p>Scheduled targets are unavailable. Reconnect to verify the active schedule.</p>
+                )}
+              </div>
+            </section>
+          ) : !fields.length && !choices.length ? (
+            <section className="panel">
+              <Empty
+                title="No editable settings available"
+                detail="This controller has not exposed editable number entities for this selection. Sensor readings cannot be edited."
+              />
+            </section>
+          ) : (
+            groups.map((item) => {
+              const id = item.match(/^P[0-3]/)?.[0];
+              const name = id ? item.replace(/^P[0-3]\s*·\s*/, "") : item;
+              const open = item === group;
+              const inGroup = visibleFields.filter((field) => fieldGroup(field) === item);
+              const changed = inGroup.filter((field) => drafts[field.entityId]).length;
+              return (
+                <section
+                  className={`phase-card settings-group${open ? " is-open" : ""}`}
+                  key={item}
+                  data-phase={id}
+                  aria-label={item}
+                >
+                  <button
+                    type="button"
+                    className="phase-card-head"
+                    aria-expanded={open}
+                    onClick={() => setOpenGroup(open ? "" : item)}
+                  >
+                    <span className="phase-badge" data-phase={id}>
+                      {id ?? "•"}
+                    </span>
+                    <span className="phase-card-title">
+                      <strong>{name}</strong>
+                      <small>{open ? (GROUP_HELP[item] ?? "") : summary(inGroup)}</small>
+                    </span>
+                    {changed > 0 && <b className="chip-count">{changed}</b>}
+                    <ChevronRight size={18} aria-hidden="true" className="phase-card-chevron" />
+                  </button>
+                  {open && (
+                    <div className="setting-fields">
+                      {inGroup.map((setting) => {
+                        const draft = drafts[setting.entityId];
+                        const error = draft ? invalid(setting, draft.value) : "";
+                        const stale = draft && draft.original !== setting.value;
+                        const param = setpointParam(setting.entityId, controller.room.room.prefix);
+                        const metric = param ? setpointMetric(param) : null;
+                        const typed = !draft
+                          ? setting.value
+                          : draft.value.trim() && Number.isFinite(Number(draft.value))
+                            ? Number(draft.value)
+                            : null;
+                        const hint =
+                          param && metric
+                            ? fieldHint(
+                                param,
+                                typed,
+                                sensor[metric].stats,
+                                sensor.hours,
+                                sensorZone?.auto?.learnedPeak,
+                              )
+                            : null;
+                        // A dryback target only for the steering mode in use: the other
+                        // mode's is not tonight's.
+                        const inUse =
+                          !param?.endsWith("dryback_target") || param.slice(0, 3) === activeMode;
+                        const order = param && levels && inUse ? levelWarning(param, levels) : null;
+                        // Auto setpoints' plan for tonight, beside the dryback target it could
+                        // not reach: the steering mode in use only.
+                        const autoNote =
+                          param?.endsWith("dryback_target") &&
+                          param.slice(0, 3) === activeMode &&
+                          zone?.auto?.state === "tracking"
+                            ? zone.auto.drybackNote
+                            : null;
+                        const suggested = hint?.suggestion
+                          ? suggestedDraft(hint.suggestion.value, setting)
+                          : null;
+                        const auto = managedBy(supervisors, setting.entityId);
+                        const words = param ? settingWords(param) : undefined;
+                        // The daily water limit is the zone's, for all its plants: per plant too.
+                        const plants =
+                          param === "max_daily_volume"
+                            ? (allSettings.find(
+                                (other) =>
+                                  other.zoneId === setting.zoneId &&
+                                  other.entityId.endsWith("_plant_count"),
+                              )?.value ?? null)
+                            : null;
+                        const perPlant =
+                          plants && plants > 0 && typed !== null ? typed / plants : null;
+                        const tag = words?.tag;
+                        const said = param ? scaleWords(param, typed) : null;
+                        return (
+                          <div
+                            className={`setting-field ${draft ? "is-draft" : ""}`}
+                            key={setting.entityId}
+                          >
                             <div>
-                              <Label htmlFor={`choice-${choice.entityId}`}>
-                                {choice.label}
-                                {drafts[choice.entityId] && <span className="draft-dot" />}
-                              </Label>
+                              <div className="setting-name">
+                                {tag && (
+                                  <span className="setting-tag" data-tag={tag}>
+                                    {TAG_TEXT[tag]}
+                                  </span>
+                                )}
+                                <Label htmlFor={`setting-${setting.entityId}`}>
+                                  {setting.label}
+                                  {draft && <span className="draft-dot" title="Unsaved draft" />}
+                                  {auto && <AutoBadge />}
+                                </Label>
+                                {param && (
+                                  <SettingHelp
+                                    label={setting.label}
+                                    param={param}
+                                    detail={words?.detail}
+                                    limits={`${setting.min}–${setting.max}${setting.unit ? ` ${setting.unit}` : ""} · step ${setting.step}`}
+                                  />
+                                )}
+                              </div>
                               <p>
-                                Vegetative or Generative. Switching it changes only three things for
-                                this zone: its P3 dryback target and its substrate EC targets for P0
-                                to P2, which each have a vegetative and a generative value, and,
-                                with Auto setpoints on, how early its maintenance shots may stop (3
-                                hours before lights-off at the earliest when vegetative, from the
-                                middle of the day when generative). Its peak target, maintenance
-                                trigger, shot sizes and timing stay as they are: change those too if
-                                the new steering calls for it. Nothing changes until you review and
-                                apply.
+                                {setting.description ||
+                                  `Allowed range: ${setting.min}–${setting.max}${setting.unit ? ` ${setting.unit}` : ""}.`}
                               </p>
                             </div>
-                            <div>
-                              <select
-                                id={`choice-${choice.entityId}`}
-                                value={drafts[choice.entityId]?.value ?? choice.value ?? ""}
-                                disabled={
-                                  planEngaged || !["live", "demo"].includes(controller.connection)
-                                }
-                                onChange={(event) => {
-                                  const value = event.target.value;
-                                  setSaved(false);
-                                  setDrafts((current) => {
-                                    const next = { ...current };
-                                    if (
-                                      value === (current[choice.entityId]?.original ?? choice.value)
-                                    )
-                                      delete next[choice.entityId];
-                                    else
-                                      next[choice.entityId] = {
-                                        value,
-                                        original:
-                                          current[choice.entityId]?.original ?? choice.value,
-                                        label: choice.label,
-                                        zone: zone?.name || "Room settings",
-                                      };
-                                    return next;
-                                  });
-                                }}
+                            <div className="setting-input">
+                              <div>
+                                <Input
+                                  id={`setting-${setting.entityId}`}
+                                  type="number"
+                                  min={setting.min}
+                                  max={setting.max}
+                                  step={setting.step}
+                                  value={draft?.value ?? setting.value ?? ""}
+                                  placeholder={setting.value === null ? "Unavailable" : undefined}
+                                  aria-invalid={Boolean(error)}
+                                  aria-describedby={
+                                    `hint-${setting.entityId}` +
+                                    (hint || auto || order || autoNote || perPlant !== null || said
+                                      ? ` context-${setting.entityId}`
+                                      : "")
+                                  }
+                                  disabled={planEngaged || !connected}
+                                  onChange={(e) => edit(setting, e.target.value)}
+                                />
+                                <span>{setting.unit}</span>
+                              </div>
+                              {words?.scale && <ScaleMark scale={words.scale} of={words.scaleOf} />}
+                              <p
+                                id={`hint-${setting.entityId}`}
+                                className={error ? "field-error" : "small muted"}
                               >
-                                <option value="" disabled>
-                                  Select a mode
-                                </option>
-                                {choice.options.map((option) => (
-                                  <option key={option} value={option}>
-                                    {option}
-                                  </option>
-                                ))}
-                              </select>
-                              {drafts[choice.entityId] && (
-                                <p className="small muted">
-                                  Currently {choice.value || "unavailable"}
-                                </p>
-                              )}
+                                {error ||
+                                  (stale
+                                    ? `Controller now reports ${number(setting.value)}. Review before applying.`
+                                    : draft
+                                      ? `Was ${number(setting.value)} ${setting.unit}`
+                                      : "")}
+                              </p>
                             </div>
+                            {(hint || auto || order || autoNote || perPlant !== null || said) && (
+                              <div className="setting-context" id={`context-${setting.entityId}`}>
+                                {said && (
+                                  <p className="scale-words" data-scale-words={words?.scale}>
+                                    {said}
+                                  </p>
+                                )}
+                                {perPlant !== null && (
+                                  <p className="setting-sensor-hint" data-per-plant>
+                                    {number(perPlant, 2)} L per plant each grow-day, across {plants}{" "}
+                                    plants.
+                                  </p>
+                                )}
+                                {auto && (
+                                  <p className="setting-auto-hint">
+                                    Managed automatically – manual edits will be overwritten.
+                                  </p>
+                                )}
+                                {autoNote && (
+                                  <p className="setting-auto-hint" data-auto-dryback>
+                                    Auto setpoints: {autoNote}.
+                                  </p>
+                                )}
+                                {hint?.text && (
+                                  <p className="setting-sensor-hint">
+                                    {setting.zoneId === undefined
+                                      ? `${sensor.zoneName} probe · `
+                                      : ""}
+                                    {hint.text}
+                                  </p>
+                                )}
+                                {hint?.suggestion && (
+                                  <FieldSuggestionLine
+                                    suggestion={hint.suggestion}
+                                    zoneName={
+                                      setting.zoneId === undefined ? sensor.zoneName : undefined
+                                    }
+                                    draftValue={suggested}
+                                    unit={setting.unit}
+                                    action="in draft"
+                                    disabled={!canEdit || typed === suggested}
+                                    onUse={(value) => edit(setting, String(value))}
+                                  />
+                                )}
+                                {[hint?.warning, order].filter(Boolean).map((warning) => (
+                                  <p className="setting-advisory" key={warning}>
+                                    <TriangleAlert size={13} aria-hidden="true" />
+                                    <span>
+                                      {warning![0].toUpperCase() + warning!.slice(1)}. Advisory
+                                      only; you can still save this value.
+                                    </span>
+                                  </p>
+                                ))}
+                              </div>
+                            )}
                           </div>
-                        ))}
-                      </div>
-                    </section>
+                        );
+                      })}
+                    </div>
                   )}
-                  {zone && activeMode && (
-                    <label className="setpoint-mode-visibility">
-                      <input
-                        type="checkbox"
-                        checked={showInactive}
-                        onChange={(event) => setShowInactive(event.target.checked)}
-                      />
-                      Show targets for both steering modes
-                    </label>
-                  )}
-                  {!fields.length && !choices.length ? (
-                    <section className="panel">
-                      <Empty
-                        title="No editable settings available"
-                        detail="This controller has not exposed editable number entities for this selection. Sensor readings cannot be edited."
-                      />
-                    </section>
-                  ) : (
-                    shownGroups.map((group) => (
-                      <section className="panel settings-group" key={group}>
-                        <div className="settings-group-heading">
-                          <span className="phase-marker">{group.match(/^P[0-3]/)?.[0] || "•"}</span>
-                          <div>
-                            <h3>{group}</h3>
-                            <p>
-                              {GROUP_HELP[group] ?? "Configuration reported by the controller."}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="setting-fields">
-                          {visibleFields
-                            .filter((field) => fieldGroup(field) === group)
-                            .map((setting) => {
-                              const draft = drafts[setting.entityId];
-                              const error = draft ? invalid(setting, draft.value) : "";
-                              const stale = draft && draft.original !== setting.value;
-                              const param = setpointParam(
-                                setting.entityId,
-                                controller.room.room.prefix,
-                              );
-                              const metric = param ? setpointMetric(param) : null;
-                              const typed = !draft
-                                ? setting.value
-                                : draft.value.trim() && Number.isFinite(Number(draft.value))
-                                  ? Number(draft.value)
-                                  : null;
-                              const hint =
-                                param && metric
-                                  ? fieldHint(
-                                      param,
-                                      typed,
-                                      sensor[metric].stats,
-                                      sensor.hours,
-                                      sensorZone?.auto?.learnedPeak,
-                                    )
-                                  : null;
-                              // A dryback target only for the steering mode in use: the other
-                              // mode's is not tonight's.
-                              const inUse =
-                                !param?.endsWith("dryback_target") ||
-                                param.slice(0, 3) === activeMode;
-                              const order =
-                                param && levels && inUse ? levelWarning(param, levels) : null;
-                              // Auto setpoints' plan for tonight, beside the dryback target it could
-                              // not reach: the steering mode in use only.
-                              const autoNote =
-                                param?.endsWith("dryback_target") &&
-                                param.slice(0, 3) === activeMode &&
-                                zone?.auto?.state === "tracking"
-                                  ? zone.auto.drybackNote
-                                  : null;
-                              const suggested = hint?.suggestion
-                                ? suggestedDraft(hint.suggestion.value, setting)
-                                : null;
-                              const auto = managedBy(supervisors, setting.entityId);
-                              const words = param ? settingWords(param) : undefined;
-                              // The daily water limit is the zone's, for all its plants: per plant too.
-                              const plants =
-                                param === "max_daily_volume"
-                                  ? (allSettings.find(
-                                      (item) =>
-                                        item.zoneId === setting.zoneId &&
-                                        item.entityId.endsWith("_plant_count"),
-                                    )?.value ?? null)
-                                  : null;
-                              const perPlant =
-                                plants && plants > 0 && typed !== null ? typed / plants : null;
-                              const tag = words?.tag;
-                              return (
-                                <div
-                                  className={`setting-field ${draft ? "is-draft" : ""}`}
-                                  key={setting.entityId}
-                                >
-                                  <div>
-                                    <div className="setting-name">
-                                      {tag && (
-                                        <span className="setting-tag" data-tag={tag}>
-                                          {TAG_TEXT[tag]}
-                                        </span>
-                                      )}
-                                      <Label htmlFor={`setting-${setting.entityId}`}>
-                                        {setting.label}
-                                        {draft && (
-                                          <span className="draft-dot" title="Unsaved draft" />
-                                        )}
-                                        {auto && <AutoBadge />}
-                                      </Label>
-                                      {param && (
-                                        <SettingHelp
-                                          label={setting.label}
-                                          param={param}
-                                          detail={words?.detail}
-                                          limits={`${setting.min}–${setting.max}${setting.unit ? ` ${setting.unit}` : ""} · step ${setting.step}`}
-                                        />
-                                      )}
-                                    </div>
-                                    <p>
-                                      {setting.description ||
-                                        `Allowed range: ${setting.min}–${setting.max}${setting.unit ? ` ${setting.unit}` : ""}.`}
-                                    </p>
-                                  </div>
-                                  <div className="setting-input">
-                                    <div>
-                                      <Input
-                                        id={`setting-${setting.entityId}`}
-                                        type="number"
-                                        min={setting.min}
-                                        max={setting.max}
-                                        step={setting.step}
-                                        value={draft?.value ?? setting.value ?? ""}
-                                        placeholder={
-                                          setting.value === null ? "Unavailable" : undefined
-                                        }
-                                        aria-invalid={Boolean(error)}
-                                        aria-describedby={
-                                          `hint-${setting.entityId}` +
-                                          (hint || auto || order || autoNote || perPlant !== null
-                                            ? ` context-${setting.entityId}`
-                                            : "")
-                                        }
-                                        disabled={
-                                          planEngaged ||
-                                          !["live", "demo"].includes(controller.connection)
-                                        }
-                                        onChange={(e) => edit(setting, e.target.value)}
-                                      />
-                                      <span>{setting.unit}</span>
-                                    </div>
-                                    {words?.scale && (
-                                      <ScaleMark scale={words.scale} of={words.scaleOf} />
-                                    )}
-                                    <p
-                                      id={`hint-${setting.entityId}`}
-                                      className={error ? "field-error" : "small muted"}
-                                    >
-                                      {error ||
-                                        (stale
-                                          ? `Controller now reports ${number(setting.value)}. Review before applying.`
-                                          : draft
-                                            ? `Currently ${number(setting.value)} ${setting.unit}`
-                                            : "")}
-                                    </p>
-                                  </div>
-                                  {(hint || auto || order || autoNote || perPlant !== null) && (
-                                    <div
-                                      className="setting-context"
-                                      id={`context-${setting.entityId}`}
-                                    >
-                                      {perPlant !== null && (
-                                        <p className="setting-sensor-hint" data-per-plant>
-                                          {number(perPlant, 2)} L per plant each grow-day, across{" "}
-                                          {plants} plants.
-                                        </p>
-                                      )}
-                                      {auto && (
-                                        <p className="setting-auto-hint">
-                                          Managed automatically – manual edits will be overwritten.
-                                        </p>
-                                      )}
-                                      {autoNote && (
-                                        <p className="setting-auto-hint" data-auto-dryback>
-                                          Auto setpoints: {autoNote}.
-                                        </p>
-                                      )}
-                                      {hint?.text && (
-                                        <p className="setting-sensor-hint">
-                                          {setting.zoneId === undefined
-                                            ? `${sensor.zoneName} probe · `
-                                            : ""}
-                                          {hint.text}
-                                        </p>
-                                      )}
-                                      {hint?.suggestion && (
-                                        <FieldSuggestionLine
-                                          suggestion={hint.suggestion}
-                                          zoneName={
-                                            setting.zoneId === undefined
-                                              ? sensor.zoneName
-                                              : undefined
-                                          }
-                                          draftValue={suggested}
-                                          unit={setting.unit}
-                                          action="in draft"
-                                          disabled={!canEdit || typed === suggested}
-                                          onUse={(value) => edit(setting, String(value))}
-                                        />
-                                      )}
-                                      {[hint?.warning, order].filter(Boolean).map((warning) => (
-                                        <p className="setting-advisory" key={warning}>
-                                          <TriangleAlert size={13} aria-hidden="true" />
-                                          <span>
-                                            {warning![0].toUpperCase() + warning!.slice(1)}.
-                                            Advisory only; you can still save this value.
-                                          </span>
-                                        </p>
-                                      ))}
-                                    </div>
-                                  )}
-                                </div>
-                              );
-                            })}
-                        </div>
-                      </section>
-                    ))
-                  )}
-                </>
-              )}
-            </div>
-            <aside
-              className={`setpoint-preview ${expanded ? "is-expanded" : ""}`}
-              aria-label="Setpoint planning preview"
-            >
-              <div className="setpoint-preview-context">
-                <div>
-                  <strong>
-                    {controller.room.room.name} ·{" "}
-                    {controller.room.zones.find((z) => z.id === previewZoneId)?.name ?? "No zone"}
-                  </strong>
-                  <span>
-                    {preview.readOnly
-                      ? "Active schedule · read only"
-                      : `${preview.draft.mode ?? "Mode unavailable"} · local draft`}
-                  </span>
-                </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="setpoint-expand"
-                  onClick={() => setExpanded(!expanded)}
-                  aria-expanded={expanded}
-                >
-                  {expanded ? "Compact preview" : "Expand preview"}
-                </Button>
-              </div>
-              {zoneId === "room" && (
-                <div className="setpoint-preview-zone">
-                  <Label htmlFor="setpoint-preview-zone">Preview room changes in</Label>
-                  <select
-                    id="setpoint-preview-zone"
-                    value={previewZoneId ?? ""}
-                    onChange={(event) => setRoomPreviewZone(Number(event.target.value))}
-                  >
-                    {controller.room.zones.map((item) => (
-                      <option key={item.id} value={item.id}>
-                        {item.name}
-                      </option>
-                    ))}
-                  </select>
-                  <p>Zone-specific values take precedence over room defaults.</p>
-                </div>
-              )}
-              <PlanningCurve
-                recorded={recorded}
-                retention={sensorZone?.auto?.gain}
-                parameters={preview.draft.parameters}
-                lightsOn={preview.draft.lightsOn}
-                lightsOff={preview.draft.lightsOff}
-                baseline={preview.readOnly ? undefined : preview.saved}
-                bounds={preview.bounds}
-                showEditors={false}
-                selectedPhase={/^P[0-3]$/.test(phase) ? (phase as PlanningPhaseId) : undefined}
-                description={
-                  preview.readOnly
-                    ? "Today’s active scheduled targets. Open Schedule to edit the dated strategy."
-                    : "Drag a target or adjust the controls beside this graph. Nothing is written until you review and apply."
-                }
-                onChange={
-                  canEdit
-                    ? (key, value) => {
-                        const setting = preview.fields[key];
-                        if (setting) edit(setting, String(value));
-                      }
-                    : undefined
-                }
-              />
-              <p className="setpoint-preview-note">
-                Blue and pink are your targets for the whole day; the dark lines are what this
-                zone’s probe actually recorded, today and on earlier days. Nothing is forecast. The
-                P3 boundary is shown at lights-off; the engine may stop earlier based on measured
-                dryback. P2 can also adjust for EC and safety limits.
-              </p>
-              <SensorContextCard
-                context={sensor}
-                lines={sensorLines}
-                disabledNote={
-                  planEngaged
-                    ? "The active schedule owns today’s targets, so nothing can be typed here. Recorded sensor behaviour is shown while manual targets are editable."
-                    : undefined
-                }
-              />
-              {preview.notes.map((note) => (
-                <p className="setpoint-preview-note" key={note}>
-                  {note}
-                </p>
-              ))}
-              {preview.issues.length > 0 && (
-                <div className="workspace-message" role="status">
-                  {preview.issues.map((issue) => (
-                    <p key={issue}>{issue}</p>
-                  ))}
-                </div>
-              )}
-            </aside>
-          </div>
+                </section>
+              );
+            })
+          )}
         </div>
       </div>
-      {Object.keys(drafts).length > 0 && (
-        <div className="draft-bar" role="status">
-          <div>
+      {drafted > 0 && (
+        <div className="draft-bar" role="region" aria-label="Unsaved changes">
+          <span className="draft-count">{drafted}</span>
+          <span className="draft-bar-text">
             <strong>
-              {Object.keys(drafts).length} unsaved{" "}
-              {Object.keys(drafts).length === 1 ? "change" : "changes"}
+              {drafted === 1 && firstDraft
+                ? `${firstDraft.zone} · ${firstDraft.label}`
+                : `${drafted} unsaved changes`}
             </strong>
             <span>
               {errors.length
-                ? "Fix invalid values before review."
-                : "Drafts are local to this tab until applied."}
+                ? " · fix the invalid values before review"
+                : " · nothing changes until you apply"}
             </span>
-          </div>
-          <Button
-            variant="ghost"
+          </span>
+          <button
+            type="button"
+            className="draft-bar-discard"
             onClick={() => {
               setDrafts({});
               setSaved(false);
               setLoaded(null);
             }}
           >
-            Discard draft
-          </Button>
-          <Button
-            disabled={
-              Boolean(errors.length) ||
-              !items.length ||
-              planEngaged ||
-              !["live", "demo"].includes(controller.connection)
-            }
+            Discard
+          </button>
+          <button
+            type="button"
+            className="draft-bar-review"
+            disabled={Boolean(errors.length) || !items.length || planEngaged || !connected}
             onClick={() => setReview(true)}
           >
-            Review changes <ArrowRight size={16} />
-          </Button>
+            Review and apply
+          </button>
         </div>
       )}
       <ReviewDialog
@@ -970,6 +934,6 @@ export function Strategy({
           }
         }}
       />
-    </>
+    </div>
   );
 }

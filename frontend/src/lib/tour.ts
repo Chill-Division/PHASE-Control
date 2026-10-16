@@ -27,38 +27,38 @@ export function tourSteps(reservoir: boolean): TourStep[] {
       id: "overview",
       page: "overview",
       title: "Overview",
-      text: "The room today: each zone's moisture against its targets through the grow day, every shot and why, the zones and the tank. Come here to see what the room is doing.",
-      target: ["[data-day-timeline]"],
+      text: "The room today: its grow-day on the clock and what comes next, each zone's day with its band from trigger to peak, the reservoir and what has happened. Open a zone for its whole day, every shot and why.",
+      target: ["[data-today]"],
     },
     {
       id: "plan",
       page: "strategy",
       title: "Irrigation strategy",
       text: "Where you steer. **Today** sets each zone's targets for the four phases, from the morning dryback to the overnight one. **Schedule** moves them through the grow, more vegetative or more generative, week by week.",
-      target: [".section-tabs button", ".page-heading h1"],
+      target: [".section-header .segmented", ".section-title"],
     },
     {
       id: "feed",
       page: reservoir ? "reservoir" : "stock",
       title: "Feed",
       text: reservoir
-        ? "For a batch tank the controller looks after: its level and minimum, the feed recipes and when each is used, and the refills it mixes. **Stock tanks** keeps track of the concentrates that feed the dosers."
+        ? "For a batch tank the controller looks after: its level and minimum, and the refills it mixes. **Recipes** holds the feed recipes and when each is used; **Stock tanks** keeps track of the concentrates that feed the dosers."
         : "For a batch tank the controller looks after: map its level sensor, solenoids and dosers in **Settings**, and its **Reservoir** page appears here. **Stock tanks** keeps track of the concentrates that feed the dosers.",
-      target: [".section-tabs button", ".page-heading h1"],
+      target: [".section-header .segmented", ".section-title"],
     },
     {
       id: "settings",
       page: "setup",
       title: "Settings",
       text: "**Rooms & hardware** holds what this room is wired to: its valves, pump, probes and pot sizes. Its **Tests** give a zone a 10-second test shot, so you can see the water reach the drippers.",
-      target: [".section-tabs button", ".page-heading h1"],
+      target: [".section-header .segmented", ".section-title"],
     },
     {
       id: "switch",
       page: "overview",
       title: "Switch it on",
-      text: "When the probes read right and a test shot reaches the drippers, switch it on here. **Room** on means it is growing; **Watering** on lets the controller water it. Each switch shows what changes before it applies, and you can switch watering off again at any time.",
-      target: [".page-heading .room-power"],
+      text: "When the probes read right and a test shot reaches the drippers, switch it on here: **Steering** lets the controller water the room. **Watching only** reads the probes and follows the phases without watering, and **Room off** is for a room with nothing growing. Each choice shows what changes before it applies.",
+      target: [".mode-pill"],
     },
   ];
 }

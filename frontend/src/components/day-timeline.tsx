@@ -1,5 +1,6 @@
 import {
   useEffect,
+  useId,
   useRef,
   useState,
   type MouseEvent,
@@ -113,10 +114,10 @@ const NO_ESTIMATE: Partial<Record<NextShot["basis"], string>> = {
   "no-reading": "no live VWC reading",
   "ramp-done": "the ramp is at its ceiling, P2 is next",
 };
-type Compare = "yesterday" | "typical" | "none";
+export type Compare = "yesterday" | "typical" | "none";
 /** What the chart draws besides today, remembered in this browser. `compared` is the comparison's
  * layer: yesterday's line, or the typical band. */
-interface Layers {
+export interface Layers {
   projected: boolean;
   compared: boolean;
   targets: boolean;
@@ -152,7 +153,7 @@ interface Projection {
   points: (Reading & { phase: string })[];
   shots: { time: number; phase: string; size: number | null; emergency: boolean }[];
 }
-interface Lane {
+export interface Lane {
   zone: Zone;
   bands: PhaseBand[];
   shots: Shot[];
@@ -192,6 +193,9 @@ interface Lane {
   drybackTarget: number | null;
   /** P0's additional dryback, the target of the P0 figure. */
   p0Target: number | null;
+  /** The peak VWC target and the maintenance trigger, as the controller reads them now. */
+  peakTarget: number | null;
+  triggerTarget: number | null;
   /** Rooms & hardware was saved after the day compared with began. */
   setupNote: string | null;
   /** What the lane line ends with: why the zone is not watered, or held, or how old the last report
@@ -209,7 +213,7 @@ interface Mark {
 }
 /** Earlier grow-days as loaded: per zone, each day's trace, yesterday first (null where there is
  * nothing to compare), and the room's setup revision as each day began. */
-interface Earlier {
+export interface Earlier {
   key: string;
   traces: Map<number, (DayTrace | null)[]>;
   setup: (number | null)[];
@@ -331,7 +335,9 @@ function useChangeAuthors(
  * a zone back and every setpoint change, as recorded; then the rest of the day as projected, the
  * target for each phase, and yesterday's day (or a typical one) to compare with. Today is downloaded
  * once when the page opens and live updates extend it; the earlier days are downloaded once. */
-export function DayTimeline({ controller }: { controller: Controller }) {
+/** The selected room's grow-day as recorded so far: today downloaded once, live updates extending
+ * it, the seven days before it, and the layers the chart draws, remembered in this browser. */
+export function useDayData(controller: Controller) {
   const [, tick] = useState(0);
   useEffect(() => {
     // The clock moves between live updates, and a quiet controller sends none.
@@ -402,19 +408,85 @@ export function DayTimeline({ controller }: { controller: Controller }) {
     ? Math.max(...Object.values(rows).map((list) => list.at(-1)?.time ?? -Infinity))
     : -Infinity;
   const age = Number.isFinite(newest) ? now - newest : null;
+  return {
+    day,
+    entities,
+    ready,
+    rows,
+    error,
+    retry: () => setRetry((value) => value + 1),
+    earlier,
+    now,
+    age,
+    layers,
+    change,
+  };
+}
+
+export type DayData = ReturnType<typeof useDayData>;
+export type Lanes = ReturnType<typeof useLanes>;
+/** Today's lanes once the day's history is in, else null: the hook runs only when it can. */
+export function WithLanes({
+  controller,
+  data,
+  children,
+}: {
+  controller: Controller;
+  data: DayData;
+  children: (lanes: Lanes | null) => ReactNode;
+}) {
+  return data.day && data.rows ? (
+    <LanesOf controller={controller} data={data}>
+      {children}
+    </LanesOf>
+  ) : (
+    children(null)
+  );
+}
+function LanesOf({
+  controller,
+  data,
+  children,
+}: {
+  controller: Controller;
+  data: DayData;
+  children: (lanes: Lanes) => ReactNode;
+}) {
+  const { day, rows, entities, now, earlier, layers } = data;
+  return children(useLanes(controller, day!, rows!, entities, now, earlier, layers));
+}
+
+export function DayTimeline({ controller }: { controller: Controller }) {
+  return <DayChart controller={controller} data={useDayData(controller)} />;
+}
+/** The grow-day chart over data a page has loaded: every zone, or one (`zoneId`) in its details. */
+export function DayChart({
+  controller,
+  data,
+  zoneId,
+  title = "Today’s grow day",
+}: {
+  controller: Controller;
+  data: DayData;
+  zoneId?: number;
+  title?: string;
+}) {
+  const { day, entities, ready, rows, error, retry, earlier, now, age, layers, change } = data;
+  const { room } = controller;
+  const titleId = useId();
   return (
-    <section className="panel day-timeline" data-day-timeline aria-labelledby="day-timeline-title">
+    <section className="panel day-timeline" data-day-timeline aria-labelledby={titleId}>
       <div className="panel-heading">
         <div className="timeline-title">
-          <h2 id="day-timeline-title">Today’s grow day</h2>
+          <h2 id={titleId}>{title}</h2>
         </div>
         {rows && (
           <div className="timeline-heading-side">
-            <label htmlFor="day-timeline-compare" className="timeline-compare">
+            <label htmlFor={`${titleId}-compare`} className="timeline-compare">
               Compare with
             </label>
             <select
-              id="day-timeline-compare"
+              id={`${titleId}-compare`}
               value={layers.compare}
               onChange={(event) => change({ compare: event.target.value as Compare })}
             >
@@ -449,7 +521,7 @@ export function DayTimeline({ controller }: { controller: Controller }) {
           title="The grow day could not load"
           detail={error}
           action={
-            <Button variant="outline" onClick={() => setRetry((value) => value + 1)}>
+            <Button variant="outline" onClick={retry}>
               Retry
             </Button>
           }
@@ -469,42 +541,25 @@ export function DayTimeline({ controller }: { controller: Controller }) {
           earlier={earlier}
           layers={layers}
           change={change}
+          only={zoneId}
         />
       )}
     </section>
   );
 }
 
-function Timeline({
-  controller,
-  entities,
-  day,
-  rows,
-  now,
-  earlier,
-  layers,
-  change,
-}: {
-  controller: Controller;
-  entities: ReturnType<typeof timelineEntities>;
-  day: GrowDay;
-  rows: TimelineRows;
-  now: number;
-  earlier: Earlier | null;
-  layers: Layers;
-  change: (next: Partial<Layers>) => void;
-}) {
-  const box = useRef<HTMLDivElement>(null);
-  const [width, setWidth] = useState(0);
-  useEffect(() => {
-    const element = box.current;
-    if (!element) return;
-    const observer = new ResizeObserver(([entry]) => setWidth(Math.floor(entry.contentRect.width)));
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, []);
-  const [hover, setHover] = useState<string | null>(null);
-  const [picked, setPicked] = useState<string | null>(null);
+/** Each zone's grow-day, as the chart and the Overview draw it: its phases, shots, holds and
+ * readings so far, the rest of the day as projected, its targets, and the day to compare with;
+ * with the day's events in order and each zone's line of how it tracks. */
+export function useLanes(
+  controller: Controller,
+  day: GrowDay,
+  rows: TimelineRows,
+  entities: ReturnType<typeof timelineEntities>,
+  now: number,
+  earlier: Earlier | null,
+  layers: Layers,
+) {
   const { room, states } = controller;
   const { view } = useWaterView();
   const decisions = rows[entities.attributeIds[0]] ?? [];
@@ -721,6 +776,10 @@ function Timeline({
       overnight: phase === "P3" ? dayDryback(points, day.start, zone.vwc.value) : null,
       drybackTarget: Number.isFinite(parameters.dryback_target) ? parameters.dryback_target : null,
       p0Target: parameters.p0_dryback_drop_percent,
+      peakTarget: Number.isFinite(parameters.p1_target_vwc) ? parameters.p1_target_vwc : null,
+      triggerTarget: Number.isFinite(parameters.p2_vwc_threshold)
+        ? parameters.p2_vwc_threshold
+        : null,
       setupNote: !moved
         ? null
         : layers.compare === "yesterday"
@@ -737,14 +796,66 @@ function Timeline({
     };
   });
   const roomChanges = changes.filter((change) => change.zoneId === undefined);
-  const plot = Math.max(160, width - 48);
-  const x = (time: number) =>
-    Math.max(0, Math.min(plot, ((time - day.start) / (day.end - day.start)) * plot));
-  const timeAt = (px: number) => day.start + (px / plot) * (day.end - day.start);
   const events = [
     ...lanes.flatMap((lane) => laneEvents(lane, day)),
     ...roomChanges.map((change) => ({ time: change.time, text: changeText(change) })),
   ].sort((a, b) => a.time - b.time);
+  const lines = lanes.map((lane) => ({
+    lane,
+    ...tracking(lane, day, now, layers.compare, earlier),
+  }));
+  return { lanes, roomChanges, events, lines };
+}
+
+function Timeline({
+  controller,
+  entities,
+  day,
+  rows,
+  now,
+  earlier,
+  layers,
+  change,
+  only,
+}: {
+  controller: Controller;
+  entities: ReturnType<typeof timelineEntities>;
+  day: GrowDay;
+  rows: TimelineRows;
+  now: number;
+  earlier: Earlier | null;
+  layers: Layers;
+  change: (next: Partial<Layers>) => void;
+  /** One zone's lane alone, with its own events. */
+  only?: number;
+}) {
+  const box = useRef<HTMLDivElement>(null);
+  const [width, setWidth] = useState(0);
+  useEffect(() => {
+    const element = box.current;
+    if (!element) return;
+    const observer = new ResizeObserver(([entry]) => setWidth(Math.floor(entry.contentRect.width)));
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+  const [hover, setHover] = useState<string | null>(null);
+  const [picked, setPicked] = useState<string | null>(null);
+  const all = useLanes(controller, day, rows, entities, now, earlier, layers);
+  const { roomChanges } = all;
+  const lines =
+    only === undefined ? all.lines : all.lines.filter((line) => line.lane.zone.id === only);
+  const lanes = lines.map((line) => line.lane);
+  const events =
+    only === undefined
+      ? all.events
+      : [
+          ...lanes.flatMap((lane) => laneEvents(lane, day)),
+          ...roomChanges.map((change) => ({ time: change.time, text: changeText(change) })),
+        ].sort((a, b) => a.time - b.time);
+  const plot = Math.max(160, width - 48);
+  const x = (time: number) =>
+    Math.max(0, Math.min(plot, ((time - day.start) / (day.end - day.start)) * plot));
+  const timeAt = (px: number) => day.start + (px / plot) * (day.end - day.start);
   const strip = (marks: Mark[]) => pointer(marks, setHover, setPicked, timeAt);
   const typicalDays = Math.max(0, ...lanes.map((lane) => lane.past.length));
   const toggle = (key: "projected" | "compared" | "targets", icon: string, name: string) => (
@@ -760,10 +871,6 @@ function Timeline({
       </button>
     </li>
   );
-  const lines = lanes.map((lane) => ({
-    lane,
-    ...tracking(lane, day, now, layers.compare, earlier),
-  }));
   return (
     <div className="timeline-body" ref={box}>
       {width > 0 && (
@@ -1568,7 +1675,7 @@ function waitingLine(zone: Zone, phase: string | null, shotEstimate: number | nu
       : "";
   return text && `next: ${text}`;
 }
-function nextText(lane: Lane, day: GrowDay): string {
+export function nextText(lane: Lane, day: GrowDay): string {
   const { next } = lane;
   if (lane.stopped) return `not watering: ${lane.stopped}`;
   const held = lane.blocks.at(-1);
@@ -1594,7 +1701,7 @@ const signed = (value: number, digits = 1) => {
   return Number(shown) === 0 ? "±0" : `${value > 0 ? "+" : "−"}${shown}`;
 };
 /** The lane's line: how today is tracking, in numbers, against yesterday or the typical day. */
-function tracking(
+export function tracking(
   lane: Lane,
   day: GrowDay,
   now: number,
@@ -1696,7 +1803,7 @@ function shotText(shot: Shot, lane: Lane): string {
 function blockText(block: Block, lane: Lane): string {
   return `${clock(block.start)}–${block.open ? "now" : clock(block.end)} · ${lane.zone.name} · ${HELD[block.kind]} for ${duration(block.end - block.start)}: ${block.text}`;
 }
-function laneEvents(lane: Lane, day: GrowDay) {
+export function laneEvents(lane: Lane, day: GrowDay) {
   const name = lane.zone.name;
   return [
     ...lane.bands.flatMap((band, index) =>

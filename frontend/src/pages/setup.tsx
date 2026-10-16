@@ -41,6 +41,7 @@ import { errorText } from "@/lib/utils";
 import { BATCH_SWITCH_KEYS, DOSER_KEYS } from "@/lib/feed";
 import { setupChanges } from "@/lib/setup-changes";
 import type { SetupCandidate, SetupDocument, SetupRoom, SetupZone } from "@/lib/operator-types";
+import { PlumbingDiagram } from "@/components/plumbing-diagram";
 
 function MappingPicker({
   label,
@@ -611,7 +612,8 @@ export function Setup({
                   <div>
                     <h2>Shared room hardware</h2>
                     <p className="muted">
-                      How the room is plumbed, then the switches that go with it.
+                      How the room is plumbed, then the switches that go with it. Click a part to
+                      map it.
                     </p>
                   </div>
                 </div>
@@ -664,6 +666,7 @@ export function Setup({
                     )}
                   </div>
                 )}
+                <PlumbingDiagram draft={draft} plumbing={plumbing} />
                 <div className="workspace-form-grid">
                   {hardwareFields
                     .filter(([key]) => plumbingUses(plumbing, key))
@@ -900,7 +903,7 @@ export function Setup({
                     !connected
                       ? "Connect to Home Assistant to run a test."
                       : draft.prefix !== controller.room.room.prefix
-                        ? `A test runs in the room chosen under Room in the menu: choose ${draft.room_name} there to test it.`
+                        ? `A test runs in the room on show: choose ${draft.room_name} in the rooms list (or its chip) to test it.`
                         : dirty
                           ? "Save or discard your changes first: a test runs on the saved configuration."
                           : null

@@ -43,6 +43,7 @@ import {
   type LiveConnection,
 } from "./live";
 import { historySamples, type WaterRecord, type WaterRecordRequest } from "./water-use";
+import { preferredRoomId, rememberRoom } from "./default-room";
 
 type Listener = () => void;
 const SESSION_KEY = "crop-steering-connection-tab";
@@ -104,7 +105,9 @@ export class ControllerStore {
         : null;
     const rooms = discoverRooms(this.states);
     this.roomId =
-      resolveRequestedRoom(rooms, requested)?.id || (requested === null ? rooms[0]?.id : "") || "";
+      resolveRequestedRoom(rooms, requested)?.id ||
+      (requested === null ? (preferredRoomId(rooms) ?? rooms[0]?.id) : "") ||
+      "";
     if (demo && requested !== null && !this.roomId)
       this.error = `Requested room "${requested}" is unavailable. Select an available room.`;
     if (demo) this.updated = Date.now();
@@ -218,7 +221,7 @@ export class ControllerStore {
     if (!rooms.some((r) => r.id === this.roomId)) {
       this.roomId =
         resolveRequestedRoom(rooms, requested)?.id ||
-        (requested === null ? rooms[0]?.id : "") ||
+        (requested === null ? (preferredRoomId(rooms) ?? rooms[0]?.id) : "") ||
         "";
     }
     this.connection = "live";
@@ -325,6 +328,7 @@ export class ControllerStore {
     this.historyAborters.clear();
     this.generation++;
     this.roomId = id;
+    rememberRoom(id);
     if (this.connection === "live" || this.demo) this.error = null;
     this.publish();
     if (typeof window !== "undefined") {

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { ChevronRight, Compass, Search } from "lucide-react";
-import { Heading } from "@/components/dashboard";
+import { RunningVersions } from "@/components/shell";
 import { WhatsNewButton } from "@/components/whats-new";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -74,17 +74,16 @@ export function Help({
 }) {
   return (
     <>
-      <Heading
-        title="Help"
-        action={
-          <div className="heading-actions">
-            <Button variant="outline" onClick={startTour}>
-              <Compass size={16} aria-hidden="true" /> Take the tour
-            </Button>
-            <WhatsNewButton controller={controller} />
-          </div>
-        }
-      />
+      <div className="page-heading">
+        <h2 className="sr-only">Help</h2>
+        {controller.demo ? <span /> : <RunningVersions controller={controller} />}
+        <div className="heading-actions">
+          <Button variant="outline" onClick={startTour}>
+            <Compass size={16} aria-hidden="true" /> Take the tour
+          </Button>
+          <WhatsNewButton controller={controller} />
+        </div>
+      </div>
       <section className="panel">
         <div className="panel-heading">
           <div>

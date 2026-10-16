@@ -1,0 +1,72 @@
+/* Which targets a room runs on: indigo with a calendar for a schedule, blue with sliders for the
+   room's own, red for a held schedule. A thick edge, an icon and the words, not only a colour. */
+.targets-banner {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 16px;
+  border-radius: 14px;
+  border: 1px solid var(--tone-info-line);
+  border-left-width: 6px;
+  background: var(--today-src-bg);
+  color: var(--foreground);
+}
+.targets-banner-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface);
+  color: var(--today-src);
+}
+.targets-banner-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--tone-paused-ink);
+}
+.targets-banner-text strong {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--today-src);
+}
+.targets-banner[data-source="schedule"] {
+  border-color: var(--schedule-line);
+  border-left-color: var(--schedule);
+  background: var(--schedule-bg);
+}
+.targets-banner[data-source="schedule"] .targets-banner-icon,
+.targets-banner[data-source="schedule"] .targets-banner-text strong {
+  color: var(--schedule);
+}
+.targets-banner[data-source="today"] {
+  border-left-color: var(--today-src);
+}
+.targets-banner[data-source="held"] {
+  border-color: var(--tone-critical-line);
+  border-left-color: var(--destructive);
+  background: var(--tone-critical-bg);
+}
+.targets-banner[data-source="held"] .targets-banner-icon,
+.targets-banner[data-source="held"] .targets-banner-text strong {
+  color: var(--tone-critical-ink);
+}
+.targets-banner-action {
+  flex: none;
+}
+@media (max-width: 767px) {
+  .targets-banner {
+    flex-wrap: wrap;
+    padding: 12px;
+  }
+  .targets-banner-action {
+    width: 100%;
+  }
+}
