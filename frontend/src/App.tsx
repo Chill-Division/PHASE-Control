@@ -329,17 +329,6 @@ export default function App() {
       </Sheet>
       <div className="app-main">
         <header className="topbar">
-          {haShell.available && (
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label="Open Home Assistant menu"
-              title="Home Assistant menu"
-              onClick={haShell.toggle}
-            >
-              <House size={20} />
-            </Button>
-          )}
           <div className="breadcrumbs">
             <Button
               className="mobile-menu"

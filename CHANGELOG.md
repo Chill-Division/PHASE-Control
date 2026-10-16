@@ -10,6 +10,20 @@ and code-level detail for developers and AI agents working on the repo.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+- **One Home Assistant button.** The top bar's house button is gone, and the room and page move
+  left into its space. Home Assistant's menu opens from **Home Assistant** at the foot of the side
+  menu, under ☰ on a phone, as it already could.
+
+### 🔧 Technical notes
+
+- Dashboard: the top bar no longer has the HA shell's menu button ("Open Home Assistant menu"); the
+  sidebar footer's **Home Assistant** button, in the desktop sidebar and the phone's sheet, is the
+  one way to `haShell.toggle()`. `verify-ha-shell.mjs` opens HA's menu from the sidebar at 1440 px
+  and from the sheet at 390 px, and fails if the top bar has a Home Assistant button. The sidebar
+  docs (`HA_SIDEBAR.md`, `INSTALL.md`, `USER_GUIDE.md`) say where the button is.
+
 ## [1.2.0] - 2026-10-16
 
 Integration and controller **1.2.0**.

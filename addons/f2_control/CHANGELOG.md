@@ -1,3 +1,7 @@
+# Unreleased
+
+- The top bar's Home Assistant button is gone; Home Assistant's menu opens from the bottom of the side menu (☰ on a phone).
+
 # 1.2.0
 
 Pair with integration 1.2.0.
