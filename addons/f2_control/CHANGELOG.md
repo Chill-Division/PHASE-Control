@@ -1,3 +1,7 @@
+# Unreleased
+
+- Today can switch EC stacking on and set the fewest P1 shots, and a zone paused by hand in Home Assistant shows it and can be resumed.
+
 # 1.2.0
 
 Pair with integration 1.2.0.

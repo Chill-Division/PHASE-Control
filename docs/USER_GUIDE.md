@@ -49,6 +49,8 @@ New installation? Start with [Install, upgrade and rollback](INSTALL.md). The fi
 
 The switch beside the **Zones** heading on **Overview** switches every zone of the room at once, as the header toggle of a Home Assistant entities card does. It is on while any zone is on. Off pauses every zone; on switches every zone on, a zone you paused yourself included. Each zone still has its own switch in its details, and like them this one asks for a review first.
 
+A zone paused by hand in Home Assistant, with its manual override switch or the `set_manual_override` service, shows **Paused by hand** and until when. The controller fires no shot in it until then, not even a rescue shot. **Resume now** in its details ends the pause after a review.
+
 To move a zone to another phase, open it from **Overview** and pick one under **Phase**. After the review, the controller moves it within a minute and carries on from there: lights-off still moves it to P3 and lights-on to P0. Today's water stays, and so does the shot count, except that a move to P1 starts the ramp again from its first shot.
 
 **Switch watering off…** in the Overview's heading switches the room's engine switch ("Engine Enabled" in Home Assistant on a room made by the setup wizard), and like zone scheduling it asks for a review first. With watering off the controller opens no valve in the room and a shot already running stops within a few seconds; it keeps reading the probes and following the phases. A new room starts with watering off. When a room is not watering, the status line at the top of every page says which switch stopped it and links to the Overview when this is the one. Beside it, **Switch room off…** stands a room down when nothing is growing in it: no irrigation and no alerts until it is switched back on, with a banner on every page saying so. Pausing a zone stops a shot already running in it within a few seconds too, and a paused zone gets no water at all, not even a rescue shot. Neither is an emergency stop: use the installation's established physical shutdown procedure for an emergency.
@@ -74,6 +76,8 @@ When no schedule owns the room, Today lets you edit the current targets using th
 3. Edit a numeric field or a supported graph handle. Both edit the same local draft and respect the HA field's limits and step. The saved reference remains visible for comparison.
 4. Check the setting's name, unit and draft line. Its **?** says what the setting does, what it accepts (range and step) and its key. The zone's **Steering mode** picks which EC and P3 dryback targets the controller uses, and only those show; **Show targets for both steering modes** shows the other mode's too.
 5. Select **Review changes**, inspect every before/after value, then confirm application. Only this application step sends the reviewed values to HA. Readback errors and unapplied values remain visible; do not assume a partially failed batch succeeded.
+
+**Auto setpoints** and **EC stacking** sit beside the heading, each switched on or off after a review. With EC stacking on, the controller moves each zone's maintenance trigger in P2, a point at a time, to steer its settled substrate EC toward the zone's P2 EC target. Each grow-day starts from the trigger as set. On the P1 card, **Fewest P1 shots** keeps the ramp going until that many shots have gone in, even if moisture reaches the peak target sooner.
 
 Pot size, plant count and drippers are the room's hardware, set in **Settings → Rooms & hardware**, not here. What a shot of a given length delivers is on **Insights → Water**.
 

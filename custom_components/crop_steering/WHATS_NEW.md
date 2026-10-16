@@ -21,6 +21,10 @@ people who build the system:
 `tests/test_whats_new.py` checks the shape and the plain words, and that the newest section is the
 version being released.
 
+## Unreleased
+
+- Today can switch EC stacking on and set the fewest P1 shots, and a zone paused by hand in Home Assistant shows it and can be resumed.
+
 ## 1.2.0 - 2026-10-16
 
 - Each zone on the Overview has a ⋯ menu: move it to another phase, pause it, edit its strategy or open its details.

@@ -10,6 +10,24 @@ and code-level detail for developers and AI agents working on the repo.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+- **The dashboard can set everything the controller reads.** EC stacking switches on and off
+  beside Auto setpoints on Today, and the P1 card has **Fewest P1 shots**. A zone paused by hand
+  in Home Assistant now says so, with until when, and its details can resume it. All three were
+  only in Home Assistant.
+
+### 🔧 Technical notes
+
+- Dashboard: the model reads the room's `switch.crop_steering_<prefix>ec_stacking_enabled`
+  (`RoomView.ecStacking`, added to the write allowlist) and each zone's `…zone_N_manual_override`
+  (`Zone.override`, `overrideUntil` from `manual_override_expires_at`). `EcStackingControl`
+  (`room-controls.tsx`) sits on Today beside `AutoSetpointsControl`. `OverridePill` and
+  `ZoneOverrideReview` (`dashboard.tsx`) show the pause and switch the override off.
+  `p1_minimum_shots` joins `ZONE_PARAMETERS`, with its words. The demo has both new controls.
+- Controller: `log_words.SETTING_NAMES` names `p1_minimum_shots` "Fewest P1 shots", as the dashboard
+  does (`tests/test_log_words.py` holds the two together).
+
 ## [1.2.0] - 2026-10-16
 
 Integration and controller **1.2.0**.
