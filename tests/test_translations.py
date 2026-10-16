@@ -120,49 +120,6 @@ def test_translations_follow_the_hassfest_rules_that_are_easy_to_break():
             ), f"{flow}.{step}: tooltip without a label {sorted(orphans)}"
 
 
-# ------------------------------------------------------------------ tooltips that must be TRUE
-RUNTIME = [
-    *INTEGRATION.glob("*.py"),
-    *(ROOT / "addons" / "f2_control" / "f2_control").glob("*.py"),
-    *(ROOT / "crop-steering-engine" / "src").rglob("*.py"),
-]
-# Modules that collect, validate or parse the answer. Using it at runtime is something else.
-SETUP_ONLY = {"config_flow.py", "setup_api.py"}
-
-
-def _runtime_consumers(key):
-    return sorted(
-        path.name
-        for path in RUNTIME
-        if path.name not in SETUP_ONLY and key in path.read_text(encoding="utf-8")
-    )
-
-
-def test_a_field_nothing_reads_does_not_promise_that_something_will():
-    """If one of these gains a runtime consumer, this test fails - and that is the prompt to put
-    the behaviour back into its tooltip. Until then the tooltip must not invent one: a grower
-    who reads 'forced closed during a shot' will plumb a recirculating system around it.
-    """
-    promised = {
-        "waste_switch": ("forced closed", "closed during a shot"),
-        "light_entity": ("knows day", "day vs night"),
-    }
-    strings = _strings()
-    for key, claims in promised.items():
-        assert _runtime_consumers(key) == [], (
-            f"{key} is now read at runtime: say what it does in its tooltip, "
-            "then move it out of this test"
-        )
-        for flow, step in (("config", "hardware"), ("options", "edit_zones_map")):
-            tooltip = strings[flow]["step"][step]["data_description"][key].lower()
-            for claim in claims:
-                assert (
-                    claim not in tooltip
-                ), f"{flow}.{step}.{key} still claims '{claim}'"
-    waste = strings["config"]["step"]["hardware"]["data_description"]["waste_switch"]
-    assert "does NOT operate" in waste
-
-
 def test_the_plumbing_question_says_what_it_commits_you_to_and_the_pump_tooltip_defers_to_it():
     """Whether a room has a pump is no longer read off an empty field: it is asked. The person
     answering has to be told, where they answer, that the switches must then match and that a

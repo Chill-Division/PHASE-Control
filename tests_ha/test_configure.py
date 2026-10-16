@@ -203,26 +203,36 @@ def _suggested(flow):
     }
 
 
-async def test_a_mapping_can_be_removed_not_just_swapped(hass):
-    hass.states.async_set("light.room", "on")
-    entry = await _install(hass)
-    await _save_map(hass, entry, light_entity="light.room")
-    assert entry.data["hardware"]["light_entity"] == "light.room"
-
-    flow = await _save_map(hass, entry, light_entity=None)
-    # The form opened showing the mapping, so an untouched save could not have wiped it...
-    assert _suggested(flow)["light_entity"] == "light.room"
-    # ...and clearing it cleared it. It used to come straight back.
-    assert entry.data["hardware"]["light_entity"] == ""
-
-
 async def test_an_untouched_save_keeps_every_mapping(hass):
-    hass.states.async_set("light.room", "on")
-    entry = await _install(hass)
-    await _save_map(hass, entry, light_entity="light.room")
+    hass.states.async_set("switch.pump", "off")
+    entry = await _install(hass, {"pump_switch": "switch.pump"})
     before = dict(entry.data["hardware"])
-    await _save_map(hass, entry)
+    flow = await _save_map(hass, entry)
+    # The form opened showing the mapping, so an untouched save could not have wiped it.
+    assert _suggested(flow)["pump_switch"] == "switch.pump"
     assert entry.data["hardware"] == before
+
+
+async def test_a_waste_valve_and_lights_an_older_room_recorded_go_on_its_next_save(hass):
+    """1.3.0: nothing ever drove a waste valve or read the room's lights (day and night come from
+    the lights hours), so the form no longer asks for them, and a room that recorded them loses
+    them the next time its zones and hardware are saved."""
+    entry = await _install(hass)
+    hass.config_entries.async_update_entry(
+        entry,
+        data={
+            **entry.data,
+            "hardware": {
+                **entry.data["hardware"],
+                "waste_switch": "switch.waste",
+                "light_entity": "light.room",
+            },
+        },
+    )
+    flow = await _save_map(hass, entry)
+    asked = {str(marker) for marker in flow["data_schema"].schema}
+    assert not {"waste_switch", "light_entity"} & asked
+    assert not {"waste_switch", "light_entity"} & set(entry.data["hardware"])
 
 
 async def test_a_pump_can_be_removed_by_saying_the_room_no_longer_has_one(hass):
