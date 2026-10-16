@@ -77,7 +77,7 @@ When no schedule owns the room, Today lets you edit the current targets using th
 4. Check the setting's name, unit and draft line. Its **?** says what the setting does, what it accepts (range and step) and its key. The zone's **Steering mode** picks which EC and P3 dryback targets the controller uses, and only those show; **Show targets for both steering modes** shows the other mode's too.
 5. Select **Review changes**, inspect every before/after value, then confirm application. Only this application step sends the reviewed values to HA. Readback errors and unapplied values remain visible; do not assume a partially failed batch succeeded.
 
-**Auto setpoints** and **EC stacking** sit beside the heading, each switched on or off after a review. With EC stacking on, the controller moves each zone's maintenance trigger in P2, a point at a time, to steer its settled substrate EC toward the zone's P2 EC target. Each grow-day starts from the trigger as set. On the P1 card, **Fewest P1 shots** keeps the ramp going until that many shots have gone in, even if moisture reaches the peak target sooner.
+**Auto setpoints** and **EC stacking** sit beside the heading, each switched on or off after a review. With EC stacking on, the controller moves each zone's maintenance trigger in P2, a point at a time, to steer its settled substrate EC toward the zone's P2 EC target. Each grow-day starts from the trigger as set. On the P1 card, **Minimum P1 shots** keeps the ramp going until that many shots have gone in, even if moisture reaches the peak target sooner.
 
 Pot size, plant count and drippers are the room's hardware, set in **Settings → Rooms & hardware**, not here. What a shot of a given length delivers is on **Insights → Water**.
 

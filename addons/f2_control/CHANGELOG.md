@@ -1,6 +1,7 @@
 # Unreleased
 
-- Today can switch EC stacking on and set the fewest P1 shots, and a zone paused by hand in Home Assistant shows it and can be resumed.
+- Today can switch EC stacking on and set the minimum P1 shots, and a zone paused by hand in Home Assistant shows it and can be resumed.
+- The log names the P1 shot limits Minimum P1 shots and Maximum P1 shots, as the dashboard does.
 
 # 1.2.0
 

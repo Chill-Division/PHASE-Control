@@ -13,9 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 - **The dashboard can set everything the controller reads.** EC stacking switches on and off
-  beside Auto setpoints on Today, and the P1 card has **Fewest P1 shots**. A zone paused by hand
+  beside Auto setpoints on Today, and the P1 card has **Minimum P1 shots**. A zone paused by hand
   in Home Assistant now says so, with until when, and its details can resume it. All three were
-  only in Home Assistant.
+  only in Home Assistant. **Most P1 shots** is now **Maximum P1 shots**, so the pair reads alike.
 
 ### 🔧 Technical notes
 
@@ -25,7 +25,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`room-controls.tsx`) sits on Today beside `AutoSetpointsControl`. `OverridePill` and
   `ZoneOverrideReview` (`dashboard.tsx`) show the pause and switch the override off.
   `p1_minimum_shots` joins `ZONE_PARAMETERS`, with its words. The demo has both new controls.
-- Controller: `log_words.SETTING_NAMES` names `p1_minimum_shots` "Fewest P1 shots", as the dashboard
+- Controller: `log_words.SETTING_NAMES` names `p1_minimum_shots` "Minimum P1 shots" and
+  `p1_maximum_shots` "Maximum P1 shots" (was "Most P1 shots"), as the dashboard's `setting-words.ts`
   does (`tests/test_log_words.py` holds the two together).
 
 ## [1.2.0] - 2026-10-16

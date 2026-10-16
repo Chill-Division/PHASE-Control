@@ -33,7 +33,7 @@ scale with your zone count, `N` = 1…zones.
 |---|---|---|---|---|
 | `p1_initial_shot_size` | 0.1-20 | 2 | % | Size of the first ramp shot (% of substrate volume). |
 | `p1_shot_size_increment` | 0.05-10 | 0.5 | % | How much each successive shot grows. |
-| `p1_minimum_shots` | 1-20 | 3 | - | **Fewest P1 shots** on Today's P1 card: reaching the peak target moves a zone to P2 only once this many ramp shots have gone in. |
+| `p1_minimum_shots` | 1-20 | 3 | - | **Minimum P1 shots** on Today's P1 card: reaching the peak target moves a zone to P2 only once this many ramp shots have gone in. |
 | `p1_maximum_shots` | 1-30 | 6 | - | After this many shots P1 exits to P2 even if the target wasn't hit. |
 | `p1_target_vwc` | 20-100 | 65 | % | VWC that ends the ramp and moves the zone to P2. |
 | `p1_time_between_shots` | 1-60 | 15 | min | Spacing between ramp shots. |
