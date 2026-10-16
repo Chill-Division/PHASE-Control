@@ -83,6 +83,11 @@ _RETIRED = {
         "zone_p2_ec_low_threshold",
         "zone_ec_target_veg_p3",
         "zone_ec_target_gen_p3",
+        # 1.3.0: their room-level copies too, read only by display sensors that went with them
+        "p2_ec_high_threshold",
+        "p2_ec_low_threshold",
+        "ec_target_veg_p3",
+        "ec_target_gen_p3",
         "zone_shot_size_multiplier",
         # the source-water gate's limits (2.26.0: the gate is gone)
         "irrigation_ph_min",
@@ -97,8 +102,19 @@ _RETIRED = {
         "zone_priority",
         "zone_crop_profile",
         "zone_phase_override",
+        # 1.3.0: a room phase nothing waters by, and named strategy stages that rewrote every
+        # zone's targets from Home Assistant, outside the dashboard's review
+        "irrigation_phase",
+        "recipe_stage",
     },
-    "sensor": {"water_usage_daily", "next_irrigation_time"},
+    "sensor": {
+        "water_usage_daily",
+        "next_irrigation_time",
+        # 1.3.0: display-only figures computed from the selects and numbers above
+        "current_phase",
+        "ec_ratio",
+        "p2_vwc_threshold_adjusted",
+    },
     "switch": {
         "analytics_enabled",
         "zone_dripper_protection",
@@ -169,17 +185,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data[DOMAIN][entry.entry_id] = _entry_config(entry)
     # Before the platforms register this room's entities: a room with none was set up just now.
     fresh = _is_new_room(hass, entry)
-
-    # Load this room's named-stage recipe (server-side Store) before the platforms
-    # come up, so the recipe select + sensor can read it on setup.
-    try:
-        from .recipe import RecipeManager
-
-        manager = RecipeManager(hass, entry)
-        await manager.async_init()
-        hass.data[DOMAIN].setdefault("_recipe", {})[entry.entry_id] = manager
-    except Exception as err:  # pragma: no cover - never block setup on the recipe store
-        _LOGGER.warning("Recipe store unavailable: %s", err)
 
     # Stock tanks: stored per room and drawn down per batch; the stock sensor reads them.
     try:
@@ -312,7 +317,6 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     except Exception:  # pragma: no cover - defensive
         pass
 
-    hass.data.get(DOMAIN, {}).get("_recipe", {}).pop(entry.entry_id, None)
     from .strategy import async_unload_strategy
 
     await async_unload_strategy(hass, entry)
