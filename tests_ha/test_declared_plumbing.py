@@ -49,7 +49,7 @@ async def test_the_wizard_will_not_go_on_until_the_plumbing_question_is_answered
 
 async def test_saying_the_room_has_a_pump_without_choosing_one_is_caught_on_that_step(hass):
     flow_id, _form = await _at_hardware_step(hass)
-    answer = {"plumbing": "pump_valves", "substrate_volume": 3.2}
+    answer = {"plumbing": "pump_valves"}
     result = await hass.config_entries.flow.async_configure(flow_id, dict(answer))
     assert result["type"] is FlowResultType.FORM and result["step_id"] == "hardware"  # not an abort
     assert "no pump switch is chosen" in result["description_placeholders"]["error"]

@@ -318,7 +318,6 @@ async def test_a_second_room_can_still_be_added_beside_an_upgraded_default_room(
         {
             "zone_1_switch": "switch.veg_tent",
             "zone_1_vwc": ["sensor.veg_vwc"],
-            "zone_1_plant_count": 2,
         },
     )
     assert flow["step_id"] == "hardware", flow.get("errors")

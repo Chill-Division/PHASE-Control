@@ -67,8 +67,7 @@ async def test_wizard_first_then_the_app_any_zone_count_up_to_the_limit(hass, co
     result = await flow.async_configure(result["flow_id"], {"num_zones": zones})
     answers = {}
     for z in range(1, zones + 1):
-        answers.update({f"zone_{z}_name": f"Bench {z}", f"zone_{z}_active": True,
-                        f"zone_{z}_switch": f"switch.valve_{z}", f"zone_{z}_plant_count": 4})
+        answers[f"zone_{z}_switch"] = f"switch.valve_{z}"
     answers["zone_1_vwc"] = ["sensor.vwc"]
     result = await flow.async_configure(result["flow_id"], answers)
     assert result["step_id"] == "hardware", result.get("errors")

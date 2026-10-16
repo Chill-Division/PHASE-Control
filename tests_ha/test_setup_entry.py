@@ -9,6 +9,7 @@ from pathlib import Path
 
 from homeassistant.components import frontend
 from homeassistant.config_entries import ConfigEntryState
+from homeassistant.core import Context
 from homeassistant.data_entry_flow import FlowResultType
 
 from custom_components.crop_steering.plumbing import infer
@@ -30,6 +31,41 @@ async def _install(hass, hardware=None):
     assert result["type"] is FlowResultType.CREATE_ENTRY, result
     await hass.async_block_till_done()
     return result["result"]
+
+
+async def _save_zones(hass, admin, entry_id=None, **zones):
+    """Change zones as Rooms & hardware does (`setup_read`, then `setup_save` with the changes):
+    `_save_zones(hass, admin, zone_1={"name": "GT1", "plant_count": 6})`. A zone's name, plant
+    count and sizing are set there, not in the setup wizard."""
+
+    async def call(name, data=None):
+        return await hass.services.async_call(
+            "crop_steering",
+            name,
+            data or {},
+            blocking=True,
+            return_response=True,
+            context=Context(user_id=admin.id),
+        )
+
+    rooms = (await call("setup_read"))["rooms"]
+    room = next(r for r in rooms if entry_id in (None, r["entry_id"]))
+    rows = []
+    for zone in room["zones"]:
+        rows.append({**zone, **zones.get(f"zone_{zone['id']}", {})})
+    await call(
+        "setup_save",
+        {
+            "entry_id": room["entry_id"],
+            "expected_revision": room["revision"],
+            "room_name": room["room_name"],
+            "active": room["active"],
+            **({"plumbing": room["plumbing"]} if room.get("plumbing") else {}),
+            "hardware": dict(room["hardware"]),
+            "zones": rows,
+        },
+    )
+    await hass.async_block_till_done()
 
 
 # ------------------------------------------------------------------ the sidebar panel

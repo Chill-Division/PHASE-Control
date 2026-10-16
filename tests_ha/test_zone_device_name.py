@@ -1,10 +1,9 @@
 """The exact first-install scenario: a tent whose one zone is named GT1, in a real Home Assistant,
-looked up in the real device registry (which is what the "Name and assign" dialog shows)."""
+looked up in the real device registry (which is what the "Name and assign" dialog shows). Since
+1.3.0 a zone is named on the dashboard's Rooms & hardware, not in the setup wizard."""
 
 from homeassistant.helpers import device_registry as dr, entity_registry as er
-from test_configure import _save_map
-from test_real_flow import ZONES
-from test_setup_entry import _install
+from test_setup_entry import _install, _save_zones
 from test_upgrade_in_place import _upgrade
 
 DOMAIN = "crop_steering"
@@ -19,19 +18,21 @@ def _zone_devices(hass, entry):
     }
 
 
-async def test_a_zone_named_gt1_is_offered_as_a_device_called_gt1(hass, monkeypatch):
-    monkeypatch.setitem(ZONES, "zone_1_name", "GT1")
+async def test_a_zone_named_gt1_is_offered_as_a_device_called_gt1(hass, hass_admin_user):
     entry = await _install(hass)
     devices = _zone_devices(hass, entry)
     assert set(devices) == {"1"}  # one zone was set up: one zone device, no phantom zones
-    assert devices["1"].name == "GT1"  # it said "Zone 1"
+    assert devices["1"].name == "Zone 1"  # what the wizard calls it
+    await _save_zones(hass, hass_admin_user, zone_1={"name": "GT1"})
+    devices = _zone_devices(hass, entry)
+    assert devices["1"].name == "GT1"
     assert devices["1"].model == "Zone Controller"
 
 
-async def test_the_entity_ids_do_not_follow_the_name(hass, monkeypatch):
+async def test_the_entity_ids_do_not_follow_the_name(hass, hass_admin_user):
     """The controller and every dashboard find a zone by id. A friendly name must never move one."""
-    monkeypatch.setitem(ZONES, "zone_1_name", "GT1")
     await _install(hass)
+    await _save_zones(hass, hass_admin_user, zone_1={"name": "GT1"})
     registry = er.async_get(hass)
     for entity_id in (
         "sensor.crop_steering_vwc_zone_1",
@@ -42,11 +43,10 @@ async def test_the_entity_ids_do_not_follow_the_name(hass, monkeypatch):
     assert not [e for e in registry.entities if "gt1" in e]
 
 
-async def test_renaming_the_zone_in_configure_renames_the_device(hass, monkeypatch):
-    monkeypatch.setitem(ZONES, "zone_1_name", "GT1")
+async def test_renaming_the_zone_renames_the_device(hass, hass_admin_user):
     entry = await _install(hass)
-    await _save_map(hass, entry, zone_1_name="Grow tent one")
-    await hass.async_block_till_done()
+    await _save_zones(hass, hass_admin_user, zone_1={"name": "GT1"})
+    await _save_zones(hass, hass_admin_user, zone_1={"name": "Grow tent one"})
     assert _zone_devices(hass, entry)["1"].name == "Grow tent one"
 
 

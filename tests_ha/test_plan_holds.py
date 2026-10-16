@@ -19,12 +19,9 @@ from test_setup_entry import _install
 DOMAIN = "crop_steering"
 HEARTBEAT = "sensor.crop_steering_ai_heartbeat"
 ZONE_2 = {
-    "zone_2_name": "Second tent",
-    "zone_2_active": True,
     "zone_2_switch": "switch.gt2_irrigation_switch",
     "zone_2_vwc": ["sensor.gt2_vwc"],
     "zone_2_ec": ["sensor.gt2_ec"],
-    "zone_2_plant_count": 4,
 }
 
 

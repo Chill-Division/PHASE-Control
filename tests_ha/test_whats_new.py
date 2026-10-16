@@ -120,7 +120,6 @@ async def test_a_room_added_later_does_not_reset_what_the_installation_has_seen(
         {
             "zone_1_switch": "switch.veg_tent",
             "zone_1_vwc": ["sensor.veg_vwc"],
-            "zone_1_plant_count": 2,
         },
     )
     done = await hass.config_entries.flow.async_configure(

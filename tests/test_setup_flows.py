@@ -97,11 +97,57 @@ def test_native_zone_builder_retains_archived_ids_and_unknown_values(flow_module
         "1": {"active": False, "zone_switch": "switch.v1", "special": 123},
         "2": {"zone_switch": "switch.v2", "max_daily_volume": 37},
     }
-    result = flow_module._build_zones(
-        1, {"zone_1_switch": "switch.v1", "zone_1_name": "New label"}, old
-    )
+    result = flow_module._build_zones(1, {"zone_1_switch": "switch.v1"}, old)
     assert result["1"]["active"] is False and result["2"]["active"] is False
     assert result["1"]["special"] == 123 and result["2"]["max_daily_volume"] == 37
+
+
+def _fields(schema):
+    return [
+        getattr(marker, "schema", getattr(marker, "key", marker)) for marker in schema
+    ]
+
+
+def test_the_wizard_asks_each_zone_for_its_valve_and_its_substrate_probes_only(
+    flow_module,
+):
+    """A zone needs its valve before anything can water it, and its probes are easiest picked
+    here. Its label, plant count, pot size and drippers are the dashboard's Rooms & hardware.
+    """
+    assert _fields(flow_module._zone_schema(2)) == [
+        "zone_1_switch",
+        "zone_1_vwc",
+        "zone_1_ec",
+        "zone_2_switch",
+        "zone_2_vwc",
+        "zone_2_ec",
+    ]
+
+
+def test_the_last_step_asks_the_plumbing_its_switches_and_the_lights_only(flow_module):
+    """Field capacity and the maximum EC asked here only ever seeded the room's values, which
+    every zone's own overrides; pot size and drippers are each zone's, on Rooms & hardware.
+    """
+    assert _fields(flow_module._hardware_schema()) == [
+        "plumbing",
+        "pump_switch",
+        "main_line_switch",
+        "lights_on_hour",
+        "lights_off_hour",
+    ]
+
+
+def test_a_zone_archived_on_rooms_and_hardware_is_not_asked_for_and_stays_archived(
+    flow_module,
+):
+    zones = {
+        "1": {"zone_switch": "switch.v1"},
+        "2": {"zone_switch": "switch.v2", "active": False, "name": "Old bench"},
+    }
+    assert "zone_2_switch" not in _fields(flow_module._zone_schema(2, zones))
+    result = flow_module._build_zones(2, {"zone_1_switch": "switch.v1"}, zones)
+    assert result["2"] == zones["2"]  # kept exactly as it was
+    assert result["1"]["active"] is True
 
 
 def test_native_hardware_schema_retains_explicit_mappings(flow_module, monkeypatch):
@@ -184,12 +230,9 @@ def _wizard(flow_module, *, zones=1):
 
 
 ZONE_INPUT = {
-    "zone_1_name": "Tent",
-    "zone_1_active": True,
     "zone_1_switch": "switch.v1",
     "zone_1_vwc": ["sensor.vwc"],
     "zone_1_ec": ["sensor.ec"],
-    "zone_1_plant_count": 4,
 }
 
 
@@ -229,7 +272,7 @@ def test_a_failure_on_the_last_step_shows_that_step_again_instead_of_aborting(
     hardware = {
         "pump_switch": "switch.p",
         "main_line_switch": "switch.m",
-        "substrate_volume": 3.2,
+        "lights_on_hour": 6,
     }
     states["switch.p"].state = "unavailable"
     result = asyncio.run(flow.async_step_hardware(dict(hardware)))
@@ -248,9 +291,7 @@ def test_a_failure_on_the_last_step_shows_that_step_again_instead_of_aborting(
 def test_a_single_switch_tent_is_a_complete_room(flow_module):
     flow, _states = _wizard(flow_module)
     asyncio.run(flow.async_step_zones(dict(ZONE_INPUT)))
-    result = asyncio.run(
-        flow.async_step_hardware({"substrate_volume": 3.2})
-    )  # no pump, no mainline
+    result = asyncio.run(flow.async_step_hardware({}))  # no pump, no mainline
     assert result["type"] == "create_entry"
     assert (
         result["data"]["hardware"]["pump_switch"] == ""
@@ -261,9 +302,7 @@ def test_a_single_switch_tent_is_a_complete_room(flow_module):
 def test_the_wizard_stores_the_plumbing_answer(flow_module):
     flow, _states = _wizard(flow_module)
     asyncio.run(flow.async_step_zones(dict(ZONE_INPUT)))
-    result = asyncio.run(
-        flow.async_step_hardware({"plumbing": "valves_only", "substrate_volume": 3.2})
-    )
+    result = asyncio.run(flow.async_step_hardware({"plumbing": "valves_only"}))
     assert result["type"] == "create_entry"
     assert result["data"]["plumbing"] == "valves_only"
 
@@ -275,7 +314,7 @@ def test_a_pump_layout_without_a_pump_is_caught_on_the_step_it_was_answered_on(
     It used to save, and the controller then watered with the valve open and no pump."""
     flow, _states = _wizard(flow_module)
     asyncio.run(flow.async_step_zones(dict(ZONE_INPUT)))
-    answer = {"plumbing": "pump_valves", "substrate_volume": 3.2}
+    answer = {"plumbing": "pump_valves"}
     result = asyncio.run(flow.async_step_hardware(dict(answer)))
     assert result["type"] == "form" and result["step_id"] == "hardware"
     assert result["data_schema"]["kept"] == answer  # nothing typed is lost
@@ -340,3 +379,79 @@ def test_a_blocker_says_whether_the_entity_is_on_unreachable_or_missing():
     assert "unavailable" in found["switch.m"]
     assert "not found" in found["switch.v1"]
     assert all("must read OFF" in line for line in found.values())
+
+
+# --------------------------------------------------------------------------- only what is read
+def test_a_new_room_records_only_what_something_reads(flow_module):
+    flow, _states = _wizard(flow_module)
+    asyncio.run(flow.async_step_zones(dict(ZONE_INPUT)))
+    result = asyncio.run(
+        flow.async_step_hardware(
+            {"plumbing": "valves_only", "lights_on_hour": 6, "lights_off_hour": 18}
+        )
+    )
+    data = result["data"]
+    # Nothing ever read these: the features switches are their own entities now, and how a room
+    # was set up changes nothing.
+    assert not {"features", "installation_mode", "config_method"} & set(data)
+    # Its number entities start from their defaults, which are what the form used to offer.
+    assert data["parameters"] == {"lights_on_hour": 6, "lights_off_hour": 18}
+    zone = data["zones"]["1"]
+    assert zone["name"] == "Zone 1" and zone["active"] is True
+    assert zone["plant_count"] == 4  # set on Rooms & hardware
+    assert zone["vwc_sensors"] == ["sensor.vwc"] and zone["ec_sensors"] == ["sensor.ec"]
+
+
+def test_configure_keeps_what_rooms_and_hardware_set(flow_module):
+    """Configure asks a zone only for its valve and probes. Its label, plant count, sizing and
+    daily limit come from Rooms & hardware, and a save here must not reset them to defaults (the
+    form used to refill a field it did not ask with one)."""
+    hass, entry, _states = rig()
+    entry.data["zones"]["1"].update(
+        name="Front bench",
+        plant_count=12,
+        substrate_volume=6.0,
+        drippers_per_plant=2,
+        dripper_flow_rate=2.0,
+        max_daily_volume=37,
+    )
+    entry.data["parameters"] = {"substrate_volume": 10.0, "lights_on_hour": 6}
+    flow = flow_module.OptionsFlowHandler(entry)
+    flow.hass = hass
+    flow._edit_num = 2
+    result = asyncio.run(
+        flow.async_step_edit_zones_map(
+            {
+                "plumbing": "pump_mainline_valves",
+                "pump_switch": "switch.p",
+                "main_line_switch": "switch.m",
+                "zone_1_switch": "switch.v1",
+                "zone_1_vwc": ["sensor.vwc"],
+                "zone_1_ec": [],
+                "zone_2_switch": "switch.v2",
+                "lights_on_hour": 7,
+                "lights_off_hour": 19,
+            }
+        )
+    )
+    assert result["type"] == "create_entry"
+    zone = entry.data["zones"]["1"]
+    assert zone["name"] == "Front bench" and zone["plant_count"] == 12
+    assert (zone["substrate_volume"], zone["drippers_per_plant"]) == (6.0, 2)
+    assert (zone["dripper_flow_rate"], zone["max_daily_volume"]) == (2.0, 37)
+    assert zone["special"] == 123 and zone["vwc_sensors"] == ["sensor.vwc"]
+    assert entry.data["zones"]["2"]["plant_count"] == 8
+    assert entry.data["parameters"] == {
+        "substrate_volume": 10.0,
+        "lights_on_hour": 7,
+        "lights_off_hour": 19,
+    }
+
+
+def test_configure_points_to_the_dashboard_for_everything_else(flow_module):
+    hass, entry, _states = rig()
+    flow = flow_module.OptionsFlowHandler(entry)
+    flow.hass = hass
+    assert not hasattr(flow, "async_step_edit_parameters")
+    result = asyncio.run(flow.async_step_open_dashboard())
+    assert result == {"type": "abort", "reason": "use_dashboard"}

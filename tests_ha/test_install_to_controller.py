@@ -11,7 +11,7 @@ the controller that has to run it.
 import pytest
 from conftest import switch_calls
 from test_real_flow import VALVE
-from test_setup_entry import _install
+from test_setup_entry import _install, _save_zones
 
 KILL = "switch.crop_steering_engine_enabled"
 ARMED = (
@@ -46,14 +46,25 @@ async def test_the_controller_finds_adopts_and_waters_a_freshly_installed_one_sw
     assert room.hardware_fault is None and room.state[1]["shots"] == 1
 
 
-async def test_the_controller_sizes_shots_from_what_the_wizard_was_told(hass, controller_for):
-    await _install(
+async def test_the_controller_sizes_shots_from_what_rooms_and_hardware_was_told(
+    hass, controller_for, hass_admin_user
+):
+    """The wizard no longer asks a pot size or drippers: a new room starts at a 3.2 L pot and one
+    4 L/hr dripper a plant, and Rooms & hardware sizes each zone. Both reach the controller."""
+    await _install(hass)
+    c, _fake, _clock = controller_for({"enable_flag": KILL})
+    room = c.rooms[0]
+    assert c._substrate_l(room, 1) == pytest.approx(3.2 * 4)  # per-plant litres x 4 plants
+    assert c._zone_flow_lps(room, 1) == pytest.approx(4 * 1 * 4.0 / 3600)
+
+    await _save_zones(
         hass,
-        {"substrate_volume": 11.4, "dripper_flow_rate": 3.8, "drippers_per_plant": 2},
+        hass_admin_user,
+        zone_1={"substrate_volume": 11.4, "dripper_flow_rate": 3.8, "drippers_per_plant": 2},
     )
     c, _fake, _clock = controller_for({"enable_flag": KILL})
     room = c.rooms[0]
-    assert c._substrate_l(room, 1) == pytest.approx(11.4 * 4)  # per-plant litres x 4 plants
+    assert c._substrate_l(room, 1) == pytest.approx(11.4 * 4)
     assert c._zone_flow_lps(room, 1) == pytest.approx(4 * 2 * 3.8 / 3600)
 
 

@@ -1,8 +1,8 @@
 # Entity Reference: Complete Schema
 
 Every entity PHASE Control creates, what it does, its range/options, and
-its default: what a new room's entity starts at. Where the setup wizard asks (plant count,
-pot size, drippers, lights hours), your answers replace the default. Per-zone entities
+its default: what a new room's entity starts at. Where the setup wizard asks (the lights
+hours) or Rooms & hardware does (plant count, pot size, drippers), your answers replace the default. Per-zone entities
 scale with your zone count, `N` = 1…zones.
 
 **Conventions**
