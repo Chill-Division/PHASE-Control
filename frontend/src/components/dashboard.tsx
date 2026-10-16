@@ -620,6 +620,7 @@ export function ZoneOperatingState({
           </Pill>
         )}
         {showScheduling && <Status enabled={zone.enabled} />}
+        <OverridePill zone={zone} />
       </div>
     </div>
   );
@@ -1227,6 +1228,58 @@ function ZoneSchedulingReview({
   );
 }
 
+/** A zone paused by hand in Home Assistant: its Manual Override switch is on, so the controller
+ * fires no shot in it (the set_manual_override service, or the switch itself). */
+function OverridePill({ zone }: { zone: Zone }) {
+  if (zone.override !== true) return null;
+  return (
+    <Pill
+      dot
+      tone="warn"
+      title="Its manual override is on in Home Assistant: the controller fires no shot in this zone."
+    >
+      Paused by hand{zone.overrideUntil ? ` until ${time(zone.overrideUntil)}` : ""}
+    </Pill>
+  );
+}
+
+/** Ending a zone's manual override, reviewed before it applies: from the zone's details. */
+function ZoneOverrideReview({
+  controller,
+  zone,
+  open,
+  onOpenChange,
+}: {
+  controller: Controller;
+  zone: Zone;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  return (
+    <ReviewDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      controller={controller}
+      title="Resume the zone?"
+      items={
+        zone.overrideEntity
+          ? [
+              {
+                change: { entityId: zone.overrideEntity, value: false },
+                label: `${zone.name} paused by hand`,
+                before: zone.overrideUntil
+                  ? `Until ${time(zone.overrideUntil)}`
+                  : "Until switched off",
+                after: "Resumed",
+              },
+            ]
+          : []
+      }
+      note="Its manual override ends now, and the controller waters the zone by its targets again from its next check."
+    />
+  );
+}
+
 /** Moving a zone to another phase, reviewed before it applies: from the zone's details and from
  * its actions menu. Nothing for a zone without a phase setting. */
 function ZonePhaseReview({
@@ -1364,12 +1417,14 @@ export function ZoneDetails({
 }) {
   const { view } = useWaterView();
   const [review, setReview] = useState(false);
+  const [resume, setResume] = useState(false);
   const [phaseChoice, setPhaseChoice] = useState<string | null>(null);
   const [probeChoice, setProbeChoice] = useState<{ metric: "vwc" | "ec"; option: string } | null>(
     null,
   );
   useEffect(() => {
     setReview(false);
+    setResume(false);
     setPhaseChoice(null);
     setProbeChoice(null);
   }, [zone?.id]);
@@ -1492,6 +1547,30 @@ export function ZoneDetails({
                 running in it stops within a few seconds. It is not an emergency stop: use the
                 installation's physical shut-off for that.
               </p>
+              {zone.override === true && (
+                <div className="zone-override" data-zone-override>
+                  <p>
+                    <strong>
+                      Paused by hand
+                      {zone.overrideUntil ? ` until ${time(zone.overrideUntil)}` : ""}.
+                    </strong>{" "}
+                    {zone.name}&rsquo;s manual override is on in Home Assistant, so the controller
+                    fires no shot in it
+                    {zone.overrideUntil ? " until then" : " until it is switched off"}. Its probes
+                    are still read.
+                  </p>
+                  <Button
+                    variant="outline"
+                    className="full-width"
+                    disabled={
+                      !zone.overrideEntity || !["live", "demo"].includes(controller.connection)
+                    }
+                    onClick={() => setResume(true)}
+                  >
+                    Resume {zone.name} now
+                  </Button>
+                </div>
+              )}
               {zone.setPhaseEntity && (
                 <>
                   <h3>Phase</h3>
@@ -1582,6 +1661,14 @@ export function ZoneDetails({
           zone={zone}
           open={review}
           onOpenChange={setReview}
+        />
+      )}
+      {zone && (
+        <ZoneOverrideReview
+          controller={controller}
+          zone={zone}
+          open={resume}
+          onOpenChange={setResume}
         />
       )}
       {zone && probeChoice && zone.probes[probeChoice.metric]?.entityId && (

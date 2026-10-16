@@ -157,6 +157,7 @@ export function createDemo(now = Date.now()): States {
     put(`switch.crop_steering_${prefix}room_active`, "on");
     // Flower 2 demonstrates a running setpoint supervisor; Flower 1 keeps the default (off).
     put(`switch.crop_steering_${prefix}auto_setpoints`, index ? "off" : "on");
+    put(`switch.crop_steering_${prefix}ec_stacking_enabled`, "off");
     // How Water today reads in the room (Settings → Appearance): each zone's total until chosen.
     put(`select.crop_steering_${prefix}water_today_view`, "Zone total", {
       options: ["Zone total", "Per plant"],
@@ -245,6 +246,7 @@ export function createDemo(now = Date.now()): States {
       number(prefix, `${key}p1_initial_shot_size`, 6, 0.5, 20, 0.5, "%");
       number(prefix, `${key}p1_shot_size_increment`, 0.5, 0.05, 10, 0.05, "%");
       number(prefix, `${key}p1_maximum_shots`, 6, 1, 30, 1);
+      number(prefix, `${key}p1_minimum_shots`, 3, 1, 20, 1);
       number(prefix, `${key}p1_time_between_shots`, 15, 5, 120, 1, "min");
       number(prefix, `${key}p2_shot_size`, 4, 0.5, 20, 0.5, "%");
       number(prefix, `${key}p2_time_between_shots`, 5, 0, 60, 1, "min");

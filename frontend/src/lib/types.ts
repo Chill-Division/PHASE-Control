@@ -52,6 +52,12 @@ export interface Zone {
   name: string;
   enabledEntity: string | null;
   enabled: boolean | null;
+  /** The zone's Manual Override switch: on, the controller fires no shot in the zone (a pause set
+   * in Home Assistant, or by the set_manual_override service). Null entity: none. */
+  overrideEntity: string | null;
+  override: boolean | null;
+  /** When an override on a timer ends (epoch ms); null for one with no end, or none. */
+  overrideUntil: number | null;
   /** The zone's Set Phase select: the controller moves the zone to a phase picked there, once.
    * Null when the integration has none. */
   setPhaseEntity: string | null;
@@ -112,6 +118,8 @@ export interface RoomView {
   /** Null when the controller has no room switch: the room is on and the control is hidden. */
   roomActiveEntity: string | null;
   autoSetpoints: { entityId: string | null; enabled: boolean | null };
+  /** The room's EC stacking switch: on, P2 moves each zone's trigger toward its P2 EC target. */
+  ecStacking: { entityId: string | null; enabled: boolean | null };
   /** The room's Automatic nutrient batches switch; entityId null on an integration without it. */
   autoBatches: { entityId: string | null; enabled: boolean | null };
   /** Whether the controller's vitals notification says what each zone will do next; entityId null

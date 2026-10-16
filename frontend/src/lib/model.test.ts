@@ -159,6 +159,64 @@ describe("room model", () => {
       }),
     ).toBeTruthy();
   });
+  it("shows a zone paused by hand and lets the dashboard end it", () => {
+    const states = fixture();
+    states["switch.crop_steering_zone_1_manual_override"] = entity(
+      "switch.crop_steering_zone_1_manual_override",
+      "on",
+      { manual_override_expires_at: "2026-10-17T15:20:00+00:00", manual_override_mode: "timed" },
+    );
+    const room = discoverRooms(states).find((r) => r.prefix === "")!;
+    const zone = buildRoom(states, room).zones[0];
+    expect(zone.overrideEntity).toBe("switch.crop_steering_zone_1_manual_override");
+    expect(zone.override).toBe(true);
+    expect(zone.overrideUntil).toBe(Date.parse("2026-10-17T15:20:00Z"));
+    const view = buildRoom(states, room);
+    expect(
+      validateChange(view, states, {
+        entityId: "switch.crop_steering_zone_1_manual_override",
+        value: false,
+      }),
+    ).toBeNull();
+    // On with no end (switched on directly), then off: no end time either way.
+    states["switch.crop_steering_zone_1_manual_override"] = entity(
+      "switch.crop_steering_zone_1_manual_override",
+      "on",
+      { manual_override_expires_at: null, manual_override_mode: "indefinite" },
+    );
+    expect(buildRoom(states, room).zones[0].overrideUntil).toBeNull();
+    states["switch.crop_steering_zone_1_manual_override"].state = "off";
+    expect(buildRoom(states, room).zones[0]).toMatchObject({
+      override: false,
+      overrideUntil: null,
+    });
+  });
+  it("offers EC stacking and the fewest P1 shots, which the controller reads", () => {
+    const states = fixture();
+    states["switch.crop_steering_ec_stacking_enabled"] = entity(
+      "switch.crop_steering_ec_stacking_enabled",
+      "off",
+    );
+    states["number.crop_steering_zone_1_p1_minimum_shots"] = entity(
+      "number.crop_steering_zone_1_p1_minimum_shots",
+      "3",
+      { min: 1, max: 20, step: 1 },
+    );
+    const room = discoverRooms(states).find((r) => r.prefix === "")!;
+    const view = buildRoom(states, room);
+    expect(view.ecStacking).toEqual({
+      entityId: "switch.crop_steering_ec_stacking_enabled",
+      enabled: false,
+    });
+    expect(
+      validateChange(view, states, {
+        entityId: "switch.crop_steering_ec_stacking_enabled",
+        value: true,
+      }),
+    ).toBeNull();
+    const fewest = view.settings.find((s) => s.entityId.endsWith("zone_1_p1_minimum_shots"));
+    expect(fewest).toMatchObject({ label: "Fewest P1 shots", group: "P1 · Ramp-up", zoneId: 1 });
+  });
   it("surfaces the engine hardware latch and room-filters the shared activity feed", () => {
     const states = fixture();
     states["sensor.crop_steering_ai_heartbeat"] = entity(

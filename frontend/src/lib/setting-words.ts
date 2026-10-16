@@ -145,6 +145,11 @@ const WORDS: Record<string, SettingWords> = {
     short: "Most P1 shots",
     help: "The ramp ends after this many shots, even below the peak VWC target.",
   },
+  p1_minimum_shots: {
+    label: "Fewest P1 shots",
+    short: "Fewest P1 shots",
+    help: "The ramp hands over to P2 only once this many shots have gone in, even if moisture reaches the peak VWC target sooner.",
+  },
   p2_vwc_threshold: {
     label: "Maintenance shot when below",
     short: "Maintenance trigger",
@@ -329,6 +334,12 @@ const DETAILS: Record<string, SettingDetail> = {
   p1_maximum_shots: {
     what: "The most shots the ramp fires.",
     when: "After this many ramp shots P1 hands over to P2, wherever moisture is. P2 then waters whenever moisture reads below the maintenance trigger.",
+  },
+  p1_minimum_shots: {
+    what: "The fewest shots the ramp fires before it hands over to P2.",
+    when: "Each time the controller checks in P1, reaching the peak VWC target moves the zone to P2 only once this many ramp shots have gone in. Until then the zone stays in P1, and a ramp shot fires whenever moisture is back below the peak target.",
+    affects:
+      "How many small shots build the morning up, and so how wet the substrate is at the top of the day. The most P1 shots still ends the ramp: a minimum above it runs as that maximum.",
   },
   p2_vwc_threshold: {
     what: "The level that triggers a daytime maintenance shot. The peak VWC target minus this is how far the substrate dries back during the day.",
