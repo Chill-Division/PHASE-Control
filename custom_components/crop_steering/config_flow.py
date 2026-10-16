@@ -20,7 +20,6 @@ from .const import (
     MIN_ZONES,
     MAX_ZONES,
     DEFAULT_NUM_ZONES,
-    MOISTURE_RANGES,
     PRODUCT_NAME,
 )
 from .plumbing import PLUMBING_LAYOUTS, infer as infer_plumbing
@@ -64,13 +63,25 @@ def _as_list(v):
     return list(v) if isinstance(v, (list, tuple)) else [v]
 
 
+def _archived(zc: dict) -> bool:
+    return zc.get("active") is False
+
+
 def _zone_schema(num_zones: int, zones: dict | None = None) -> dict:
     """Build the {marker: selector} map for per-zone entity mapping, prefilled from
-    an existing `zones` dict (the config entry's shape)."""
+    an existing `zones` dict (the config entry's shape).
+
+    Each zone's valve and its substrate probes, moisture and EC: what a zone needs before it
+    can be watered, and what is easiest to pick here. Its label, plant count and sizing, and
+    archiving or restoring it, are on the dashboard's Rooms & hardware. A zone archived there
+    is not asked for here, and keeps everything it had.
+    """
     zones = zones or {}
     out: dict = {}
     for z in range(1, int(num_zones) + 1):
         zc = zones.get(str(z)) or zones.get(z) or {}
+        if _archived(zc):
+            continue
         sw = zc.get("zone_switch") or ""
         vwc = zc.get("vwc_sensors") or (
             _as_list(zc.get("vwc_front")) + _as_list(zc.get("vwc_back"))
@@ -78,9 +89,6 @@ def _zone_schema(num_zones: int, zones: dict | None = None) -> dict:
         ec = zc.get("ec_sensors") or (
             _as_list(zc.get("ec_front")) + _as_list(zc.get("ec_back"))
         )
-        pc = zc.get("plant_count", 4)
-        out[vol.Optional(f"zone_{z}_name", default=zc.get("name", f"Zone {z}"))] = str
-        out[vol.Optional(f"zone_{z}_active", default=zc.get("active", True))] = bool
         out[
             (
                 vol.Required(f"zone_{z}_switch", default=sw)
@@ -90,9 +98,6 @@ def _zone_schema(num_zones: int, zones: dict | None = None) -> dict:
         ] = _sw_sel()
         out[vol.Optional(f"zone_{z}_vwc", default=vwc)] = _sensor_multi()
         out[vol.Optional(f"zone_{z}_ec", default=ec)] = _sensor_multi()
-        out[vol.Optional(f"zone_{z}_plant_count", default=pc)] = vol.All(
-            vol.Coerce(int), vol.Range(min=1, max=1000)
-        )
     return out
 
 
@@ -101,7 +106,12 @@ def _hardware_schema(
     params: dict | None = None,
     plumbing: str | None = None,
 ) -> dict:
-    """Build the {marker: selector} map for shared hardware + substrate properties.
+    """Build the {marker: selector} map for the room's plumbing and its lights hours.
+
+    Pot size, drippers and their flow are each zone's, on the dashboard's Rooms & hardware; the
+    targets are on Irrigation strategy → Today. A field capacity and a maximum EC asked here used
+    to seed only the room's values, which every zone's own overrides: nothing the controller
+    steered by ever changed.
 
     `plumbing` prefills the layout question: what the room declared, or for a room from before
     the question existed, what its mapped switches imply. A new room gets no prefill, so the
@@ -140,45 +150,31 @@ def _hardware_schema(
     out[vol.Optional("lights_off_hour", default=params.get("lights_off_hour", 0))] = (
         vol.All(vol.Coerce(int), vol.Range(min=0, max=23))
     )
-    out[
-        vol.Optional("substrate_volume", default=params.get("substrate_volume", 3.2))
-    ] = vol.All(vol.Coerce(float), vol.Range(min=0.1, max=200.0))
-    out[
-        vol.Optional("dripper_flow_rate", default=params.get("dripper_flow_rate", 4.0))
-    ] = vol.All(vol.Coerce(float), vol.Range(min=0.1, max=50.0))
-    out[
-        vol.Optional("drippers_per_plant", default=params.get("drippers_per_plant", 1))
-    ] = vol.All(vol.Coerce(int), vol.Range(min=1, max=20))
-    out[vol.Optional("field_capacity", default=params.get("field_capacity", 70.0))] = (
-        vol.All(
-            vol.Coerce(float),
-            vol.Range(
-                min=MOISTURE_RANGES["field_capacity"][0],
-                max=MOISTURE_RANGES["field_capacity"][1],
-            ),
-        )
-    )
-    out[vol.Optional("max_ec", default=params.get("max_ec", 9.0))] = vol.All(
-        vol.Coerce(float), vol.Range(min=1.0, max=15.0)
-    )
     return out
 
 
 def _build_zones(num_zones: int, data: dict, existing: dict | None = None) -> dict:
-    """Build the config entry's `zones` dict from submitted form data."""
-    zones: dict = {str(k): {**v, "active": False} for k, v in (existing or {}).items()}
+    """Build the config entry's `zones` dict from submitted form data.
+
+    Only a zone's valve and probes come from the form. Its label, plant count, sizing and daily
+    limit stay what the room has (a new zone gets the defaults), so a save here never resets
+    what Rooms & hardware set. Zones above the count are archived; a zone archived on Rooms &
+    hardware, which the form does not ask for, stays as it is.
+    """
+    existing = {str(k): v for k, v in (existing or {}).items()}
+    zones: dict = {k: {**v, "active": False} for k, v in existing.items()}
     for z in range(1, int(num_zones) + 1):
+        old = existing.get(str(z)) or {}
+        if _archived(old):
+            zones[str(z)] = old
+            continue
         vwc = _as_list(data.get(f"zone_{z}_vwc"))
         ec = _as_list(data.get(f"zone_{z}_ec"))
         zones[str(z)] = {
-            **((existing or {}).get(str(z)) or (existing or {}).get(z) or {}),
+            **old,
             "zone_number": z,
-            "active": data.get(
-                f"zone_{z}_active",
-                ((existing or {}).get(str(z)) or {}).get("active", True),
-            ),
-            "name": data.get(f"zone_{z}_name")
-            or ((existing or {}).get(str(z)) or {}).get("name", f"Zone {z}"),
+            "active": True,
+            "name": old.get("name") or f"Zone {z}",
             "zone_switch": data.get(f"zone_{z}_switch", ""),
             "vwc_sensors": vwc,
             "ec_sensors": ec,
@@ -186,10 +182,8 @@ def _build_zones(num_zones: int, data: dict, existing: dict | None = None) -> di
             "vwc_back": vwc[1] if len(vwc) > 1 else "",
             "ec_front": ec[0] if ec else "",
             "ec_back": ec[1] if len(ec) > 1 else "",
-            "plant_count": int(data.get(f"zone_{z}_plant_count", 4)),
-            "max_daily_volume": ((existing or {}).get(str(z)) or {}).get(
-                "max_daily_volume", 20.0
-            ),
+            "plant_count": int(old.get("plant_count", 4)),
+            "max_daily_volume": old.get("max_daily_volume", 20.0),
         }
     return zones
 
@@ -201,15 +195,19 @@ def _build_hardware(data: dict) -> dict:
     }
 
 
-def _build_parameters(data: dict) -> dict:
+def _build_parameters(data: dict, existing: dict | None = None) -> dict:
+    """The recorded setup parameters: the lights hours from the form, everything else as the
+    room recorded it. A new room records only its lights hours; its number entities start from
+    their defaults (number.py DEFAULT_VALUES), which are what this form used to offer.
+    """
     return {
-        "substrate_volume": data.get("substrate_volume", 3.2),
-        "dripper_flow_rate": data.get("dripper_flow_rate", 4.0),
-        "drippers_per_plant": data.get("drippers_per_plant", 1),
-        "field_capacity": data.get("field_capacity", 70.0),
-        "max_ec": data.get("max_ec", 9.0),
-        "lights_on_hour": data.get("lights_on_hour", 12),
-        "lights_off_hour": data.get("lights_off_hour", 0),
+        **(existing or {}),
+        "lights_on_hour": data.get(
+            "lights_on_hour", (existing or {}).get("lights_on_hour", 12)
+        ),
+        "lights_off_hour": data.get(
+            "lights_off_hour", (existing or {}).get("lights_off_hour", 0)
+        ),
     }
 
 
@@ -293,7 +291,6 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 data.update(
                     room_slug=slug,
                     room_prefix=f"{slug}_" if named else "",
-                    config_method="manual",
                     setup_revision=1,
                 )
                 data["enable_flag"] = (
@@ -388,9 +385,11 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Map each zone's valve and sensors via entity pickers."""
         num = int(self._data.get(CONF_NUM_ZONES, DEFAULT_NUM_ZONES))
         info = (
-            f"Pick the valve and probe(s) for each of your {num} zones. "
-            "You can choose MORE THAN ONE moisture/EC sensor per zone — the engine "
-            "averages valid readings. Outliers are not automatically rejected."
+            f"Pick the valve and the substrate probes for each of your {num} zones. You can "
+            "choose more than one moisture or EC probe for a zone: the controller reads their "
+            "average until you choose otherwise in the zone's details on the dashboard. Each "
+            "zone's name, plant count, pot size and drippers are set there too, under Settings → "
+            "Rooms & hardware."
         )
         if user_input is None:
             return self.async_show_form(
@@ -418,12 +417,13 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_hardware(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
-        """Map shared hardware (pump/mainline/lights) and substrate properties."""
+        """Say how the room is plumbed, map its shared switches, and set its lights hours."""
         info = (
-            "Shared plumbing, lights and the substrate facts used to size shots. Start by saying how "
-            "the room is plumbed: a room with one switch per zone, such as a tent on a single smart "
-            "plug, is zone valves only and needs nothing more than the valves you have already "
-            "picked. If water only flows while a pump runs, say so and choose the pump."
+            "Say how the room is plumbed: a room with one switch per zone, such as a tent on a "
+            "single smart plug, is zone valves only and needs nothing more than the valves you "
+            "have already picked. If water only flows while a pump runs, say so and choose the "
+            "pump. Then the hours the lights come on and go off: the grow-day runs from one "
+            "lights-on to the next. Watering stays off until you switch it on in PHASE Control."
         )
         if user_input is None:
             return self.async_show_form(
@@ -432,8 +432,6 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 description_placeholders={"info": info},
             )
         data = {
-            "installation_mode": "manual",
-            "config_method": "manual",
             "name": self._data.get("name", PRODUCT_NAME),
             "room_name": self._data.get("room_name", PRODUCT_NAME),
             "room_prefix": self._data.get("room_prefix", ""),
@@ -442,7 +440,6 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             "zones": self._data.get("zones", {}),
             "hardware": _build_hardware(user_input),
             "parameters": _build_parameters(user_input),
-            "features": {"ec_stacking": False, "analytics": True, "ml_features": False},
         }
         data["enable_flag"] = (
             f"switch.crop_steering_{data['room_prefix']}engine_enabled"
@@ -502,17 +499,6 @@ def _restart_notice(running: str, waiting: str | None) -> str:
     )
 
 
-def _number_range(key: str) -> vol.Range:
-    """The limits of this integration's own number entity for `key`: one definition, in
-    number.py, so a form can never refuse a value the entity it edits accepts, nor write one the
-    entity then rejects. Imported here, not at module level: number.py is an entity platform.
-    """
-    from .number import NUMBER_DESCRIPTIONS
-
-    described = next(d for d in NUMBER_DESCRIPTIONS if d.key == key)
-    return vol.Range(min=described.native_min_value, max=described.native_max_value)
-
-
 class OptionsFlowHandler(config_entries.OptionsFlow):
     """Handle options flow for PHASE Control."""
 
@@ -529,8 +515,8 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         return self.async_show_menu(
             step_id="init",
             menu_options=[
-                "edit_parameters",
                 "edit_zones",
+                "open_dashboard",
             ],
             # Not blocked while an update waits for a restart: an operator with a growing room
             # has to be able to get in here. It is told what is going on instead.
@@ -568,68 +554,11 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 blocking=True,
             )
 
-    async def async_step_edit_parameters(
+    async def async_step_open_dashboard(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
-        """Edit irrigation parameters via UI."""
-        from .setup_api import effective, safety_blockers, _update
-
-        if user_input is not None:
-            blockers = safety_blockers(self.hass, self._entry)
-            if blockers:
-                return self.async_abort(
-                    reason="setup_invalid",
-                    description_placeholders={"error": "; ".join(blockers)},
-                )
-            # The entry's `parameters` only SEED a number entity the first time it is created.
-            # After that the entity restores its own last value, so updating `parameters` alone
-            # saved the edit, reloaded, and each number restored the old value over the top:
-            # nothing the engine reads ever changed. Write the live entities first; the reload
-            # that follows then restores the value just written.
-            await self._set_live_numbers(user_input)
-            new_data = effective(self._entry)
-            new_data["parameters"] = {**new_data.get("parameters", {}), **user_input}
-            _update(self.hass, self._entry, new_data)
-
-            return self.async_create_entry(title="", data={})
-
-        # What the engine is reading NOW. The recorded `parameters` go stale the moment a number
-        # is changed on a dashboard, so showing them here presented an old value as current.
-        current_params = {
-            **effective(self._entry).get("parameters", {}),
-            **self._live_numbers(
-                (
-                    "substrate_volume",
-                    "dripper_flow_rate",
-                    "p1_target_vwc",
-                    "p2_vwc_threshold",
-                )
-            ),
-        }
-
-        # The form opens on the live entities, so it takes their limits too. It used to restate
-        # them, and demanded a P1 target of at least 30 and a P2 threshold of at least 25 where
-        # the entities accept 5: a room steering lower could not submit this form even unchanged.
-        return self.async_show_form(
-            step_id="edit_parameters",
-            data_schema=vol.Schema(
-                {
-                    vol.Optional(
-                        key, default=current_params.get(key, fallback)
-                    ): vol.All(vol.Coerce(float), _number_range(key))
-                    for key, fallback in (
-                        ("substrate_volume", 3.2),
-                        ("dripper_flow_rate", 4.0),
-                        ("p1_target_vwc", 65.0),
-                        ("p2_vwc_threshold", 60.0),
-                    )
-                }
-            ),
-            description_placeholders={
-                "info": "Edit irrigation parameters. Changes take effect immediately. "
-                "You can also edit these via number entities in Home Assistant."
-            },
-        )
+        """Where everything else is set: a note, then back out without changing anything."""
+        return self.async_abort(reason="use_dashboard")
 
     async def async_step_edit_zones(
         self, user_input: dict[str, Any] | None = None
@@ -650,7 +579,9 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 ),
                 description_placeholders={
                     "info": "Set how many zones you have. Increase it to ADD a zone, decrease to "
-                    "remove the highest ones. You'll map entities on the next screen."
+                    "archive the highest ones. You'll map their valves and probes on the next "
+                    "screen; a zone archived in PHASE Control is restored there, under Settings → "
+                    "Rooms & hardware."
                 },
             )
         self._edit_num = int(user_input["num_zones"])
@@ -685,8 +616,9 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             }
         )
         info = (
-            "Add, remove or swap the sensors and switches for each zone. "
-            "Pick multiple moisture/EC probes per zone if you have them — they get fused."
+            "Swap each zone's valve and substrate probes, how the room is plumbed and its lights "
+            "hours. A zone's name, plant count, pot size and drippers are on the dashboard, under "
+            "Settings → Rooms & hardware; its targets under Irrigation strategy → Today."
         )
         if user_input is None:
             return self.async_show_form(
@@ -706,10 +638,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 },
                 **_build_hardware(user_input),
             },
-            "parameters": {
-                **data.get("parameters", {}),
-                **_build_parameters(user_input),
-            },
+            "parameters": _build_parameters(user_input, data.get("parameters", {})),
         }
         if user_input.get("plumbing"):
             new_data["plumbing"] = user_input["plumbing"]
