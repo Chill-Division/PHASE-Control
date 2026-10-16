@@ -15,6 +15,7 @@ SETTING_NAMES = {
     "p1_shot_size_increment": "Each P1 shot adds",
     "p1_time_between_shots": "Time between P1 shots",
     "p1_maximum_shots": "Most P1 shots",
+    "p1_minimum_shots": "Fewest P1 shots",
     "p2_vwc_threshold": "Maintenance trigger",
     "p2_shot_size": "Maintenance shot",
     "p2_time_between_shots": "Time between P2 shots",
