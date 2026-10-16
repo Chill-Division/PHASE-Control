@@ -64,10 +64,10 @@ partial run and exits zero, but still says PARTIAL rather than ALL CHECKS PASSED
 | File | Scenario |
 | --- | --- |
 | `test_real_flow.py` | **Fresh install.** The wizard through the real flow manager for a one-switch room; the registered id of every entity; an existing registry keeps its ids. |
-| `test_setup_entry.py` | **The entry itself.** It loads on a Home Assistant without `frontend.async_panel_exists`; another owner's sidebar path is left alone; the wizard's lights hours and sizing reach the entities. |
-| `test_install_to_controller.py` | **Fresh install, both layers.** That install is handed to the *real add-on controller*, which must find the room from the descriptor alone, adopt it, and fire a shot sized and scheduled from the wizard's answers. The only tests that cross the integration / controller seam. |
+| `test_setup_entry.py` | **The entry itself.** It loads on a Home Assistant without `frontend.async_panel_exists`; another owner's sidebar path is left alone; the wizard's lights hours reach the entities, and a new room's sizing starts at the settings' defaults. |
+| `test_install_to_controller.py` | **Fresh install, both layers.** That install is handed to the *real add-on controller*, which must find the room from the descriptor alone, adopt it, and fire a shot sized from Rooms & hardware and scheduled from the wizard's lights hours. The only tests that cross the integration / controller seam. |
 | `test_upgrade_in_place.py` | **In-place upgrade with seeded data.** Starts the new code on top of a snapshot of an old install. Nothing tuned may move, no entity may change id, and the controller must carry on with the kill switch ON and no disarm cycle. |
-| `test_configure.py` | **Configure.** Editing a parameter reaches the engine; a mapping can be removed; an untouched save keeps every mapping. |
+| `test_configure.py` | **Configure.** It asks only valves, probes, plumbing and lights hours and points to the dashboard for the rest; a save keeps each zone's name, plants and sizing from Rooms & hardware, and an upgraded room's untouched save moves nothing; a mapping can be removed; an untouched save keeps every mapping. |
 
 **Seeded fixtures** live in `tests_ha/fixtures/`. Each is a room *as an old version actually wrote
 it*, with an `_about` note saying which era it models: its config entry, the states of its

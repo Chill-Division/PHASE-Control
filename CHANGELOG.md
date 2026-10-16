@@ -16,6 +16,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   nothing ever read it, and day and night come from the lights-on and lights-off times (Irrigation
   strategy → Today → the whole room). Home Assistant's own setup form no longer asks for a waste
   valve either, which nothing ever switched. A room that recorded either loses it on its next save.
+- **Setting up a room asks less.** Home Assistant's setup asks the room's name, how many zones it
+  has, each zone's valve and substrate probes (moisture and EC), how the room is plumbed, and when
+  the lights come on and go off. Each zone's name, plant count, pot size and drippers are set on the
+  dashboard's Rooms & hardware. The field capacity and maximum EC it used to ask changed nothing the
+  controller steered by: every zone has its own, on Today. In **Configure**, the **Irrigation
+  parameters** screen is gone, and so are the pot size, drippers, field capacity and maximum EC on
+  **Edit zones**: what they saved never reached the controller. A save there now keeps each zone's
+  name, plant count and sizing instead of resetting them.
 
 ### 🔧 Technical notes
 
@@ -27,6 +35,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   its next save.
 - Dashboard: Rooms & hardware has no Room lights picker, and its batch-switch check no longer
   names a waste valve; the setup-change words (`setup-changes.ts`, from `HARDWARE_WORDS`) drop both.
+- Integration (`config_flow.py`): `_zone_schema` asks each zone only `zone_N_switch`, `zone_N_vwc`
+  and `zone_N_ec`, and skips a zone archived on Rooms & hardware; `_hardware_schema` asks
+  `plumbing`, `pump_switch`, `main_line_switch` and the lights hours. `_build_zones` keeps a zone's
+  name, plant count, sizing, daily limit and archived state from the entry (a new zone: "Zone N",
+  4 plants, active), and `_build_parameters` changes only the lights hours, so a Configure save no
+  longer refills unasked fields with defaults. A new entry records `parameters` with the lights
+  hours only (its numbers start from `DEFAULT_VALUES`, the old form's defaults) and no longer
+  `features`, `installation_mode` or `config_method`, which nothing read. The options flow's menu is
+  `edit_zones` and `open_dashboard` (an abort, `use_dashboard`, saying where the rest is);
+  `edit_parameters` and `_number_range` are gone. Old entries keep what they recorded.
+- Tests: `tests_ha/test_configure.py` proves the menu and forms ask only that, that a save keeps
+  what Rooms & hardware set (name, plants, sizing, every number entity), that an upgraded room's
+  untouched save moves nothing (three seeded fixtures), and that a save with a switch on is refused.
+  `_save_zones` (`test_setup_entry.py`) names and sizes zones as Rooms & hardware does, for the
+  tests that used to do it in the wizard.
 
 ## [1.2.0] - 2026-10-16
 

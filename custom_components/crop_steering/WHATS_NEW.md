@@ -24,6 +24,7 @@ version being released.
 ## Unreleased
 
 - Rooms & hardware no longer asks for the room's lights, which nothing used: day and night come from the lights-on and lights-off times.
+- Setting up a room in Home Assistant asks less: each zone's valve and probes, the plumbing and the lights; the rest is on Rooms & hardware.
 
 ## 1.2.0 - 2026-10-16
 
