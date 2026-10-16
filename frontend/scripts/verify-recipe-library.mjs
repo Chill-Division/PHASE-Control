@@ -49,6 +49,17 @@ const page = await context.newPage();
 page.setDefaultTimeout(10000);
 page.on("pageerror", (error) => errors.push(error.message));
 const library = () => page.locator("[data-recipe-library]");
+/** Shows `name`'s room the way a person picks one on a desktop: its card in the rooms column. */
+async function chooseRoom(name) {
+  const card = page
+    .locator("nav.rooms-column button.room-card")
+    .filter({ has: page.getByText(name, { exact: true }) });
+  await card.click();
+  await page
+    .locator('nav.rooms-column button.room-card[aria-current="page"]')
+    .filter({ has: page.getByText(name, { exact: true }) })
+    .waitFor();
+}
 async function openLibrary() {
   if ((await library().getAttribute("open")) === null)
     await library().locator("summary").first().click();
@@ -155,11 +166,13 @@ try {
     const exported = await downloadPlan(
       page.getByRole("button", { name: "Export strategy My saved plan", exact: true }),
     );
-    await page.locator("#desktop-room").selectOption("room:f1_");
+    await chooseRoom("Flower 1");
+    assert.equal(new URL(page.url()).searchParams.get("room"), "room:f1_");
     await library().waitFor();
     await openLibrary();
     assert.equal(await library().locator(".recipe-list li").count(), 2);
-    await page.locator("#desktop-room").selectOption("room:");
+    await chooseRoom("Flower 2");
+    assert.equal(new URL(page.url()).searchParams.get("room"), "room:");
     await library().waitFor();
     await openLibrary();
     await page.getByRole("button", { name: "Remove strategy My saved plan", exact: true }).click();

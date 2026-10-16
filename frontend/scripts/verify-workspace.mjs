@@ -70,28 +70,41 @@ async function fresh(route) {
   target.hash = "/" + route;
   await page.goto(target.toString(), { waitUntil: "networkidle" });
 }
-async function navigate(label) {
-  await page.locator(".desktop-sidebar").getByRole("button", { name: label, exact: true }).click();
+/** A section, by its short name in the rail: Overview, Strategy, Insights, Feed, Settings, Help. */
+async function navigate(label, target = page) {
+  await target.locator("nav.app-rail").getByRole("button", { name: label, exact: true }).click();
 }
 async function navigateSchedule(target = page) {
-  await target
-    .locator(".desktop-sidebar")
-    .getByRole("button", { name: "Irrigation strategy", exact: true })
-    .click();
+  await navigate("Strategy", target);
   await target
     .getByRole("navigation", { name: "Irrigation strategy views" })
     .getByRole("button", { name: "Schedule", exact: true })
     .click();
 }
 async function navigateSetup(target = page) {
-  await target
-    .locator(".desktop-sidebar")
-    .getByRole("button", { name: "Settings", exact: true })
-    .click();
+  await navigate("Settings", target);
   await target
     .getByRole("navigation", { name: "Settings views" })
     .getByRole("button", { name: "Rooms & hardware", exact: true })
     .click();
+}
+/** A room's card in the rooms column, which is how a desktop with more than one room picks one. */
+function roomCard(name, target = page) {
+  return target.locator("nav.rooms-column .room-card").filter({
+    has: target.locator(".room-card-head strong", { hasText: new RegExp(`^${name}$`) }),
+  });
+}
+/** The room the rooms column marks as the one on show. */
+async function currentRoom(target = page) {
+  return (
+    await target
+      .locator('nav.rooms-column .room-card[aria-current="page"] .room-card-head strong')
+      .innerText()
+  ).trim();
+}
+/** The Overview's heading, which is the room's name. */
+function overviewHeading(name, target = page) {
+  return target.locator("[data-overview]").getByRole("heading", { level: 1, name, exact: true });
 }
 async function exported() {
   const download = page.waitForEvent("download");
@@ -135,11 +148,14 @@ async function check(name, run) {
     });
   }
 }
+/** Watering off: the Overview's mode pill, from Steering to Watching only (the engine switch off). */
 async function pause() {
   await navigate("Overview");
-  const pause = page.getByRole("button", { name: "Switch watering off…", exact: true });
-  if (await pause.count()) {
-    await pause.click();
+  const pill = page.locator("button.mode-pill");
+  await visible(pill);
+  if ((await pill.getAttribute("data-mode")) === "steering") {
+    await pill.click();
+    await page.getByRole("radio", { name: /^Watching only/ }).click();
     await page.getByRole("button", { name: /Apply \d+ change/ }).click();
     await page.getByRole("dialog").waitFor({ state: "hidden" });
   }
@@ -407,13 +423,14 @@ try {
       await visible(page.getByRole("heading", { name: "Discard unsaved workspace changes?" }));
       await page.getByRole("button", { name: "Keep editing" }).click();
       assert.equal(new URL(page.url()).hash, "#/grow-plan");
-      await page.locator("#desktop-room").selectOption({ label: "Flower 1" });
+      assert.equal(await currentRoom(), "Flower 2");
+      await roomCard("Flower 1").click();
       await visible(page.getByRole("heading", { name: "Discard unsaved workspace changes?" }));
       await page.getByRole("button", { name: "Keep editing" }).click();
-      assert.equal(await page.locator("#desktop-room").inputValue(), "room:");
+      assert.equal(await currentRoom(), "Flower 2", "Keep editing stays in the room");
       await navigate("Overview");
       await page.getByRole("button", { name: "Discard and continue" }).click();
-      await visible(page.getByRole("heading", { level: 1, name: / overview$/ }));
+      await visible(overviewHeading("Flower 2"));
       await navigateSchedule();
       assert.notEqual(await page.locator("#steering-balance").inputValue(), "83");
       await setBalance(81);
@@ -473,7 +490,7 @@ try {
       await fresh("setup");
       await visible(page.locator("#room-name"));
       await page.locator("#room-name").fill("Must be discarded");
-      await page.locator("#desktop-room").selectOption({ label: "Flower 1" });
+      await roomCard("Flower 1").click();
       await visible(page.getByRole("heading", { name: "Discard unsaved workspace changes?" }));
       await page.getByRole("button", { name: "Discard and continue" }).click();
       assert.equal(await page.locator("#room-name").inputValue(), "Flower 1");
@@ -1048,32 +1065,42 @@ try {
             },
           ],
         });
-        await lp
-          .locator(".desktop-sidebar")
-          .getByRole("button", { name: "Overview", exact: true })
-          .click();
+        await navigate("Overview", lp);
         await lp.getByRole("button", { name: "Refresh controller data" }).click();
         await visible(lp.getByText("The irrigation strategy controls this room", { exact: true }));
-        const targetCell = lp
-          .locator(".zone-table-desktop tbody tr")
-          .first()
-          .locator("td")
-          .filter({ hasText: "Strategy · threshold" });
-        assert.match(await targetCell.innerText(), /77/);
+        // A zone's target is in its details sheet, opened from its card on the Overview: the
+        // Moisture fact names the target and its value.
+        const zoneTarget = async () => {
+          await lp.locator('[data-zone-card="1"] .zone-card-name').click();
+          const sheet = lp.getByRole("dialog");
+          const target = sheet
+            .locator(".detail-metrics > div")
+            .filter({ has: lp.locator("span", { hasText: /^Moisture$/ }) })
+            .locator("small")
+            .filter({ hasText: "Strategy · " });
+          await visible(target);
+          const text = await target.innerText();
+          await lp.keyboard.press("Escape");
+          await sheet.waitFor({ state: "hidden" });
+          return text;
+        };
+        assert.match(await zoneTarget(), /77/);
         const mutations = () =>
           apiCalls.filter(
             (call) => !["setup_read", "strategy_get", "strategy_preview"].includes(call.action),
           );
         const writesBeforeToday = structuredClone(mutations());
-        await lp
-          .locator(".desktop-sidebar")
-          .getByRole("button", { name: "Irrigation strategy", exact: true })
-          .click();
-        await visible(lp.getByRole("heading", { name: "Today’s targets", exact: true }));
-        await visible(lp.getByText("Active schedule · read only", { exact: true }));
+        await navigate("Strategy", lp);
+        const today = lp
+          .getByRole("navigation", { name: "Irrigation strategy views" })
+          .getByRole("button", { name: "Today", exact: true });
+        await visible(today);
+        assert.equal(await today.getAttribute("aria-current"), "page");
+        await visible(lp.locator('.targets-banner[data-source="schedule"]'));
+        await visible(lp.getByText("The schedule’s targets today · read only", { exact: true }));
         await visible(lp.getByRole("link", { name: "Open schedule", exact: true }));
-        const activeTargets = lp.locator(".settings-group").filter({
-          has: lp.getByRole("heading", { name: "Active scheduled targets", exact: true }),
+        const activeTargets = lp.locator(".phase-card.scheduled-targets").filter({
+          has: lp.locator("strong", { hasText: /^The schedule’s targets today$/ }),
         });
         const scheduledVwc = activeTargets
           .locator(".setting-field")
@@ -1084,9 +1111,11 @@ try {
         assert.equal((await scheduledVwc.locator("strong").innerText()).trim(), "77");
         assert.equal((await scheduledEc.locator("strong").innerText()).trim(), "4.2 mS/cm");
         assert.equal(await lp.locator('input[id^="setting-"], select[id^="choice-"]').count(), 0);
+        // "Review and apply" lives in the draft bar, which only a draft brings up: none can be made.
         assert.equal(
-          await lp.getByRole("button", { name: "Review changes", exact: true }).isDisabled(),
-          true,
+          await lp.getByRole("button", { name: "Review and apply", exact: true }).count(),
+          0,
+          "Nothing can be reviewed or applied while the schedule is in charge",
         );
         assert.deepEqual(
           mutations(),
@@ -1110,13 +1139,10 @@ try {
           writesBeforeToday,
           "An expired schedule must not enable fallback writes",
         );
-        await lp
-          .locator(".desktop-sidebar")
-          .getByRole("button", { name: "Overview", exact: true })
-          .click();
+        await navigate("Overview", lp);
         await lp.getByRole("button", { name: "Refresh controller data" }).click();
         await visible(lp.getByText("Irrigation strategy snapshot unavailable", { exact: true }));
-        assert.doesNotMatch(await targetCell.innerText(), /77|54/);
+        assert.doesNotMatch(await zoneTarget(), /77|54/);
         await lp.screenshot({ path: out + "workspace-stale-plan.png", fullPage: true });
         await navigateSetup(lp);
         await visible(lp.locator("#room-name"));
@@ -1160,7 +1186,7 @@ try {
         await tp.goto(origin + "/workspace-theme-parent.html");
         const frame = tp.frames().find((f) => f !== tp.mainFrame());
         assert.ok(frame);
-        await visible(frame.getByRole("heading", { level: 1, name: / overview$/ }));
+        await visible(overviewHeading("Flower 2", frame));
         await frame.waitForFunction(
           () =>
             document.documentElement.dataset.themeSource === "home-assistant" &&
@@ -1202,11 +1228,8 @@ try {
         await visible(frame.locator("#setup-room"));
         await settled(frame); // the tabs ease between their colours
         await tp.screenshot({ path: out + "ha-native-dark-rooms-setup.png" });
-        await frame
-          .locator(".desktop-sidebar")
-          .getByRole("button", { name: "Overview", exact: true })
-          .click();
-        await visible(frame.getByRole("heading", { level: 1, name: / overview$/ }));
+        await navigate("Overview", frame);
+        await visible(overviewHeading("Flower 2", frame));
         await tp.setViewportSize({ width: 390, height: 844 });
         await tp.screenshot({ path: out + "ha-native-dark-mobile-overview.png" });
         await tp.setViewportSize({ width: 1440, height: 1000 });
@@ -1224,10 +1247,7 @@ try {
               .getPropertyValue("--ha-native-canvas")
               .trim() === "#fafafa",
         );
-        await frame
-          .locator(".desktop-sidebar")
-          .getByRole("button", { name: "Settings", exact: true })
-          .click();
+        await navigate("Settings", frame);
         await frame.getByRole("button", { name: "Light", exact: true }).click();
         await frame.waitForFunction(
           () => document.documentElement.dataset.themeSource === "override",
@@ -1276,7 +1296,8 @@ try {
       try {
         await mkdir(fileURLToPath(new URL("../../img/", import.meta.url)), { recursive: true });
         await open("overview");
-        await lp.locator(".timeline-zone").first().waitFor();
+        // The zones' day charts draw once the day's history has loaded.
+        await lp.locator(".zone-mini-chart").first().waitFor();
         // Light with nothing saved: the default.
         assert.equal(
           await lp.evaluate(() => document.documentElement.classList.contains("dark")),
@@ -1298,7 +1319,7 @@ try {
         // On a phone: the Overview, the Reservoir and today's plan.
         await lp.setViewportSize({ width: 390, height: 844 });
         for (const [route, name, ready] of [
-          ["overview", "mobile-overview.png", ".timeline-zone"],
+          ["overview", "mobile-overview.png", ".zone-mini-chart"],
           ["reservoir", "mobile-reservoir.png", "[data-batch-status]"],
           ["strategy", "mobile-plan.png", ".planning-curve"],
         ]) {

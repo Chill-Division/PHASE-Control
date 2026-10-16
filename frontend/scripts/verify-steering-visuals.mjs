@@ -29,6 +29,8 @@ const context = await browser.newContext({
 });
 // Follows the device's colour scheme, as the dashboard did by default before it defaulted to light.
 const followDevice = () => {
+  // The blank page between checks (fresh) has no storage.
+  if (location.protocol === "about:") return;
   if (!localStorage.getItem("irrigation-theme")) localStorage.setItem("irrigation-theme", "auto");
 };
 await context.addInitScript(followDevice);
@@ -53,6 +55,9 @@ page.setDefaultTimeout(10000);
 page.on("pageerror", (e) => errors.push(e.message));
 page.on("dialog", (d) => d.accept());
 async function fresh(route) {
+  // Through a blank page, so a draft a failed check left behind cannot hold the route: within the
+  // same document the dashboard keeps the page with a draft and asks before leaving it.
+  await page.goto("about:blank");
   await page.goto(`${origin}/dashboard.html?demo=1#/${route}`, { waitUntil: "networkidle" });
   await page.reload({ waitUntil: "networkidle" });
 }
@@ -87,29 +92,45 @@ async function noOverflow() {
 }
 const field = (suffix) => page.locator(`[id="setting-number.crop_steering_zone_1_${suffix}"]`);
 const line = (name) => page.locator(`[data-planning-line="${name}"]`);
+// Whose targets the page shows: a chip per zone, then "Whole room".
+const zoneChip = (n) =>
+  page.locator(".target-chips").getByRole("button", { name: new RegExp("Zone " + n) });
+// The settings sit in phase cards beside the day, one open at a time: by default the card of the
+// zone's phase now, and again after another zone is picked. A card opens by its head; `card` is a
+// phase ("P3") or a group's name ("Substrate").
+async function openCard(card) {
+  const section = page.locator(
+    /^P[0-3]$/.test(card)
+      ? `section.phase-card[data-phase="${card}"]`
+      : `section.phase-card[aria-label="${card}"]`,
+  );
+  const head = section.locator(".phase-card-head");
+  if ((await head.getAttribute("aria-expanded")) !== "true") await head.click();
+  await section.locator('.phase-card-head[aria-expanded="true"]').waitFor();
+}
+// The draft's bar at the foot of the page, there while the draft holds a change.
+const draftBar = page.getByRole("region", { name: "Unsaved changes" });
+const discard = draftBar.getByRole("button", { name: "Discard", exact: true });
 try {
   await check(
     "P3 floor follows numeric edits; saved baseline and room values remain unchanged",
     async () => {
       await fresh("strategy");
-      await page.getByRole("heading", { name: "Today’s targets", exact: true }).waitFor();
-      await page
-        .getByRole("navigation", { name: "Setpoint phase" })
-        .getByRole("button", { name: "P3", exact: true })
-        .click();
+      await page.locator(".targets-banner").waitFor();
+      await openCard("P3");
       const floor = field("p3_emergency_vwc_threshold");
       // Each zone's axis scales to its own recorded data, so zones are compared by value and a
       // zone's draft line only against that same zone's saved line, never by pixels across zones.
-      const zoneTab = (n) =>
-        page
-          .locator(".strategy-zone-picker")
-          .getByRole("button", { name: new RegExp("Zone " + n) });
+      const zoneTab = async (n) => {
+        await zoneChip(n).click();
+        await openCard("P3");
+      };
       const otherFloor = page.locator(
         '[id="setting-number.crop_steering_zone_2_p3_emergency_vwc_threshold"]',
       );
-      await zoneTab(2).click();
+      await zoneTab(2);
       const other = await otherFloor.inputValue();
-      await zoneTab(1).click();
+      await zoneTab(1);
       const original = await floor.inputValue();
       const savedY = await line("baseline-p3-floor").getAttribute("y1");
       const curve = await line("vwc").getAttribute("d");
@@ -121,7 +142,7 @@ try {
         curve,
         "Emergency floor must not pretend to reshape daytime moisture",
       );
-      await page.getByRole("button", { name: "Discard draft", exact: true }).waitFor();
+      await discard.waitFor();
       await noOverflow();
       await axe("manual preview");
       await page.evaluate(() => {
@@ -131,16 +152,16 @@ try {
       await lightShot(page, page, {
         path: fileURLToPath(new URL("../../img/manual-setpoints.png", import.meta.url)),
       });
-      await zoneTab(2).click();
+      await zoneTab(2);
       assert.equal(await otherFloor.inputValue(), other, "Zone 2 remains unchanged");
       assert.equal(
         await line("p3-floor").getAttribute("y1"),
         await line("baseline-p3-floor").getAttribute("y1"),
         "Zone 2 draws no draft floor",
       );
-      await zoneTab(1).click();
+      await zoneTab(1);
       assert.equal(await floor.inputValue(), String(Number(original) + 5));
-      await page.getByRole("button", { name: "Discard draft", exact: true }).click();
+      await discard.click();
       assert.equal(await floor.inputValue(), original);
       assert.equal(await line("p3-floor").getAttribute("y1"), savedY);
     },
@@ -194,14 +215,29 @@ try {
   });
   await check("Room off stands the room down and says so", async () => {
     await fresh("overview");
-    await page.getByRole("button", { name: "Switch room off…" }).click();
+    // How the room runs is one choice, the mode pill in the Overview's heading: Room off, reviewed
+    // (the room's switch, one change) and applied.
+    await page.getByRole("button", { name: /^How Flower 2 runs: Steering\. Change$/ }).click();
+    await page
+      .getByRole("dialog", { name: "How Flower 2 runs" })
+      .getByRole("radio", { name: /^Room off/ })
+      .click();
     await page.getByRole("button", { name: /^Apply 1 change/ }).click();
-    const on = page.getByRole("button", { name: "Switch room on…" });
+    const on = page.getByRole("button", { name: /^How Flower 2 runs: Room off\. Change$/ });
     await on.first().waitFor();
     // One switch on the Overview, in its heading: the banner there only says so.
     assert.equal(await on.count(), 1);
+    assert.equal(
+      await page
+        .locator(".room-header")
+        .getByRole("button", { name: /Room off/ })
+        .count(),
+      1,
+    );
+    assert.equal(await page.getByRole("button", { name: "Switch room on…" }).count(), 0);
     const banner = page.locator(".room-off-banner");
     await banner.waitFor();
+    assert.equal(await banner.getByRole("button").count(), 0, "The Overview's banner only says so");
     assert.match(await banner.innerText(), /no irrigation, no alerts/i);
     await page.evaluate(() => window.scrollTo(0, 0));
     await lightShot(page, page, {
@@ -215,10 +251,7 @@ try {
   });
   await check("P1 controls reshape preview; invalid drafts cannot apply", async () => {
     await fresh("strategy");
-    await page
-      .getByRole("navigation", { name: "Setpoint phase" })
-      .getByRole("button", { name: "P1", exact: true })
-      .click();
+    await openCard("P1");
     const target = field("p1_target_vwc");
     // The VWC axis scales to what is plotted, so compare what each line plots, not its pixels.
     const before = await line("vwc").getAttribute("data-planning-values");
@@ -228,15 +261,17 @@ try {
     await target.fill("999");
     assert.equal(await target.getAttribute("aria-invalid"), "true");
     assert.equal(
-      await page.getByRole("button", { name: "Review changes", exact: true }).isDisabled(),
+      await draftBar.getByRole("button", { name: "Review and apply", exact: true }).isDisabled(),
       true,
     );
-    await page.getByRole("button", { name: "Discard draft", exact: true }).click();
+    await discard.click();
   });
   await check("A target dragged on the chart stays under the pointer with the page scrolled down", async () => {
     // Scrolled to the end, the sticky preview is held in place by its foot: the field being dragged
     // turning into a draft, and the words around the chart changing length, slid the chart under a
-    // still pointer, and the maintenance trigger ran away (from 55.5 to 30 in one 10 px step).
+    // still pointer, and the maintenance trigger ran away (from 55.5 to 30 in one 10 px step). The
+    // chart is no longer sticky: brought back into view from the end, it is dragged with the page
+    // scrolled down, while the field turns into a draft and the draft bar appears.
     await page.setViewportSize({ width: 1280, height: 720 });
     await fresh("strategy");
     await page.evaluate(() => {
@@ -244,6 +279,10 @@ try {
     });
     const handle = page.locator("circle.planning-handle[aria-label^='Maintenance']").first();
     await handle.scrollIntoViewIfNeeded();
+    assert.ok(
+      await page.evaluate(() => document.scrollingElement.scrollTop > 0),
+      "the page is scrolled down",
+    );
     const chartTop = () => handle.evaluate((h) => h.ownerSVGElement.getBoundingClientRect().top);
     const handleY = () =>
       handle.evaluate((h) => {
@@ -267,13 +306,14 @@ try {
     await page.mouse.up();
     const end = Number(await handle.getAttribute("aria-valuenow"));
     assert.ok(end < start && end > start - 30, `80 px moved the trigger from ${start} to ${end}`);
-    await page.getByRole("button", { name: "Discard draft", exact: true }).click();
+    await discard.click();
     await page.setViewportSize({ width: 1600, height: 1100 });
   });
   await check(
     "Field capacity suggestion names its source, fills only the local draft and is never applied by itself",
     async () => {
       await fresh("strategy");
+      await openCard("Substrate");
       const capacity = field("field_capacity");
       const context = page.locator('[id="context-number.crop_steering_zone_1_field_capacity"]');
       // Zone 1's supervisor is tracking, so the controller has a learned peak to offer.
@@ -284,33 +324,32 @@ try {
         /^Suggestion · Learned peak 60\.0%, the ceiling the controller’s Auto Setpoints has learned for this zone\./,
       );
       assert.equal(await capacity.inputValue(), "70", "A suggestion must not change the field");
-      assert.equal(
-        await page.getByRole("button", { name: "Discard draft", exact: true }).count(),
-        0,
-        "A suggestion must not create a draft",
-      );
+      assert.equal(await discard.count(), 0, "A suggestion must not create a draft");
       await context.getByRole("button", { name: "Use 60% in draft", exact: true }).click();
       assert.equal(await capacity.inputValue(), "60", "The draft holds the suggested value");
       // Draft only: the controller keeps its saved value until the change is reviewed and applied.
-      await page.getByText("Currently 70 %", { exact: true }).waitFor();
+      await page
+        .locator('[id="hint-number.crop_steering_zone_1_field_capacity"]')
+        .getByText("Was 70 %", { exact: true })
+        .waitFor();
       assert.equal(
         await context.getByRole("button", { name: "Use 60% in draft", exact: true }).isDisabled(),
         true,
       );
-      await page.getByRole("button", { name: /^Review 1 change/ }).click();
+      assert.equal(await draftBar.locator(".draft-count").innerText(), "1", "One change in draft");
+      await draftBar.getByRole("button", { name: "Review and apply", exact: true }).click();
+      await page.getByRole("button", { name: /^Apply 1 change/ }).waitFor();
       assert.match(
         await page.getByRole("dialog").locator(".review-row").innerText(),
         /Zone 1 · Full saturation \(most it holds\)[\s\S]*70 %[\s\S]*60 %/,
       );
       await page.getByRole("button", { name: "Back to editing", exact: true }).click();
       await page.getByRole("dialog").waitFor({ state: "hidden" });
-      await page.getByRole("button", { name: "Discard draft", exact: true }).click();
+      await discard.click();
       assert.equal(await capacity.inputValue(), "70");
       // Zone 2's supervisor is still learning: the suggestion falls back to recorded history.
-      await page
-        .locator(".strategy-zone-picker")
-        .getByRole("button", { name: /Zone 2/ })
-        .click();
+      await zoneChip(2).click();
+      await openCard("Substrate");
       const typical = page.locator(
         '[id="context-number.crop_steering_zone_2_field_capacity"] .setting-suggestion',
       );
@@ -346,7 +385,10 @@ try {
     "Register, compare and archive runs with bounded dates and room isolation",
     async () => {
       await fresh("compare");
-      await page.getByRole("heading", { name: "Compare runs", exact: true }).waitFor();
+      // The page's own title is for a screen reader now: the section header names the page.
+      await page
+        .getByRole("heading", { name: "Compare runs", exact: true })
+        .waitFor({ state: "attached" });
       await page.getByRole("img", { name: /Recorded VWC and EC/ }).waitFor();
       const dateAgo = (days) => new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
       async function register(name, start, end = "") {
@@ -360,7 +402,7 @@ try {
       await page.getByRole("button", { name: "Add run", exact: true }).click();
       await page.getByLabel("Run name", { exact: true }).fill("Unsaved run draft");
       await page
-        .locator(".desktop-sidebar")
+        .locator("nav.app-rail")
         .getByRole("button", { name: "Overview", exact: true })
         .click();
       await page.getByRole("heading", { name: "Discard unsaved workspace changes?" }).waitFor();
@@ -426,7 +468,15 @@ try {
         .filter({ hasText: "Previous room run" })
         .getByRole("button", { name: "Restore", exact: true })
         .click();
-      await page.locator("#desktop-room").selectOption("room:f1_");
+      // Flower 1 (room:f1_), picked from the desktop's rooms column.
+      await page
+        .getByRole("navigation", { name: "Rooms" })
+        .getByRole("button", { name: /Flower 1/ })
+        .click();
+      await page
+        .locator('nav.rooms-column .room-card[aria-current="page"]')
+        .filter({ hasText: "Flower 1" })
+        .waitFor();
       await page.waitForFunction(
         () => document.querySelectorAll(".comparison-run-list article").length >= 2,
       );
@@ -454,10 +504,7 @@ try {
   await check("Mobile phase editing stays usable without page overflow", async () => {
     await page.setViewportSize({ width: 390, height: 844 });
     await fresh("strategy");
-    await page
-      .getByRole("navigation", { name: "Setpoint phase" })
-      .getByRole("button", { name: "P3", exact: true })
-      .click();
+    await openCard("P3");
     await field("p3_emergency_vwc_threshold").fill("40");
     await noOverflow();
     await axe("mobile setpoints");
