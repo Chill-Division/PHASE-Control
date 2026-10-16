@@ -14,8 +14,8 @@ SETTING_NAMES = {
     "p1_initial_shot_size": "First P1 shot",
     "p1_shot_size_increment": "Each P1 shot adds",
     "p1_time_between_shots": "Time between P1 shots",
-    "p1_maximum_shots": "Most P1 shots",
-    "p1_minimum_shots": "Fewest P1 shots",
+    "p1_maximum_shots": "Maximum P1 shots",
+    "p1_minimum_shots": "Minimum P1 shots",
     "p2_vwc_threshold": "Maintenance trigger",
     "p2_shot_size": "Maintenance shot",
     "p2_time_between_shots": "Time between P2 shots",
@@ -67,8 +67,8 @@ def amount(value, unit=""):
 
 
 def change(name, unit, old, new, who=None):
-    """A setting change in one sentence, as Today's events says it: "Sam raised Most P1 shots to 10
-    (was 6)"; with nobody known, "Most P1 shots raised to 10 (was 6)"."""
+    """A setting change in one sentence, as Today's events says it: "Sam raised Maximum P1 shots to
+    10 (was 6)"; with nobody known, "Maximum P1 shots raised to 10 (was 6)"."""
     way = "raised" if new > old else "lowered"
     to, was = amount(new, unit), amount(old, unit)
     return f"{who} {way} {name} to {to} (was {was})" if who else f"{name} {way} to {to} (was {was})"

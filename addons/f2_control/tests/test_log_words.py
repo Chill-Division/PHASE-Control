@@ -155,7 +155,7 @@ def test_setting_names_are_the_dashboards():
 
 
 def test_a_change_is_one_sentence_as_the_dashboard_says_it():
-    assert log_words.change("Most P1 shots", "", 6, 10, "Sam") == "Sam raised Most P1 shots to 10 (was 6)"
+    assert log_words.change("Maximum P1 shots", "", 6, 10, "Sam") == "Sam raised Maximum P1 shots to 10 (was 6)"
     assert log_words.change("Maintenance trigger", "%", 71.3, 63.3, "Auto setpoints") == (
         "Auto setpoints lowered Maintenance trigger to 63.3% (was 71.3%)"
     )
@@ -254,13 +254,13 @@ def test_a_setting_change_is_logged_with_who_made_it(monkeypatch, capsys):
     )
     c.rooms[0].state[1].update(phase="P2", last_daily_reset=_Clock.now().date())
     c.loop_once(_Clock.now())  # the first read only notes it
-    assert "Most P1 shots" not in capsys.readouterr().out
+    assert "Maximum P1 shots" not in capsys.readouterr().out
     fake.set_state(entity, "10")
     c.loop_once(_Clock.now())
-    said = [line for line in capsys.readouterr().out.splitlines() if "Most P1 shots" in line]
-    assert said == ["2026-09-19 14:00:00 GR2 · Bench 1 (Z1) · Sam raised Most P1 shots to 10 (was 6)"]
+    said = [line for line in capsys.readouterr().out.splitlines() if "Maximum P1 shots" in line]
+    assert said == ["2026-09-19 14:00:00 GR2 · Bench 1 (Z1) · Sam raised Maximum P1 shots to 10 (was 6)"]
     url, params = next(item for item in asked if "/logbook/" in item[0])
     assert params["entity"] == entity
     # Said once: the next read has nothing new.
     c.loop_once(_Clock.now())
-    assert "Most P1 shots" not in capsys.readouterr().out
+    assert "Maximum P1 shots" not in capsys.readouterr().out
