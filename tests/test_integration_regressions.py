@@ -53,8 +53,8 @@ def test_dead_placeholder_sensor_descriptors_stay_removed():
 
 
 def test_setup_removes_only_this_rooms_retired_entities(monkeypatch):
-    """_RETIRED is matched per platform, per room, and a zone key covers every zone's copy. The
-    global P2 EC thresholds stay: only their per-zone copies were retired."""
+    """_RETIRED is matched per platform, per room, and a zone key covers every zone's copy,
+    not a room-level entity of the same name: only per-zone multipliers were retired."""
     from homeassistant.helpers import entity_registry as er
 
     integration = _load_integration_init()
@@ -62,7 +62,7 @@ def test_setup_removes_only_this_rooms_retired_entities(monkeypatch):
     items = [
         ("number", head + "zone_12_shot_size_multiplier", "number.multiplier"),
         ("number", head + "zone_3_p2_ec_high_threshold", "number.zone_copy"),
-        ("number", head + "p2_ec_high_threshold", "number.global_kept"),
+        ("number", head + "shot_size_multiplier", "number.global_kept"),
         ("sensor", head + "zone_3_shot_size_multiplier", "sensor.other_platform"),
         ("button", head + "zone_1_trigger_shot", "button.trigger"),
         (

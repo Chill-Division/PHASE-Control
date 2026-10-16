@@ -45,9 +45,8 @@ def rig(monkeypatch, tmp_path):
         setup.setattr(controller.Controller, "_read_state_file", lambda self: {})
         c = controller.Controller()
     c._state_path = str(tmp_path / "state.json")
-    for eid in ("input_boolean.kill", "switch.crop_steering_system_enabled",
-                "switch.crop_steering_auto_irrigation_enabled",
-                "switch.crop_steering_zone_1_enabled", "switch.crop_steering_zone_2_enabled"):
+    for eid in ("input_boolean.kill", "switch.crop_steering_zone_1_enabled",
+                "switch.crop_steering_zone_2_enabled"):
         fake.set_state(eid, "on")
     for eid in ("switch.p", "switch.m", "switch.v1", "switch.v2"):
         fake.set_state(eid, "off")
@@ -71,6 +70,12 @@ def crashed(c, fake, pump=0, main=2, valve=3):
     c._load_state()  # what the restarted controller reads back
     fake.calls.clear()
     return c.rooms[0]
+
+
+def zones_off(fake):
+    """Both zones switched off: no new shot starts, and the kill switch stays on, as recovery needs."""
+    for zone in (1, 2):
+        fake.set_state(f"switch.crop_steering_zone_{zone}_enabled", "off")
 
 
 def offs(fake):
@@ -143,7 +148,7 @@ def test_an_old_state_file_loads_and_a_damaged_record_is_ignored(rig):
 def test_after_a_crash_mid_shot_the_next_loop_closes_what_that_shot_opened(rig):
     c, fake, _ = rig
     crashed(c, fake)
-    fake.set_state("switch.crop_steering_system_enabled", "off")  # nothing else may fire in this loop
+    zones_off(fake)  # nothing else may fire in this loop
     c.loop_once(datetime(2026, 9, 23, 12, 0))
     assert offs(fake) == ["switch.v1", "switch.m", "switch.p"]  # the valve first, then back up the line
     assert c.rooms[0].shot_inflight is None and c.rooms[0].hardware_fault is None
@@ -318,7 +323,7 @@ def test_without_a_record_a_latched_hold_switches_nothing_off(rig):
                                  "entities": ["switch.m", "switch.p", "switch.v1", "switch.v2"]}
     for eid in ("switch.p", "switch.m", "switch.v2"):
         fake.set_state(eid, "on")
-    fake.set_state("switch.crop_steering_system_enabled", "off")
+    zones_off(fake)
     c.loop_once(datetime(2026, 9, 23, 12, 0))
     assert offs(fake) == []
 
@@ -354,7 +359,7 @@ def test_an_alert_home_assistant_did_not_take_is_raised_again_and_only_then_goes
 
 def test_a_hold_latched_while_home_assistant_was_away_is_announced_once_it_is_back(rig, monkeypatch):
     c, fake, _ = rig
-    fake.set_state("switch.crop_steering_system_enabled", "off")  # nothing may fire in these loops
+    zones_off(fake)  # nothing may fire in these loops
     up = {"ok": False}
     real = controller.ha_call
 

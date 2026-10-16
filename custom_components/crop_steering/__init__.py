@@ -83,6 +83,11 @@ _RETIRED = {
         "zone_p2_ec_low_threshold",
         "zone_ec_target_veg_p3",
         "zone_ec_target_gen_p3",
+        # 1.3.0: their room-level copies too, read only by display sensors that went with them
+        "p2_ec_high_threshold",
+        "p2_ec_low_threshold",
+        "ec_target_veg_p3",
+        "ec_target_gen_p3",
         "zone_shot_size_multiplier",
         # the source-water gate's limits (2.26.0: the gate is gone)
         "irrigation_ph_min",
@@ -97,11 +102,27 @@ _RETIRED = {
         "zone_priority",
         "zone_crop_profile",
         "zone_phase_override",
+        # 1.3.0: a room phase nothing waters by, and named strategy stages that rewrote every
+        # zone's targets from Home Assistant, outside the dashboard's review
+        "irrigation_phase",
+        "recipe_stage",
     },
-    "sensor": {"water_usage_daily", "next_irrigation_time"},
+    "sensor": {
+        "water_usage_daily",
+        "next_irrigation_time",
+        # 1.3.0: display-only figures computed from the selects and numbers above
+        "current_phase",
+        "ec_ratio",
+        "p2_vwc_threshold_adjusted",
+    },
     "switch": {
         "analytics_enabled",
         "zone_dripper_protection",
+        # System Enabled and Auto Irrigation Enabled: retired in 2.25.0, when the room's engine
+        # switch became the one switch that stops watering, and kept hidden for older controllers.
+        # One that read off still kept a room from watering, set right only in Home Assistant.
+        "system_enabled",
+        "auto_irrigation_enabled",
         *(
             f"intelligence_{name}_enabled"
             for name in (
@@ -165,17 +186,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Before the platforms register this room's entities: a room with none was set up just now.
     fresh = _is_new_room(hass, entry)
 
-    # Load this room's named-stage recipe (server-side Store) before the platforms
-    # come up, so the recipe select + sensor can read it on setup.
-    try:
-        from .recipe import RecipeManager
-
-        manager = RecipeManager(hass, entry)
-        await manager.async_init()
-        hass.data[DOMAIN].setdefault("_recipe", {})[entry.entry_id] = manager
-    except Exception as err:  # pragma: no cover - never block setup on the recipe store
-        _LOGGER.warning("Recipe store unavailable: %s", err)
-
     # Stock tanks: stored per room and drawn down per batch; the stock sensor reads them.
     try:
         from .stock_api import async_setup_stock
@@ -199,7 +209,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await async_setup_selftest(hass)
 
     _remove_retired_entities(hass, entry)
-    _hide_retired_switches(hass, entry)
 
     # Set up platforms
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
@@ -275,29 +284,6 @@ def _remove_retired_entities(hass: HomeAssistant, entry: ConfigEntry) -> None:
         _LOGGER.info("Removed %d retired entities from the registry", removed)
 
 
-# Switches kept only for controllers from 2.24.0 or before (see switch.py): hidden, not removed.
-_HIDDEN_RETIRED = {"system_enabled", "auto_irrigation_enabled"}
-
-
-def _hide_retired_switches(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Hide this room's existing registry entries for _HIDDEN_RETIRED. A new install creates them
-    hidden (entity_registry_visible_default); an older one registered them visible."""
-    from homeassistant.helpers import entity_registry as er
-
-    registry = er.async_get(hass)
-    head = f"{DOMAIN}_{entry.entry_id}_"
-    for item in er.async_entries_for_config_entry(registry, entry.entry_id):
-        key = str(item.unique_id).removeprefix(head)
-        if (
-            item.domain == "switch"
-            and key in _HIDDEN_RETIRED
-            and item.hidden_by is None
-        ):
-            registry.async_update_entity(
-                item.entity_id, hidden_by=er.RegistryEntryHider.INTEGRATION
-            )
-
-
 def _entry_config(entry: ConfigEntry) -> dict[str, Any]:
     """Return the active config entry payload with options overriding base data."""
     return {
@@ -331,7 +317,6 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     except Exception:  # pragma: no cover - defensive
         pass
 
-    hass.data.get(DOMAIN, {}).get("_recipe", {}).pop(entry.entry_id, None)
     from .strategy import async_unload_strategy
 
     await async_unload_strategy(hass, entry)

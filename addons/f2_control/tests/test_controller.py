@@ -174,8 +174,6 @@ def test_hold_entities_are_configurable_and_f2_ids_no_longer_hardcoded():
             ("ok", _desc(pump="switch.p", mainline="switch.m", valves={"1": "switch.v1"})),
         "sensor.crop_steering_vwc_zone_1": ("50", {}),
         "input_boolean.f2_control_enabled": ("on", {}),
-        "switch.crop_steering_system_enabled": ("on", {}),
-        "switch.crop_steering_auto_irrigation_enabled": ("on", {}),
         "switch.crop_steering_zone_1_enabled": ("on", {}),
         # the OLD hardcoded F2 hold — must be IGNORED now
         "input_boolean.f2_fill_mode": ("on", {}),
