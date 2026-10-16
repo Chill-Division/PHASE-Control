@@ -141,13 +141,13 @@ const WORDS: Record<string, SettingWords> = {
     help: "Lets each ramp shot soak in before the next. Athena: 15 to 30 minutes.",
   },
   p1_maximum_shots: {
-    label: "Most P1 shots",
-    short: "Most P1 shots",
+    label: "Maximum P1 shots",
+    short: "Maximum P1 shots",
     help: "The ramp ends after this many shots, even below the peak VWC target.",
   },
   p1_minimum_shots: {
-    label: "Fewest P1 shots",
-    short: "Fewest P1 shots",
+    label: "Minimum P1 shots",
+    short: "Minimum P1 shots",
     help: "The ramp hands over to P2 only once this many shots have gone in, even if moisture reaches the peak VWC target sooner.",
   },
   p2_vwc_threshold: {
@@ -266,7 +266,7 @@ const EC_WORDS: Record<string, SettingWords> = {
   "1": {
     label: "Substrate EC target, P1",
     short: "P1 EC target",
-    help: "At the peak VWC target, the ramp ends only once substrate EC is no more than 15% above this (or after the most P1 shots).",
+    help: "At the peak VWC target, the ramp ends only once substrate EC is no more than 15% above this (or after the maximum P1 shots).",
   },
   "2": {
     label: "Substrate EC target, P2",
@@ -306,7 +306,7 @@ const DETAILS: Record<string, SettingDetail> = {
   },
   p1_target_vwc: {
     what: "The moisture the morning ramp brings the substrate up to: the top of the day’s range. Athena calls it the Peak VWC% Target.",
-    when: "In P1, a ramp shot fires while moisture is below it (or below full saturation, if that is lower) and the time between P1 shots has passed. P1 hands over to P2 once moisture has reached it, the P1 minimum shots have fired (3 by default, set in Home Assistant) and substrate EC is no more than 15% above the P1 target; or after the most P1 shots.",
+    when: "In P1, a ramp shot fires while moisture is below it (or below full saturation, if that is lower) and the time between P1 shots has passed. P1 hands over to P2 once moisture has reached it, the P1 minimum shots have fired (3 by default, set in Home Assistant) and substrate EC is no more than 15% above the P1 target; or after the maximum P1 shots.",
     affects:
       "Where the day peaks, which the P3 dryback target is measured from, and how much runoff the ramp makes. The maintenance trigger is always kept at least 1 point below it.",
     auto: AUTO,
@@ -315,7 +315,7 @@ const DETAILS: Record<string, SettingDetail> = {
   },
   p1_initial_shot_size: {
     what: `The size of the ramp’s first shot, ${OF_SUBSTRATE}.`,
-    when: "The first shot of P1. Each later ramp shot adds “Each P1 shot adds” to the one before, until the most P1 shots.",
+    when: "The first shot of P1. Each later ramp shot adds “Each P1 shot adds” to the one before, until the maximum P1 shots.",
     affects:
       "Ramp shots are sized by substrate EC against the P1 target: up to twice this while EC is well above it, as little as half while it is well below.",
     athena:
@@ -332,14 +332,14 @@ const DETAILS: Record<string, SettingDetail> = {
       "“2%-6% shots, spaced 15-30 minutes apart allows the substrate to gradually build up to target VWC%” (p. 36).",
   },
   p1_maximum_shots: {
-    what: "The most shots the ramp fires.",
+    what: "The maximum number of shots the ramp fires.",
     when: "After this many ramp shots P1 hands over to P2, wherever moisture is. P2 then waters whenever moisture reads below the maintenance trigger.",
   },
   p1_minimum_shots: {
-    what: "The fewest shots the ramp fires before it hands over to P2.",
+    what: "The minimum number of shots the ramp fires before it hands over to P2.",
     when: "Each time the controller checks in P1, reaching the peak VWC target moves the zone to P2 only once this many ramp shots have gone in. Until then the zone stays in P1, and a ramp shot fires whenever moisture is back below the peak target.",
     affects:
-      "How many small shots build the morning up, and so how wet the substrate is at the top of the day. The most P1 shots still ends the ramp: a minimum above it runs as that maximum.",
+      "How many small shots build the morning up, and so how wet the substrate is at the top of the day. Maximum P1 shots still ends the ramp: a minimum above it runs as that maximum.",
   },
   p2_vwc_threshold: {
     what: "The level that triggers a daytime maintenance shot. The peak VWC target minus this is how far the substrate dries back during the day.",
@@ -417,7 +417,7 @@ const EC_DETAILS: Record<string, SettingDetail> = {
   },
   "1": {
     what: "The substrate (pore water) EC the ramp checks before it hands over.",
-    when: "At the peak VWC target, P1 ends only once substrate EC is no more than 15% above this. Until then, while the feed is weaker than the substrate and there is room below full saturation, the ramp keeps shooting at the ceiling to flush, up to the most P1 shots.",
+    when: "At the peak VWC target, P1 ends only once substrate EC is no more than 15% above this. Until then, while the feed is weaker than the substrate and there is room below full saturation, the ramp keeps shooting at the ceiling to flush, up to the maximum P1 shots.",
     affects:
       "Ramp shots are sized 1.2×, 1.5× or 2× while EC is above this (by up to 20%, up to 50%, or more), and 0.7× or 0.5× while it is under 80% or 50% of it.",
     auto: "After a ramp levels off, the controller may raise this (never above the P2 target) so a finished ramp can hand over. Auto setpoints is off by default.",

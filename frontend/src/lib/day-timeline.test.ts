@@ -541,8 +541,8 @@ describe("who changed a setting", () => {
     ).toBe("Sam");
   });
   it("says it in one sentence: who, which way, the new value and the one it replaced", () => {
-    expect(changeSentence("Most P1 shots", "", 6, 10, "Sam")).toBe(
-      "Sam raised Most P1 shots to 10 (was 6)",
+    expect(changeSentence("Maximum P1 shots", "", 6, 10, "Sam")).toBe(
+      "Sam raised Maximum P1 shots to 10 (was 6)",
     );
     expect(changeSentence("Maintenance trigger", "%", 71.3, 63.3, "Auto setpoints")).toBe(
       "Auto setpoints lowered Maintenance trigger to 63.3% (was 71.3%)",

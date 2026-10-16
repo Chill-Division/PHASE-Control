@@ -191,7 +191,7 @@ describe("room model", () => {
       overrideUntil: null,
     });
   });
-  it("offers EC stacking and the fewest P1 shots, which the controller reads", () => {
+  it("offers EC stacking and the minimum P1 shots, which the controller reads", () => {
     const states = fixture();
     states["switch.crop_steering_ec_stacking_enabled"] = entity(
       "switch.crop_steering_ec_stacking_enabled",
@@ -214,8 +214,8 @@ describe("room model", () => {
         value: true,
       }),
     ).toBeNull();
-    const fewest = view.settings.find((s) => s.entityId.endsWith("zone_1_p1_minimum_shots"));
-    expect(fewest).toMatchObject({ label: "Fewest P1 shots", group: "P1 · Ramp-up", zoneId: 1 });
+    const minimum = view.settings.find((s) => s.entityId.endsWith("zone_1_p1_minimum_shots"));
+    expect(minimum).toMatchObject({ label: "Minimum P1 shots", group: "P1 · Ramp-up", zoneId: 1 });
   });
   it("surfaces the engine hardware latch and room-filters the shared activity feed", () => {
     const states = fixture();
