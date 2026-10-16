@@ -235,17 +235,20 @@ even when the day's water limit is spent.
 - the controller has just started and is still reading the room's settings (up to 3 minutes);
 - a pump, main line or valve switch reads neither on nor off (its device is offline);
 - the zone is under manual override;
-- a hardware fault has latched: switch watering off, fix it, check everything reads off, switch
-  watering back on.
+- a hardware fault has latched: set the room to Watching only (watering off), fix it, check
+  everything reads off, then set it back to Steering.
 
 ## Reading the grow-day chart
 
-![The Overview: today's grow day for every zone](../img/operator-dashboard.png)
+![The Overview: the grow day on its clock, and each zone's day](../img/operator-dashboard.png)
 
-**Today's grow day** on the Overview runs from lights-on to the next lights-on, one row per zone.
+The Overview draws the room's grow day as a clock (**Today**): lights-on at the top, one ring a zone,
+its phases in their colours, a notch for each shot, the rest of the day faded as projected. Open a
+zone (its name or its small chart) for its own chart, **<zone> today**, which runs from lights-on to
+the next lights-on.
 
-- **The coloured bar** is the phase: P0 dryback, P1 ramp, P2 maintenance, P3 overnight. The dark band
-  is lights-off.
+- **The coloured bar** is the phase, in the dashboard's phase colours: P0 dryback amber, P1 ramp
+  green, P2 maintenance blue, P3 overnight indigo. The dark band is lights-off.
 - **The solid blue line** is today's moisture, and **the dashed blue line** a projection: an estimate
   from the zone's drying rates. **The grey line** is yesterday, or a grey band for a typical day
   (**Compare with**).

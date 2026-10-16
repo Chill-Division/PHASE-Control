@@ -11,7 +11,7 @@ PHASE Control waters a grow room automatically. Every minute it reads each zone'
 
 **Deterministic, sensor-driven crop steering.** No AI makes any decision. Every shot comes from a published rule and your setpoints: the same readings, settings and day so far always give the same decision, and the dashboard shows the numbers behind each one. Nothing guesses, nothing makes up a reading, and nothing apologises after the fact.
 
-![The Overview: today's grow day for every zone, and the zones](https://raw.githubusercontent.com/Chill-Division/PHASE-Control/main/img/operator-dashboard.png)
+![The Overview: the room's grow day on its clock, what comes next, and each zone's day](https://raw.githubusercontent.com/Chill-Division/PHASE-Control/main/img/operator-dashboard.png)
 
 > **Safety first.** This switches real pumps and valves, unattended, on living plants. Set each room up with watering switched off, check every probe and switch it uses, and do a catch test (measure what the drippers actually deliver) before you let it water. It does not replace physical safety devices: use valves that close when power is lost, and a float switch or timer that can stop a pump on its own.
 
@@ -20,7 +20,8 @@ PHASE Control waters a grow room automatically. Every minute it reads each zone'
 - **The four-phase day, for every zone.** P0: the morning dryback. P1: small shots, a few minutes apart, up to your peak target. P2: a top-up whenever moisture falls to your trigger. P3: the overnight dryback, held at your dryback target, with a rescue shot if a zone still gets too dry. The day's counters start again at lights-on.
 - **Shots sized from your hardware.** Each zone's pot size, plant count, drippers and dripper flow turn a shot's percentage into litres and seconds, within a daily water limit and a maximum shot length.
 - **An irrigation strategy for the whole grow.** Steer each zone week by week, or day by day, between vegetative and generative; the targets change at lights-on. Keep the strategies that worked in a library.
-- **The grow day on one chart.** Each zone's phases, shots, holds and setting changes since lights-on, against its targets, yesterday and the projected rest of the day. Every setting change says who made it and what it replaced.
+- **The grow day at a glance.** The room's day as a clock, with what comes next, and a card for each zone with its own day. A zone's details chart its phases, shots, holds and setting changes since lights-on, against its targets, yesterday and the projected rest of the day. Every setting change says who made it and what it replaced.
+- **One page for a phone, a tablet and a computer.** How a room runs is one choice (Steering, Watching only or Room off), and every page says whether the room follows its schedule or Today's targets.
 - **Water use and runs compared.** Litres per zone by day, week and grow, today's water per plant, and this run lined up against an earlier one at the same age.
 - **It fails safe.** Every switch it turns off is read back, and one that stays on holds the room and alerts you. A zone whose probe dies follows a working zone, or a cautious timer. An empty room switches off: no watering, no alerts.
 - **Alerts you can act on.** Each alert, as a Repairs card or a notification, carries a code (such as CS-601) that the built-in Help explains: what it means, what happens to watering meanwhile, and what to do.
@@ -75,7 +76,7 @@ PHASE Control comes in two parts, and watering needs both: the **integration** k
 
 ## Support
 
-Report a problem or ask a question in [GitHub issues](https://github.com/Chill-Division/PHASE-Control/issues). Include the error code if there is one, both version numbers (shown in the PHASE Control sidebar), and what the controller app's log says.
+Report a problem or ask a question in [GitHub issues](https://github.com/Chill-Division/PHASE-Control/issues). Include the error code if there is one, both version numbers (shown at the top of PHASE Control's **Help** page), and what the controller app's log says.
 
 ## Credits
 

@@ -6,7 +6,7 @@ Captured in October 2026 from the compiled application with isolated demo data, 
 
 ![Overview](../img/operator-dashboard.png)
 
-## Tank and pump
+## Feed: the tank and pump
 
 ![The tank's level, its level over the last 24 hours, the pump, and the controller's refills](../img/tank-status.png)
 

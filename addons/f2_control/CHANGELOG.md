@@ -6,6 +6,7 @@
 - Rooms & hardware no longer asks for the room's lights, which nothing used: day and night come from the lights-on and lights-off times.
 - Today can switch EC stacking on and set the minimum P1 shots, and a zone paused by hand in Home Assistant shows it and can be resumed.
 - The log names the P1 shot limits Minimum P1 shots and Maximum P1 shots, as the dashboard does.
+- The dashboard is redesigned for a phone, a tablet and a computer alike: the room's day as a clock, a card for each zone, and how a room runs as one choice.
 
 # 1.2.0
 
