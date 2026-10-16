@@ -21,8 +21,6 @@ DESCRIPTOR = "sensor.crop_steering_engine_config"
 OTHER_VALVE = "switch.gt4_irrigation_switch"
 ARMED = (
     KILL,
-    "switch.crop_steering_system_enabled",
-    "switch.crop_steering_auto_irrigation_enabled",
     "switch.crop_steering_zone_1_enabled",
 )
 

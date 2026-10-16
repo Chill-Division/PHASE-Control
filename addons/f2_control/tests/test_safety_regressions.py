@@ -36,8 +36,7 @@ def rig(monkeypatch, tmp_path):
         setup.setattr(controller.Controller, "_read_state_file", lambda self: {})
         c = controller.Controller()
     c._state_path = str(tmp_path / "state.json")
-    for eid in ("input_boolean.kill", "switch.crop_steering_system_enabled",
-                "switch.crop_steering_auto_irrigation_enabled",
+    for eid in ("input_boolean.kill",
                 "switch.crop_steering_zone_1_enabled", "switch.crop_steering_zone_2_enabled"):
         fake.set_state(eid, "on")
     for eid in ("switch.p", "switch.m", "switch.v1", "switch.v2"):
@@ -239,9 +238,7 @@ def test_fault_blocks_other_room_sharing_pump_but_not_independent_room(rig, monk
                                "input_boolean." + slug, 10, 22)
         c.rooms.append(room)
         c._load_room_state(room, {})
-        for eid in (room.enable_flag, "switch.crop_steering_" + slug + "_system_enabled",
-                    "switch.crop_steering_" + slug + "_auto_irrigation_enabled"):
-            fake.set_state(eid, "on")
+        fake.set_state(room.enable_flag, "on")
         for switch in (pump, "switch." + slug + "_main", "switch." + slug + "_valve"):
             if switch not in fake.states:  # its own feed path exists, switched off
                 fake.set_state(switch, "off")

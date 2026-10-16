@@ -33,9 +33,6 @@ from .const import (
     PROBE_METHODS,
     DOMAIN,
     CONF_NUM_ZONES,
-    DEFAULT_EC_RATIO,
-    DEFAULT_EC_FALLBACK,
-    VWC_ADJUSTMENT_PERCENT,
     PRODUCT_NAME,
     SOFTWARE_VERSION,
 )
@@ -58,11 +55,6 @@ SHOT_SIZE_KEYS = {
 
 # Base sensor descriptions (non-zone specific)
 BASE_SENSOR_DESCRIPTIONS = [
-    SensorEntityDescription(
-        key="current_phase",
-        name="Current Phase",
-        icon="mdi:water-circle",
-    ),
     # dryback_percentage is OWNED BY THE ENGINE (the add-on set_state from
     # _update_dryback_entities — computed per-zone from peak vs current VWC). It was a
     # coordinator-backed descriptor here whose native_value was always None, so it
@@ -89,19 +81,6 @@ BASE_SENSOR_DESCRIPTIONS = [
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=UnitOfTime.SECONDS,
         icon="mdi:timer-sand",
-    ),
-    SensorEntityDescription(
-        key="ec_ratio",
-        name="EC Ratio",
-        state_class=SensorStateClass.MEASUREMENT,
-        icon="mdi:division",
-    ),
-    SensorEntityDescription(
-        key="p2_vwc_threshold_adjusted",
-        name="P2 VWC Threshold Adjusted",
-        state_class=SensorStateClass.MEASUREMENT,
-        native_unit_of_measurement=PERCENTAGE,
-        icon="mdi:water-alert",
     ),
     SensorEntityDescription(
         key="configured_avg_vwc",
@@ -463,16 +442,10 @@ class CropSteeringSensor(SensorEntity):
         if self.entity_description.key in SHOT_SIZE_KEYS:
             seconds = self._shot_seconds_by_zone(self.entity_description.key)
             return max(seconds.values()) if seconds else None
-        elif self.entity_description.key == "ec_ratio":
-            return self._calculate_ec_ratio()
-        elif self.entity_description.key == "p2_vwc_threshold_adjusted":
-            return self._calculate_adjusted_p2_threshold()
         elif self.entity_description.key == "configured_avg_vwc":
             return self._calculate_avg_vwc()
         elif self.entity_description.key == "configured_avg_ec":
             return self._calculate_avg_ec()
-        elif self.entity_description.key == "current_phase":
-            return self._get_current_phase()
         else:
             # Other sensors return None (placeholder)
             return None
@@ -536,41 +509,6 @@ class CropSteeringSensor(SensorEntity):
             )
             seconds[zone] = ShotCalculator.capped_shot_seconds(raw, cap)
         return seconds
-
-    def _calculate_ec_ratio(self) -> float:
-        """Calculate current EC ratio vs target."""
-        try:
-            current_ec = self._calculate_avg_ec()
-            # Get current EC target based on phase and mode
-            target_ec = self._get_current_ec_target()
-
-            if target_ec > 0 and current_ec is not None:
-                return round(current_ec / target_ec, 2)
-            return DEFAULT_EC_RATIO
-        except Exception:
-            return DEFAULT_EC_RATIO
-
-    def _calculate_adjusted_p2_threshold(self) -> float:
-        """Calculate P2 VWC threshold adjusted for EC ratio."""
-        try:
-            base_threshold = self._get_number_value("p2_vwc_threshold")
-            ec_ratio = self._calculate_ec_ratio()
-            ec_high_threshold = self._get_number_value("p2_ec_high_threshold")
-            ec_low_threshold = self._get_number_value("p2_ec_low_threshold")
-
-            # Simplified adjustment logic
-            if ec_ratio > ec_high_threshold:
-                return round(
-                    base_threshold + VWC_ADJUSTMENT_PERCENT, 2
-                )  # Raise threshold when EC high
-            elif ec_ratio < ec_low_threshold:
-                return round(
-                    base_threshold - VWC_ADJUSTMENT_PERCENT, 2
-                )  # Lower threshold when EC low
-            else:
-                return round(base_threshold, 2)
-        except Exception:
-            return self._get_number_value("p2_vwc_threshold")
 
     def _zone_probe_ids(self, zone_num: int, metric: str) -> list[str]:
         """The probes mapped to a zone for `metric` ("vwc" or "ec"): the N-probe list, or the
@@ -821,83 +759,6 @@ class CropSteeringSensor(SensorEntity):
                     all_sensors.append(zone_config["ec_back"])
 
         return self._average_sensor_values(all_sensors, "ec")
-
-    def _get_number_value(self, key: str) -> float:
-        """Get value from integration number entity."""
-        try:
-            entity_id = f"number.crop_steering_{self._prefix}{key}"
-            state = self.hass.states.get(entity_id)
-            if state is None:
-                _LOGGER.debug(f"Number entity not found: {entity_id}")
-                return 0.0
-            if state.state not in ["unknown", "unavailable", "none", None]:
-                return float(state.state)
-            return 0.0
-        except (ValueError, TypeError) as e:
-            _LOGGER.warning(f"Could not parse number value for {key}: {e}")
-            return 0.0
-
-    def _get_current_ec_target(self) -> float:
-        """Get current EC target based on phase and steering mode."""
-        try:
-            # Get current phase and mode
-            phase_state = self.hass.states.get(
-                f"select.crop_steering_{self._prefix}irrigation_phase"
-            )
-            mode_state = self.hass.states.get(
-                f"select.crop_steering_{self._prefix}steering_mode"
-            )
-
-            if not phase_state or not mode_state:
-                return DEFAULT_EC_FALLBACK  # Default fallback
-
-            phase = phase_state.state
-            mode = mode_state.state.lower()
-
-            # Map to EC target entities
-            if mode == "vegetative":
-                if phase == "P0":
-                    return self._get_number_value("ec_target_veg_p0")
-                elif phase == "P1":
-                    return self._get_number_value("ec_target_veg_p1")
-                elif phase == "P2":
-                    return self._get_number_value("ec_target_veg_p2")
-                elif phase == "P3":
-                    return self._get_number_value("ec_target_veg_p3")
-            else:  # Generative
-                if phase == "P0":
-                    return self._get_number_value("ec_target_gen_p0")
-                elif phase == "P1":
-                    return self._get_number_value("ec_target_gen_p1")
-                elif phase == "P2":
-                    return self._get_number_value("ec_target_gen_p2")
-                elif phase == "P3":
-                    return self._get_number_value("ec_target_gen_p3")
-
-            return DEFAULT_EC_FALLBACK  # Default fallback
-        except Exception:
-            return DEFAULT_EC_FALLBACK
-
-    def _get_current_phase(self) -> str:
-        """Get current irrigation phase from the engine sensor."""
-        try:
-            # Check if there's a sensor from the engine
-            phase_sensor = self.hass.states.get(
-                f"sensor.crop_steering_{self._prefix}app_current_phase"
-            )
-            if phase_sensor and phase_sensor.state not in ["unknown", "unavailable"]:
-                return phase_sensor.state
-
-            # Fallback to integration select entity
-            phase_select = self.hass.states.get(
-                f"select.crop_steering_{self._prefix}irrigation_phase"
-            )
-            if phase_select and phase_select.state not in ["unknown", "unavailable"]:
-                return phase_select.state
-
-            return "P2"  # Default to maintenance phase
-        except Exception:
-            return "P2"
 
     @property
     def available(self) -> bool:

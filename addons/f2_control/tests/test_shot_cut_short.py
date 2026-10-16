@@ -67,8 +67,7 @@ def rig(monkeypatch, tmp_path):
         setup.setattr(controller.Controller, "_read_state_file", lambda self: {})
         c = controller.Controller()
     c._state_path = str(tmp_path / "state.json")
-    for eid in (KILL, "switch.crop_steering_system_enabled",
-                "switch.crop_steering_auto_irrigation_enabled",
+    for eid in (KILL,
                 "switch.crop_steering_zone_1_enabled", "switch.crop_steering_zone_2_enabled"):
         fake.set_state(eid, "on")
     for eid in (PUMP, MAIN, VALVE, "switch.v2", HOLD):

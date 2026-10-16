@@ -12,6 +12,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **One Home Assistant button.** The top bar's house button is gone, and the room and page move
+  left into its space. Home Assistant's menu opens from **Home Assistant** at the foot of the side
+  menu, under ☰ on a phone, as it already could.
+- **No hidden switch can stop watering.** Two on/off switches left over from older versions,
+  System Enabled and Auto Irrigation Enabled, are gone. Hidden in Home Assistant, either one, off,
+  kept a room from watering: switching watering on in PHASE Control never lasted, and only Home
+  Assistant could put it right. Now only the room's own Watering switch turns watering on and off.
+- **Old controls that did nothing are gone.** Home Assistant no longer shows a room-level
+  Irrigation Phase, a Strategy Stage, two P2 EC thresholds, two P3 EC targets or the three
+  readings worked out from them. None of them watered anything; a Strategy Stage picked in
+  Home Assistant rewrote every zone's targets, past the dashboard's review. Today, the Schedule and
+  saved strategies are where targets change.
+- **Rooms & hardware asks only for what the controller uses.** The Room lights picker is gone:
+  nothing ever read it, and day and night come from the lights-on and lights-off times (Irrigation
+  strategy → Today → the whole room). Home Assistant's own setup form no longer asks for a waste
+  valve either, which nothing ever switched. A room that recorded either loses it on its next save.
 - **The dashboard can set everything the controller reads.** EC stacking switches on and off
   beside Auto setpoints on Today, and the P1 card has **Minimum P1 shots**. A zone paused by hand
   in Home Assistant now says so, with until when, and its details can resume it. All three were
@@ -19,6 +35,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🔧 Technical notes
 
+- Dashboard: the top bar no longer has the HA shell's menu button ("Open Home Assistant menu"); the
+  sidebar footer's **Home Assistant** button, in the desktop sidebar and the phone's sheet, is the
+  one way to `haShell.toggle()`. `verify-ha-shell.mjs` opens HA's menu from the sidebar at 1440 px
+  and from the sheet at 390 px, and fails if the top bar has a Home Assistant button. The sidebar
+  docs (`HA_SIDEBAR.md`, `INSTALL.md`, `USER_GUIDE.md`) say where the button is.
+- Integration: `switch.crop_steering_<prefix>system_enabled` and `…auto_irrigation_enabled`, retired
+  in 2.25.0 and kept hidden for controllers from 2.24.0 or before, are no longer created, and setup
+  removes them from an existing room's entity registry (`_RETIRED`). `tests_ha/test_retired_switches.py`
+  proves a new room has neither and an upgraded room loses both.
+- Controller: `RETIRED_SWITCHES` and `_carry_retired_switches` are gone, so one an older integration
+  left behind, off, neither holds a shot nor switches the engine switch off; CS-208 leaves the
+  error-code list, and CS-207 no longer names Auto Irrigation among its causes.
+- Dashboard: the status line no longer says "Not watering" for an off retired switch.
+- Integration: the room-level `select.crop_steering_<prefix>irrigation_phase` and `…recipe_stage`,
+  the `apply_recipe` / `save_recipe` services and `recipe.py` (the per-room recipe Store, left on
+  disk, unread), `number.…p2_ec_high_threshold`, `…p2_ec_low_threshold`, `…ec_target_veg_p3` and
+  `…ec_target_gen_p3`, and `sensor.…current_phase`, `…ec_ratio` and `…p2_vwc_threshold_adjusted`
+  are no longer created, and setup removes them from an existing room's entity registry
+  (`_RETIRED`). `tests_ha/test_removed_leftovers.py` proves a new room has none of them and an
+  upgraded room loses all of them, with its EC targets kept.
+- Integration: `light_entity` and `waste_switch` leave `HARDWARE_DOMAINS`, the configure flow's
+  hardware step and its strings, and join `RETIRED_HARDWARE`, so a setup save drops them, and so
+  does a save of the configure flow's zones and hardware. The pump and main line no longer need to
+  differ from a waste valve, and setup offers no light entities as candidates.
+  `tests_ha/test_configure.py` proves the form no longer asks for them and an older room's go on
+  its next save.
+- Dashboard: Rooms & hardware has no Room lights picker, and its batch-switch check no longer
+  names a waste valve; the setup-change words (`setup-changes.ts`, from `HARDWARE_WORDS`) drop both.
 - Dashboard: the model reads the room's `switch.crop_steering_<prefix>ec_stacking_enabled`
   (`RoomView.ecStacking`, added to the write allowlist) and each zone's `…zone_N_manual_override`
   (`Zone.override`, `overrideUntil` from `manual_override_expires_at`). `EcStackingControl`

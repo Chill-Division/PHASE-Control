@@ -57,22 +57,6 @@ BASE_SWITCH_DESCRIPTIONS = [
         name="Include Predictions in Notifications",
         icon="mdi:crystal-ball",
     ),
-    # Retired: the room's engine switch ("Watering" on the dashboard) is the one switch that stops
-    # watering. A controller from 2.24.0 or before still stops every shot while one of these reads
-    # off, and treats a missing one as off, so they stay, hidden, until no such controller is left;
-    # a newer one switches the engine switch off while one of them is off (CS-208).
-    SwitchEntityDescription(
-        key="system_enabled",
-        name="System Enabled (retired)",
-        icon="mdi:power",
-        entity_registry_visible_default=False,
-    ),
-    SwitchEntityDescription(
-        key="auto_irrigation_enabled",
-        name="Auto Irrigation Enabled (retired)",
-        icon="mdi:auto-mode",
-        entity_registry_visible_default=False,
-    ),
 ]
 
 
@@ -177,10 +161,6 @@ class CropSteeringSwitch(SwitchEntity, RestoreEntity):
             self._attr_is_on = (
                 True  # a room is growing until the operator says otherwise
             )
-        elif description.key == "system_enabled":
-            self._attr_is_on = True  # System enabled by default
-        elif description.key == "auto_irrigation_enabled":
-            self._attr_is_on = True  # Auto irrigation enabled by default
         elif description.key == "notify_predictions":
             self._attr_is_on = True  # the vitals say what comes next until switched off
         elif "zone_" in description.key and "_enabled" in description.key:

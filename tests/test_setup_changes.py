@@ -14,7 +14,10 @@ def room():
         "room_name": "Crop Steering System",
         "active": True,
         "plumbing": "pump_valves",
-        "hardware": {"pump_switch": "switch.gr2_irrigation_relay", "light_entity": ""},
+        "hardware": {
+            "pump_switch": "switch.gr2_irrigation_relay",
+            "fresh_water_switch": "",
+        },
         "zones": [
             {
                 "id": 1,
@@ -49,7 +52,7 @@ def test_mappings_probes_and_sizing_say_what_they_were_and_are():
     new = room()
     new["hardware"] = {
         "pump_switch": "",
-        "light_entity": "light.gr2",
+        "fresh_water_switch": "switch.gr2_fresh",
         "doser_2_switch": "switch.d2",
     }
     new["plumbing"] = "valves_only"
@@ -62,7 +65,7 @@ def test_mappings_probes_and_sizing_say_what_they_were_and_are():
     assert setup_changes(room(), new) == [
         "plumbing: zone valves only",
         "pump switch.gr2_irrigation_relay → none",
-        "lights none → light.gr2",
+        "fresh-water solenoid none → switch.gr2_fresh",
         "doser 2 none → switch.d2",
         "zone 1 valve switch.gr2_solenoid → switch.gr2_valve_b",
         "zone 1 moisture probes sensor.door_vwc, sensor.ac_vwc → sensor.door_vwc",

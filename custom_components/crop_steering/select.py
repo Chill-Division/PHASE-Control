@@ -14,11 +14,8 @@ from homeassistant.helpers.restore_state import RestoreEntity
 from .const import (
     DOMAIN,
     CONF_NUM_ZONES,
-    PHASES,
     STEERING_MODES,
     GROWTH_STAGES,
-    RECIPE_STAGES,
-    RECIPE_PARAMS,
     SOFTWARE_VERSION,
     SET_PHASE_OPTIONS,
     WATER_TODAY_VIEWS,
@@ -26,7 +23,6 @@ from .const import (
     PRODUCT_NAME,
 )
 from .room import restored_state_is_ours, room_prefix, zone_device_name
-from .recipe import get_manager
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -42,19 +38,6 @@ SELECT_DESCRIPTIONS = [
         name="Steering Mode",
         icon="mdi:steering",
         options=STEERING_MODES,  # Use constant from const.py
-    ),
-    SelectEntityDescription(
-        key="irrigation_phase",
-        name="Irrigation Phase",
-        icon="mdi:water-circle",
-        options=PHASES,  # Use constant from const.py (P0-P3 only)
-    ),
-    # Named-stage recipe: picking a stage applies its setpoints to the zones.
-    SelectEntityDescription(
-        key="recipe_stage",
-        name="Strategy Stage",
-        icon="mdi:format-list-bulleted-type",
-        options=RECIPE_STAGES,
     ),
     # The room's one choice of how Water today reads: the dashboard shows it for everyone, and
     # the controller's vitals notification follows it. Zone total until someone chooses.
@@ -180,12 +163,6 @@ class CropSteeringSelect(SelectEntity, RestoreEntity):
         if last_state is not None and restored_state_is_ours(self._entry, last_state):
             if last_state.state in self.options:
                 self._attr_current_option = last_state.state
-        # The recipe stage's source of truth is the server-side recipe Store, not
-        # the restored entity state — reflect the loaded recipe's active stage.
-        if self.entity_description.key == "recipe_stage":
-            mgr = get_manager(self.hass, self._entry)
-            if mgr is not None and mgr.active_stage in self.options:
-                self._attr_current_option = mgr.active_stage
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -214,37 +191,6 @@ class CropSteeringSelect(SelectEntity, RestoreEntity):
         if option in self.options:
             self._attr_current_option = option
             self.async_write_ha_state()
-            # Announce a manual phase pick on the event bus for automations. The controller
-            # keeps each zone's phase itself and does not read this select.
-            if getattr(self.entity_description, "key", None) == "irrigation_phase":
-                self.hass.bus.async_fire(
-                    "crop_steering_phase_transition",
-                    {
-                        "target_phase": option,
-                        "reason": "Manual (phase select)",
-                        "forced": True,
-                    },
-                )
-            # Selecting a recipe stage applies its setpoints to the zone numbers.
-            elif self.entity_description.key == "recipe_stage":
-                mgr = get_manager(self.hass, self._entry)
-                if mgr is not None:
-                    await mgr.async_apply(option)
-
-    @property
-    def extra_state_attributes(self):
-        """Expose the full recipe table on the recipe_stage select so the
-        dashboard can read it (and edit via the save_recipe service)."""
-        if self.entity_description.key != "recipe_stage":
-            return None
-        mgr = get_manager(self.hass, self._entry)
-        if mgr is None:
-            return None
-        return {
-            "params": RECIPE_PARAMS,
-            "stages": mgr.recipe.get("stages", {}),
-            "active_stage": mgr.active_stage,
-        }
 
     @property
     def available(self) -> bool:
