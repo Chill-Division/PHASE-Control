@@ -1,12 +1,10 @@
 """Behavioral tests for the crop_steering service handlers.
 
-Confirms three shipped fixes without a live HA:
+Confirms two shipped fixes without a live HA:
   * #15  services no longer call the removed `hass.helpers.template.now()` — event
          payloads carry a timestamp from `homeassistant.util.dt.now()` and do not raise.
   * #16  services resolve a `room` slug to that room's entity-id prefix, so a second
          room is steered independently (and the default room is unchanged).
-  * #27  apply_recipe / save_recipe raise instead of silently doing nothing when the
-         recipe store is not loaded.
 """
 
 from __future__ import annotations
@@ -88,17 +86,3 @@ def test_unknown_room_raises_instead_of_steering_default():
         asyncio.run(h["set_manual_override"](Call(zone=1, room="ghost")))
     override.async_set_manual_override.assert_not_awaited()
     assert hass.services.calls == [] and hass.bus.events == []  # nothing actuated
-
-
-def test_apply_recipe_without_store_raises():
-    hass = ha_stubs.FakeHass()  # hass.data has no DOMAIN/_recipe
-    h = _handlers(hass)
-    with pytest.raises(HomeAssistantError):
-        asyncio.run(h["apply_recipe"](Call(stage="Bulk")))
-
-
-def test_save_recipe_without_store_raises():
-    hass = ha_stubs.FakeHass()
-    h = _handlers(hass)
-    with pytest.raises(HomeAssistantError):
-        asyncio.run(h["save_recipe"](Call(recipe={"stages": {}})))

@@ -50,8 +50,6 @@ SETUP = {"setup_read", "setup_create", "setup_save", "setup_remove"}
 # Every other service changes something. What each is called with:
 CHANGES = {
     "set_manual_override": {"zone": 1},
-    "apply_recipe": {"stage": "Bulk"},
-    "save_recipe": {"recipe": {"stages": {}}},
     "strategy_save": {"room_id": ROOM, "expected_revision": 0, "plan": {}},
     "strategy_activate": {"room_id": ROOM, "expected_revision": 0},
     "strategy_disarm": {"room_id": ROOM},
@@ -90,12 +88,6 @@ def rig(monkeypatch):
         if not hasattr(vol, name):
             monkeypatch.setattr(vol, name, value, raising=False)
 
-    recipe = SimpleNamespace(
-        entry=ha_stubs.FakeEntry(),
-        active_stage="Bulk",
-        async_apply=AsyncMock(return_value=0),
-        async_save=AsyncMock(),
-    )
     override = SimpleNamespace(
         entity_id=f"switch.{DOMAIN}_zone_1_manual_override",
         _override_loaded=True,
@@ -155,7 +147,6 @@ def rig(monkeypatch):
         states={f"button.{DOMAIN}_zone_1_test_shot": "unknown"},
         data={
             DOMAIN: {
-                "_recipe": {"entry": recipe},
                 "_manual_overrides": {"zone_1_manual_override": override},
                 "_strategy": {"entry": strategy},
             }
@@ -179,8 +170,6 @@ def rig(monkeypatch):
     def effects():
         """Everything a handler could have done: events, service calls, writes."""
         writes = (
-            recipe.async_apply,
-            recipe.async_save,
             override.async_set_manual_override,
             strategy.save,
             strategy.activate,

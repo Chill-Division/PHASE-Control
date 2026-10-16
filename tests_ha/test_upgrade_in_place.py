@@ -91,7 +91,7 @@ async def test_everything_the_operator_tuned_survives_the_upgrade(hass):
 async def test_the_upgrade_removes_the_entities_nothing_uses_and_keeps_the_rest(hass):
     """An old install still holds entities that nothing read or set: the trigger button, the
     retired intelligence switches, a zone's group and so on. Setup removes those from the
-    registry, and only those: the global P2 EC threshold stays although its per-zone copy goes."""
+    registry, and only those: every number the operator tuned stays."""
     seed = fixture("entry_2_17_wizard.json")
     retired = {
         "button.crop_steering_zone_1_trigger_shot": "zone_1_trigger_shot",
@@ -108,11 +108,14 @@ async def test_the_upgrade_removes_the_entities_nothing_uses_and_keeps_the_rest(
         "number.crop_steering_irrigation_ph_max": "irrigation_ph_max",
         "number.crop_steering_irrigation_ec_min": "irrigation_ec_min",
         "number.crop_steering_irrigation_ec_max": "irrigation_ec_max",
-    }
-    kept = {
-        **_known_numbers(seed),
+        # gone in 1.3.0 with the room-level phase, the strategy stages and what only they fed
         "number.crop_steering_p2_ec_high_threshold": "p2_ec_high_threshold",
+        "number.crop_steering_ec_target_gen_p3": "ec_target_gen_p3",
+        "select.crop_steering_irrigation_phase": "irrigation_phase",
+        "select.crop_steering_recipe_stage": "recipe_stage",
+        "sensor.crop_steering_ec_ratio": "ec_ratio",
     }
+    kept = _known_numbers(seed)
     entry, _seed = await _upgrade(
         hass, "entry_2_17_wizard.json", registry_ids={**retired, **kept}
     )
