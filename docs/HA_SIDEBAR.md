@@ -1,6 +1,6 @@
 # Home Assistant sidebar
 
-When opened inside a compatible Home Assistant shell, PHASE Control temporarily collapses the HA sidebar. Use **Home Assistant** at the bottom of PHASE Control's navigation, or the house button in its top bar, to open the HA menu over the workspace. The top-bar button stays available on mobile.
+When opened inside a compatible Home Assistant shell, PHASE Control temporarily collapses the HA sidebar. Use **Home Assistant** at the bottom of PHASE Control's menu to open the HA menu over the workspace: in the sidebar on a desktop, and under ☰ on a phone.
 
 Leaving PHASE Control restores the prior kiosk state. This does not change Home Assistant's saved sidebar preference. Standalone tabs and unsupported or cross-origin embeddings retain their normal navigation.
 
@@ -8,7 +8,7 @@ Leaving PHASE Control restores the prior kiosk state. This does not change Home 
 
 Opening the native panel hides the Home Assistant sidebar, and the **Home Assistant** button brings it back. This was checked on a real installation; companion apps and third-party kiosk extensions may behave differently.
 
-PHASE Control's menu (Overview, Irrigation strategy, Insights, Feed, Settings and Help, with tabs across the top where an entry holds more than one page) moves around the workspace only; it does not replace the Home Assistant menu button. Each page has its own address, so a bookmark opens it; an address the dashboard does not know opens **Overview**.
+PHASE Control's menu (Overview, Irrigation strategy, Insights, Feed, Settings and Help, with tabs across the top where an entry holds more than one page) moves around the workspace; the **Home Assistant** button at its foot opens Home Assistant's own menu. Each page has its own address, so a bookmark opens it; an address the dashboard does not know opens **Overview**.
 
 ## Implementation references
 
