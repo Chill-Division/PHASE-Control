@@ -25,8 +25,6 @@ API_VERSION = 1
 HARDWARE_DOMAINS = {
     "pump_switch": {"switch"},
     "main_line_switch": {"switch"},
-    "waste_switch": {"switch"},
-    "light_entity": {"light", "switch"},
     # The reservoir and its dosers, for nutrient batches (feed.py): the controller drives these.
     "reservoir_distance_sensor": {"sensor"},
     "fresh_water_switch": {"switch"},
@@ -50,6 +48,10 @@ RETIRED_HARDWARE = (
     "notification_service",
     # The tank's water temperature: only the tank card showed it.
     "tank_temperature_sensor",
+    # A waste valve and the room's lights (1.3.0): recorded, never driven or read. Day and night
+    # come from the lights-on and lights-off hours.
+    "waste_switch",
+    "light_entity",
 )
 SIZING = {
     "plant_count": (1, 1000, True),
@@ -75,7 +77,6 @@ def hardware_entities(data):
         for entity in [
             hw.get("pump_switch"),
             hw.get("main_line_switch"),
-            hw.get("waste_switch"),
             *[hw.get(key) for key in BATCH_SWITCHES],
             *[z.get("zone_switch") for z in data.get("zones", {}).values()],
         ]
@@ -269,7 +270,7 @@ def prepare_setup(hass, payload, old=None, entry_id=None):
             continue
         foreign_shared.update(
             cfg.get("hardware", {}).get(key)
-            for key in ("pump_switch", "main_line_switch", "waste_switch")
+            for key in ("pump_switch", "main_line_switch")
             if cfg.get("hardware", {}).get(key)
         )
         for zone in cfg.get("zones", {}).values():
@@ -359,7 +360,6 @@ def prepare_setup(hass, payload, old=None, entry_id=None):
     shared = {
         hw.get("pump_switch"),
         hw.get("main_line_switch"),
-        hw.get("waste_switch"),
     } - {None, ""}
     if any(
         entity in allocated and allocated[entity] != (entry_id or "new room")
@@ -369,17 +369,13 @@ def prepare_setup(hass, payload, old=None, entry_id=None):
             "Shared hardware conflicts with another room's zone valve role"
         )
     if len(shared) != len(
-        [
-            hw[k]
-            for k in ("pump_switch", "main_line_switch", "waste_switch")
-            if hw.get(k)
-        ]
+        [hw[k] for k in ("pump_switch", "main_line_switch") if hw.get(k)]
     ):
-        raise ValueError("Pump, mainline and waste must use different switches")
+        raise ValueError("Pump and mainline must use different switches")
     if shared.intersection(
         z["zone_switch"] for z in zones.values() if z.get("active", True)
     ):
-        raise ValueError("A valve cannot also be pump, mainline or waste")
+        raise ValueError("A valve cannot also be the pump or mainline")
     batch = [hw[key] for key in BATCH_SWITCHES if hw.get(key)]
     if len(set(batch)) != len(batch):
         raise ValueError(
@@ -387,7 +383,7 @@ def prepare_setup(hass, payload, old=None, entry_id=None):
         )
     if set(batch) & (shared | {z.get("zone_switch") for z in zones.values()}):
         raise ValueError(
-            "A doser or reservoir solenoid cannot also be the pump, mainline, waste or a zone valve"
+            "A doser or reservoir solenoid cannot also be the pump, mainline or a zone valve"
         )
     # The plumbing layout is DECLARED, never inferred here. Absent from the payload (an older
     # dashboard, the env file, a room from before this existed) keeps whatever the room already
@@ -544,7 +540,7 @@ def read_setup(hass):
                 "device_class": s.attributes.get("device_class"),
             }
             for s in hass.states.async_all()
-            if s.entity_id.split(".")[0] in {"sensor", "switch", "light"}
+            if s.entity_id.split(".")[0] in {"sensor", "switch"}
         ],
     }
 
@@ -639,8 +635,6 @@ async def create_setup(hass, payload):
 HARDWARE_WORDS = {
     "pump_switch": "pump",
     "main_line_switch": "main-line valve",
-    "waste_switch": "waste valve",
-    "light_entity": "lights",
     "reservoir_distance_sensor": "reservoir level sensor",
     "fresh_water_switch": "fresh-water solenoid",
     "recirc_switch": "recirculation solenoid",

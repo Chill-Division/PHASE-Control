@@ -238,6 +238,5 @@ offer it, and Supervisor rejects it as an unknown option.)
 For nutrient batches, the room's **Reservoir & dosers** card maps the reservoir's level sensor (an
 ultrasonic distance sensor on the lid: the distance down to the water, in mm, cm or m), the
 fresh-water solenoid, the recirculation solenoid and up to six dosers (each doser's power switch).
-Each needs a switch of its own, which is not the pump, the main line, the waste valve or a zone's
-valve; the controller app switches them only in a batch, and the dashboard never switches them
+Each needs a switch of its own, which is not the pump, the main line or a zone's valve; the controller app switches them only in a batch, and the dashboard never switches them
 directly. A batch also runs the room's pump.

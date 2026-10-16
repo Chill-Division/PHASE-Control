@@ -6,8 +6,6 @@ import { PLUMBING_LABELS, isPlumbingLayout } from "./plumbing";
 export const HARDWARE_WORDS: Record<string, string> = {
   pump_switch: "pump",
   main_line_switch: "main-line valve",
-  waste_switch: "waste valve",
-  light_entity: "lights",
   reservoir_distance_sensor: "reservoir level sensor",
   fresh_water_switch: "fresh-water solenoid",
   recirc_switch: "recirculation solenoid",

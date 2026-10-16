@@ -25,6 +25,7 @@ from .const import (
 )
 from .plumbing import PLUMBING_LAYOUTS, infer as infer_plumbing
 from .room import slugify_room
+from .setup_api import RETIRED_HARDWARE
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -44,12 +45,6 @@ def _sensor_multi():
 
 def _sensor_one():
     return selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor"))
-
-
-def _light_sel():
-    return selector.EntitySelector(
-        selector.EntitySelectorConfig(domain=["light", "switch"])
-    )
 
 
 def _plumbing_sel():
@@ -139,8 +134,6 @@ def _hardware_schema(
     ] = _plumbing_sel()
     _ent("pump_switch", _sw_sel())
     _ent("main_line_switch", _sw_sel())
-    _ent("waste_switch", _sw_sel())
-    _ent("light_entity", _light_sel())
     out[vol.Optional("lights_on_hour", default=params.get("lights_on_hour", 12))] = (
         vol.All(vol.Coerce(int), vol.Range(min=0, max=23))
     )
@@ -205,8 +198,6 @@ def _build_hardware(data: dict) -> dict:
     return {
         "pump_switch": data.get("pump_switch", ""),
         "main_line_switch": data.get("main_line_switch", ""),
-        "waste_switch": data.get("waste_switch", ""),
-        "light_entity": data.get("light_entity", ""),
     }
 
 
@@ -707,7 +698,14 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             **data,
             "num_zones": max(num, int(data.get("num_zones", 1))),
             "zones": _build_zones(num, user_input, data.get("zones", {})),
-            "hardware": {**data.get("hardware", {}), **_build_hardware(user_input)},
+            "hardware": {
+                **{
+                    key: value
+                    for key, value in data.get("hardware", {}).items()
+                    if key not in RETIRED_HARDWARE
+                },
+                **_build_hardware(user_input),
+            },
             "parameters": {
                 **data.get("parameters", {}),
                 **_build_parameters(user_input),

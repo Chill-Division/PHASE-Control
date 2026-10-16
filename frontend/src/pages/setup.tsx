@@ -189,7 +189,6 @@ function newZone(id: number): SetupZone {
 const hardwareFields = [
   ["pump_switch", "Room pump", "switch"],
   ["main_line_switch", "Mainline valve", "switch"],
-  ["light_entity", "Room lights", "light"],
 ] as const;
 /** The reservoir and dosers a room's nutrient batches use (Feed → Reservoir); the controller app
  * switches these. */
@@ -278,13 +277,7 @@ export function Setup({
   }
   function candidates(kind: string) {
     return (data?.candidates || [])
-      .filter((c) =>
-        kind === "switch"
-          ? c.domain === "switch"
-          : kind === "light"
-            ? ["light", "switch"].includes(c.domain)
-            : c.domain === "sensor",
-      )
+      .filter((c) => (kind === "switch" ? c.domain === "switch" : c.domain === "sensor"))
       .sort((a, b) => {
         const preferred = (c: SetupCandidate) =>
           kind === "distance"
@@ -334,12 +327,11 @@ export function Setup({
     const watering = new Set([
       draft.hardware.pump_switch,
       draft.hardware.main_line_switch,
-      draft.hardware.waste_switch,
       ...draft.zones.map((z) => z.valve),
     ]);
     if (batch.some((id) => watering.has(id)))
       errors.push(
-        "A doser or reservoir solenoid cannot also be the pump, mainline, waste or a zone valve.",
+        "A doser or reservoir solenoid cannot also be the pump, mainline or a zone valve.",
       );
     if (
       activeZones.some(

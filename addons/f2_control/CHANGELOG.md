@@ -3,6 +3,7 @@
 - The top bar's Home Assistant button is gone; Home Assistant's menu opens from the bottom of the side menu (☰ on a phone).
 - Two old, hidden switches are gone, so only the room's own Watering switch ever switches watering on and off.
 - Old controls Home Assistant showed that didn't water anything are gone, among them Irrigation Phase and Strategy Stage.
+- Rooms & hardware no longer asks for the room's lights, which nothing used: day and night come from the lights-on and lights-off times.
 
 # 1.2.0
 

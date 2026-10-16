@@ -107,7 +107,7 @@ def test_native_zone_builder_retains_archived_ids_and_unknown_values(flow_module
 def test_native_hardware_schema_retains_explicit_mappings(flow_module, monkeypatch):
     mappings = {
         "pump_switch": "switch.pump",
-        "light_entity": "light.room",
+        "main_line_switch": "switch.main",
     }
     defaults = {}
     original = flow_module.vol.Optional
@@ -136,8 +136,10 @@ def test_native_hardware_schema_retains_explicit_mappings(flow_module, monkeypat
         "tank_ph_sensor",
         "feed_ec_sensor",
         "feed_ph_sensor",
+        "waste_switch",
+        "light_entity",
     ):
-        assert gone not in fields  # removed in 2.26.0
+        assert gone not in fields  # removed in 2.26.0 and (the last two) 1.3.0
     # Nothing ever read the room's temperature, humidity or VPD, or a notification service, and only
     # the tank card showed the tank's water temperature.
     assert not {
