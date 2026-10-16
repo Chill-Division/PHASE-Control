@@ -19,7 +19,6 @@ VALVE = "switch.zone1_valve"
 PUMP = "switch.pump"
 FLAGS = {
     KILL: ("on", {}),
-    "switch.crop_steering_auto_irrigation_enabled": ("on", {}),
     "switch.crop_steering_zone_1_enabled": ("on", {}),
 }
 

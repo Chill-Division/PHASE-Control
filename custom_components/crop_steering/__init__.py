@@ -102,6 +102,11 @@ _RETIRED = {
     "switch": {
         "analytics_enabled",
         "zone_dripper_protection",
+        # System Enabled and Auto Irrigation Enabled: retired in 2.25.0, when the room's engine
+        # switch became the one switch that stops watering, and kept hidden for older controllers.
+        # One that read off still kept a room from watering, set right only in Home Assistant.
+        "system_enabled",
+        "auto_irrigation_enabled",
         *(
             f"intelligence_{name}_enabled"
             for name in (
@@ -199,7 +204,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await async_setup_selftest(hass)
 
     _remove_retired_entities(hass, entry)
-    _hide_retired_switches(hass, entry)
 
     # Set up platforms
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
@@ -273,29 +277,6 @@ def _remove_retired_entities(hass: HomeAssistant, entry: ConfigEntry) -> None:
             removed += 1
     if removed:
         _LOGGER.info("Removed %d retired entities from the registry", removed)
-
-
-# Switches kept only for controllers from 2.24.0 or before (see switch.py): hidden, not removed.
-_HIDDEN_RETIRED = {"system_enabled", "auto_irrigation_enabled"}
-
-
-def _hide_retired_switches(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Hide this room's existing registry entries for _HIDDEN_RETIRED. A new install creates them
-    hidden (entity_registry_visible_default); an older one registered them visible."""
-    from homeassistant.helpers import entity_registry as er
-
-    registry = er.async_get(hass)
-    head = f"{DOMAIN}_{entry.entry_id}_"
-    for item in er.async_entries_for_config_entry(registry, entry.entry_id):
-        key = str(item.unique_id).removeprefix(head)
-        if (
-            item.domain == "switch"
-            and key in _HIDDEN_RETIRED
-            and item.hidden_by is None
-        ):
-            registry.async_update_entity(
-                item.entity_id, hidden_by=er.RegistryEntryHider.INTEGRATION
-            )
 
 
 def _entry_config(entry: ConfigEntry) -> dict[str, Any]:

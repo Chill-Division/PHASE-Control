@@ -24,6 +24,7 @@ version being released.
 ## Unreleased
 
 - The top bar's Home Assistant button is gone; Home Assistant's menu opens from the bottom of the side menu (☰ on a phone).
+- Two old, hidden switches are gone, so only the room's own Watering switch ever switches watering on and off.
 
 ## 1.2.0 - 2026-10-16
 

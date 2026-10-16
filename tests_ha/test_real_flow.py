@@ -74,9 +74,9 @@ async def test_a_one_switch_tent_becomes_a_room_and_its_switches_get_the_ids_the
         "switch.crop_steering_room_active",
         "switch.crop_steering_auto_setpoints",
         "switch.crop_steering_engine_enabled",
-        "switch.crop_steering_system_enabled",
     ):
         assert registry.async_get(entity_id) is not None, f"{entity_id} is not registered under that id"
+    assert registry.async_get("switch.crop_steering_system_enabled") is None  # retired, then removed
     assert hass.states.get("switch.crop_steering_room_active").state == "on"  # a new room is growing
     assert hass.states.get("switch.crop_steering_auto_setpoints").state == "off"  # nothing rewrites targets unasked
 
