@@ -28,6 +28,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   nothing ever read it, and day and night come from the lights-on and lights-off times (Irrigation
   strategy → Today → the whole room). Home Assistant's own setup form no longer asks for a waste
   valve either, which nothing ever switched. A room that recorded either loses it on its next save.
+- **The dashboard can set everything the controller reads.** EC stacking switches on and off
+  beside Auto setpoints on Today, and the P1 card has **Minimum P1 shots**. A zone paused by hand
+  in Home Assistant now says so, with until when, and its details can resume it. All three were
+  only in Home Assistant. **Most P1 shots** is now **Maximum P1 shots**, so the pair reads alike.
 
 ### 🔧 Technical notes
 
@@ -59,6 +63,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   its next save.
 - Dashboard: Rooms & hardware has no Room lights picker, and its batch-switch check no longer
   names a waste valve; the setup-change words (`setup-changes.ts`, from `HARDWARE_WORDS`) drop both.
+- Dashboard: the model reads the room's `switch.crop_steering_<prefix>ec_stacking_enabled`
+  (`RoomView.ecStacking`, added to the write allowlist) and each zone's `…zone_N_manual_override`
+  (`Zone.override`, `overrideUntil` from `manual_override_expires_at`). `EcStackingControl`
+  (`room-controls.tsx`) sits on Today beside `AutoSetpointsControl`. `OverridePill` and
+  `ZoneOverrideReview` (`dashboard.tsx`) show the pause and switch the override off.
+  `p1_minimum_shots` joins `ZONE_PARAMETERS`, with its words. The demo has both new controls.
+- Controller: `log_words.SETTING_NAMES` names `p1_minimum_shots` "Minimum P1 shots" and
+  `p1_maximum_shots` "Maximum P1 shots" (was "Most P1 shots"), as the dashboard's `setting-words.ts`
+  does (`tests/test_log_words.py` holds the two together).
 
 ## [1.2.0] - 2026-10-16
 

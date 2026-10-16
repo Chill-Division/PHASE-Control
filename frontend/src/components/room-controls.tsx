@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Droplets, Power, Sparkles } from "lucide-react";
+import { Droplets, Layers, Power, Sparkles } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ReviewDialog, Status } from "@/components/dashboard";
@@ -235,6 +235,59 @@ export function AutoSetpointsControl({ controller }: { controller: Controller })
           enabled
             ? "The engine still fires every shot. Managed setpoints will no longer be rewritten automatically; they keep their current values until you change them."
             : "The engine still fires every shot. Managed setpoints will be rewritten automatically from what the probes do, so manual edits to those fields will be overwritten."
+        }
+      />
+    </>
+  );
+}
+
+/** Room-level EC stacking On/Off: in P2 the controller moves each zone's maintenance trigger to
+ * steer its settled substrate EC toward the zone's P2 EC target. Hidden without the switch. */
+export function EcStackingControl({ controller }: { controller: Controller }) {
+  const [review, setReview] = useState(false);
+  const { entityId, enabled } = controller.room.ecStacking;
+  if (!entityId) return null;
+  const name = controller.room.room.name;
+  return (
+    <>
+      <div className="room-power" role="group" aria-label={`${name} EC stacking`}>
+        <Status
+          enabled={enabled === true ? true : null}
+          label={
+            enabled === true
+              ? "EC stacking on"
+              : enabled === false
+                ? "EC stacking off"
+                : "EC stacking unavailable"
+          }
+        />
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={!writable(controller, entityId)}
+          onClick={() => setReview(true)}
+        >
+          <Layers size={15} />
+          {enabled ? "Turn EC stacking off…" : "Turn EC stacking on…"}
+        </Button>
+      </div>
+      <ReviewDialog
+        open={review}
+        onOpenChange={setReview}
+        controller={controller}
+        title={enabled ? "Turn EC stacking off?" : "Turn EC stacking on?"}
+        items={[
+          {
+            change: { entityId, value: !enabled },
+            label: `${name} EC stacking`,
+            before: enabled ? "On" : "Off",
+            after: enabled ? "Off" : "On",
+          },
+        ]}
+        note={
+          enabled
+            ? "No new moves. A move already made today stays until lights-on, when each zone's maintenance trigger is back where it is set."
+            : "In P2 the controller moves each zone's maintenance trigger by up to a point, at most every 30 minutes, to steer its settled substrate EC toward its P2 EC target: down while EC is under 90% of it, so less water lets EC build, and up while it is over 110%, so more water dilutes it. Never by more than a fifth of the trigger, and each grow-day starts from the trigger as set."
         }
       />
     </>
