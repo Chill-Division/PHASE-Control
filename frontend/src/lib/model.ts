@@ -932,24 +932,6 @@ export function roomStatus(states: States, room: Room, now = Date.now()): RoomSt
         ? `${pending}. Switch watering off, wait up to 5 minutes for the controller to adopt the setup, then switch it back on.`
         : `${pending}. Correct the room in Settings → Rooms & hardware.`,
     );
-  // System Enabled and Auto Irrigation Enabled are retired: while one reads off, the controller
-  // keeps the engine switch off (CS-208), and an older controller holds every shot itself. Named
-  // first, because switching watering on would not last while one of them is off.
-  for (const [key, fallback] of [
-    ["system_enabled", "System Enabled"],
-    ["auto_irrigation_enabled", "Auto Irrigation Enabled"],
-  ]) {
-    const id = `switch.${ROOT}${room.prefix}${key}`;
-    const entity = states[id];
-    if (entity?.state !== "off") continue;
-    const name = String(entity.attributes.friendly_name || fallback);
-    return say(
-      "stopped",
-      "Not watering",
-      `Home Assistant's “${name}” switch (${id}) is off, and nothing is watered in this room while it is. Switch it back on in Home Assistant, then switch watering on in Overview if it is off.`,
-      { label: "Open Overview", route: "overview" },
-    );
-  }
   // The room's engine switch (the "watering" switch here): off, or unreadable, stops every shot.
   const flag = beat.attributes.enable_flag ?? descriptor(states, room)?.attributes.enable_flag;
   const flagId = typeof flag === "string" && /^(switch|input_boolean)\./.test(flag) ? flag : null;

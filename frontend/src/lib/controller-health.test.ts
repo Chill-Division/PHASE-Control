@@ -371,20 +371,6 @@ describe("room status line", () => {
       /^This room's engine switch, input_boolean\.f2_control_enabled, is missing or unavailable in Home Assistant\. The controller treats that as off/,
     ],
     [
-      "Home Assistant's System Enabled is off",
-      [
-        entity("switch.crop_steering_system_enabled", "off", {
-          friendly_name: "Crop Steering System Enabled",
-        }),
-      ],
-      /^Home Assistant's “Crop Steering System Enabled” switch \(switch\.crop_steering_system_enabled\) is off, and nothing is watered in this room while it is\. Switch it back on in Home Assistant, then switch watering on in Overview if it is off\.$/,
-    ],
-    [
-      "Home Assistant's Auto Irrigation Enabled is off",
-      [entity("switch.crop_steering_auto_irrigation_enabled", "off")],
-      /^Home Assistant's “Auto Irrigation Enabled” switch \(switch\.crop_steering_auto_irrigation_enabled\) is off/,
-    ],
-    [
       "setup is waiting to be adopted",
       [
         entity(HEARTBEAT, "healthy", {
@@ -429,30 +415,21 @@ describe("room status line", () => {
     expect(line).toMatchObject({ tone: "stopped", text: "Not watering" });
     expect(line.detail).toMatch(detail);
   });
-  it("names an off retired switch before the watering switch, and links to Overview for both", () => {
+  it("links to Overview when watering is off, and an old retired switch changes nothing", () => {
     const off = status(fixture([entity("input_boolean.f2_control_enabled", "off")]));
     expect(off.action).toEqual({ label: "Switch it on in Overview", route: "overview" });
-    const systemOff = [entity("switch.crop_steering_system_enabled", "off")];
-    expect(status(fixture(systemOff)).action).toEqual({
-      label: "Open Overview",
-      route: "overview",
-    });
-    // The controller keeps watering switched off while System Enabled is: switching watering on
-    // first would not last, so the line names System Enabled.
-    const both = status(fixture([entity("input_boolean.f2_control_enabled", "off"), ...systemOff]));
-    expect(both.detail).toMatch(/^Home Assistant's “System Enabled” switch/);
-    // An unreadable retired switch stops nothing: the controller only acts on one that reads off.
-    const unreadable = [entity("switch.crop_steering_system_enabled", "unavailable")];
-    expect(status(fixture(unreadable))).toMatchObject({
+    // System Enabled and Auto Irrigation Enabled are gone; one an older integration left behind,
+    // off, no longer stops watering, so the line never names it.
+    const retired = [
+      entity("switch.crop_steering_system_enabled", "off"),
+      entity("switch.crop_steering_auto_irrigation_enabled", "off"),
+    ];
+    expect(status(fixture(retired))).toMatchObject({
       tone: "holding",
       detail: "all zones in band",
     });
-    // Both switches on, as the integration makes them: no change to the usual line.
-    const on = [
-      entity("switch.crop_steering_system_enabled", "on"),
-      entity("switch.crop_steering_auto_irrigation_enabled", "on"),
-    ];
-    expect(status(fixture(on))).toMatchObject({ tone: "holding", detail: "all zones in band" });
+    const both = status(fixture([entity("input_boolean.f2_control_enabled", "off"), ...retired]));
+    expect(both.detail).toMatch(/^Watering is switched off for this room/);
   });
   it("says there is no word from the controller when its heartbeat is missing", () => {
     const states = fixture();
