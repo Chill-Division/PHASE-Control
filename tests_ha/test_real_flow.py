@@ -6,13 +6,12 @@ from homeassistant.helpers import entity_registry as er
 
 DOMAIN = "crop_steering"
 VALVE = "switch.gt1_irrigation_switch"
+# The wizard asks each zone for its valve and its substrate probes; its label, plant count and
+# sizing are the dashboard's Rooms & hardware.
 ZONES = {
-    "zone_1_name": "Tent",
-    "zone_1_active": True,
     "zone_1_switch": VALVE,
     "zone_1_vwc": ["sensor.gt1_vwc"],
     "zone_1_ec": ["sensor.gt1_ec"],
-    "zone_1_plant_count": 4,
 }
 
 

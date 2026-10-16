@@ -11,10 +11,9 @@ from homeassistant import config_entries
 from homeassistant.data_entry_flow import FlowResultType
 
 from custom_components.crop_steering.plumbing import infer
-from test_configure import _save_map
 from test_real_flow import ZONES, _seed
 from test_recreated_room_controller import _see
-from test_setup_entry import _install
+from test_setup_entry import _install, _save_zones
 from test_upgrade_in_place import _upgrade
 
 KILL = "switch.crop_steering_engine_enabled"
@@ -29,11 +28,11 @@ def _texts(fake):
     ]
 
 
-async def test_fresh_install_a_zone_named_in_the_wizard_is_named_in_its_alert(
-    hass, controller_for, monkeypatch
+async def test_fresh_install_a_zone_named_on_rooms_and_hardware_is_named_in_its_alert(
+    hass, controller_for, hass_admin_user
 ):
-    monkeypatch.setitem(ZONES, "zone_1_name", "GT1")
-    entry = await _install(hass)
+    await _install(hass)
+    await _save_zones(hass, hass_admin_user, zone_1={"name": "GT1"})
     c, fake, _clock = controller_for({"enable_flag": KILL})
     assert c.rooms[0].zone_names == {1: "GT1"}
     c.loop_once(NOW)  # a bare install: never watered, so the watchdog speaks
@@ -41,20 +40,18 @@ async def test_fresh_install_a_zone_named_in_the_wizard_is_named_in_its_alert(
     assert any(text.startswith("Tent · GT1 (Z1): ") for text in _texts(fake)), _texts(fake)
     assert not any("default" in text.split(" | ")[0] for text in _texts(fake)), _texts(fake)
 
-    # Renamed in Configure: the running controller follows, with no restart and no disarm cycle.
-    await _save_map(hass, entry, zone_1_name="Bench A")
-    await hass.async_block_till_done()
+    # Renamed again: the running controller follows, with no restart and no disarm cycle.
+    await _save_zones(hass, hass_admin_user, zone_1={"name": "Bench A"})
     _see(hass, fake)
     c._rediscover(NOW)
     assert c.rooms[0].zone_names == {1: "Bench A"}
 
 
 async def test_fresh_install_a_room_left_at_the_wizards_name_is_not_named(
-    hass, controller_for, monkeypatch
+    hass, controller_for, hass_admin_user
 ):
     """The wizard offers PHASE Control as the room's name. Left at that, nobody named the room,
     so the controller names the zone alone, as it does a room left at "Crop Steering System"."""
-    monkeypatch.setitem(ZONES, "zone_1_name", "GT1")
     _seed(hass)
     flow = hass.config_entries.flow
     result = await flow.async_init("crop_steering", context={"source": config_entries.SOURCE_USER})
@@ -64,6 +61,7 @@ async def test_fresh_install_a_room_left_at_the_wizards_name_is_not_named(
     result = await flow.async_configure(result["flow_id"], {"plumbing": infer({})})
     assert result["type"] is FlowResultType.CREATE_ENTRY, result
     await hass.async_block_till_done()
+    await _save_zones(hass, hass_admin_user, zone_1={"name": "GT1"})
     descriptor = hass.states.get("sensor.crop_steering_engine_config")
     assert descriptor.attributes["room_name"] == "PHASE Control"
     c, fake, _clock = controller_for({"enable_flag": KILL})

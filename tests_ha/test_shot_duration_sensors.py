@@ -8,7 +8,7 @@ the same states: its substrate litres, its flow, its shot size and its room limi
 
 from homeassistant.helpers.entity_component import async_update_entity
 from test_install_to_controller import KILL
-from test_setup_entry import _install
+from test_setup_entry import _install, _save_zones
 from test_setup_save_plumbing import _payload, _room, _service
 
 SHOTS = {
@@ -32,11 +32,13 @@ def _controller_seconds(c, room, zone, key):
 
 
 async def test_each_sensor_is_what_the_controller_runs_with_two_drippers_per_plant(
-    hass, controller_for
+    hass, controller_for, hass_admin_user
 ):
-    await _install(
+    await _install(hass)
+    await _save_zones(
         hass,
-        {"substrate_volume": 11.4, "dripper_flow_rate": 3.8, "drippers_per_plant": 2},
+        hass_admin_user,
+        zone_1={"substrate_volume": 11.4, "dripper_flow_rate": 3.8, "drippers_per_plant": 2},
     )
     c, _fake, _clock = controller_for({"enable_flag": KILL})
     room = c.rooms[0]

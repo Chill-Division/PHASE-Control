@@ -160,4 +160,12 @@ async def test_an_upgraded_rooms_configure_menu_shows_the_version_and_still_open
     entry, _seed = await _upgrade(hass, name)
     menu = await hass.config_entries.options.async_init(entry.entry_id)
     assert menu["description_placeholders"]["version"] == SOFTWARE_VERSION
-    assert set(menu["menu_options"]) == {"edit_parameters", "edit_zones"}
+    assert set(menu["menu_options"]) == {"edit_zones", "open_dashboard"}
+    for step in menu["menu_options"]:  # every entry still opens on a room this old
+        flow = await hass.config_entries.options.async_init(entry.entry_id)
+        result = await hass.config_entries.options.async_configure(
+            flow["flow_id"], {"next_step_id": step}
+        )
+        assert result["type"] in (FlowResultType.FORM, FlowResultType.ABORT), step
+        if result["type"] is FlowResultType.ABORT:
+            assert result["reason"] == "use_dashboard", step
