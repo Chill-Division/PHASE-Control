@@ -35,7 +35,7 @@ async def test_the_controller_finds_adopts_and_waters_a_freshly_installed_one_sw
     assert room.zones[1]["vwc"] == "sensor.crop_steering_vwc_zone_1"
 
     # A new room is born safe: nothing actuates until the operator arms it.
-    assert c._blocked(room, 1) == "room off (kill switch)"
+    assert c._blocked(room, 1) == "watering off (Watching only)"
     for switch in ARMED:
         fake.set_state(switch, "on")
     assert "no hardware mapped" not in (c._blocked(room, 1) or "")

@@ -149,7 +149,7 @@ def test_every_other_gate_still_stops_a_rescue(rig):
     room.state[1].update(phase="P2", last_shot=now - timedelta(hours=4))
     plan_held(fake, room)
     pub = c._loop_room(room, now)
-    assert pub[1]["fire"] and "kill switch" in pub[1]["block"]
+    assert pub[1]["fire"] and pub[1]["block"] == "watering off (Watching only)"
     assert opened(fake) == []
 
 

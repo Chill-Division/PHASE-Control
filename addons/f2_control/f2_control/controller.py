@@ -3042,8 +3042,13 @@ class Controller:
                 room=room,
             )
             return plumbing
-        if not self._on(room.enable_flag, False):
-            return "room off (kill switch)"
+        # The room's watering switch, in the dashboard's words: off is Watching only (before 1.3.1 this
+        # said "room off (kill switch)", which read like Room off). Unreadable is treated as off.
+        flag, _, _ = ha_get(room.enable_flag)
+        if flag in (None, "unknown", "unavailable", ""):
+            return "watering switch unavailable"
+        if str(flag).lower() not in ON_STATES:
+            return "watering off (Watching only)"
         loading = self._settings_loading(room)
         if loading:
             return loading

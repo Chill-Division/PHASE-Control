@@ -15,7 +15,7 @@ from pathlib import Path
 
 import controller
 from test_controller import _build, _desc
-from test_zone_count import DESCRIPTOR, _room
+from test_zone_count import DESCRIPTOR, KILL, _room
 import pytest
 
 # What happens once a probe is dead; how long it must be out first is test_blind_grace.py.
@@ -202,7 +202,20 @@ def test_a_zone_never_watered_is_not_given_a_number_of_hours():
     assert alert["title"] == "Zone 1: URGENT, drying out and not being watered (CS-207)"
     assert "has never been watered by the controller" in alert["message"]
     assert "16666666" not in alert["message"]
-    assert "Blocked by: room off (kill switch)" in alert["message"]
+    assert "Blocked by: watering off (Watching only)" in alert["message"]
+
+
+def test_a_zone_held_by_its_rooms_watering_switch_says_so_in_the_dashboards_words():
+    """Off is the dashboard's Watching only; before 1.3.1 it said "room off (kill switch)", which read
+    like Room off. A switch Home Assistant cannot read is treated as off, and says so."""
+    c, fake = _build(dict(OPTIONS), states=_room(1))
+    room = c.rooms[0]
+    assert c._blocked(room, 1) == "watering off (Watching only)"
+    for unreadable in ("unavailable", "unknown"):
+        fake.set_state(KILL, unreadable)
+        assert c._blocked(room, 1) == "watering switch unavailable"
+    fake.set_state(KILL, "on")
+    assert "watering" not in (c._blocked(room, 1) or "")
 
 
 def test_every_alert_the_controller_raises_passes_a_code():
