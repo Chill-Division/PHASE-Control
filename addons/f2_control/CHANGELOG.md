@@ -1,3 +1,7 @@
+# Unreleased
+
+- A zone held because its room is Watching only now says "watering off (Watching only)", and one whose watering switch Home Assistant can't read says "watering switch unavailable". Both used to say "room off (kill switch)".
+
 # 1.3.0
 
 Pair with integration 1.3.0.

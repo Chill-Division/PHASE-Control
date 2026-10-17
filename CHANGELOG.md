@@ -10,6 +10,34 @@ and code-level detail for developers and AI agents working on the repo.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+- **Watching only says how to start watering.** A room that is Watching only says so where it says
+  it isn't watering, with a **Start steering…** button, on the Overview and at the top of every
+  page. Its zones no longer raise a Critical "needs attention" card, and the Zones heading no longer
+  counts them as watering.
+
+### 🔧 Technical notes
+
+- Controller: `_blocked` holds a zone with "watering off (Watching only)" when the room's engine
+  switch reads off, and "watering switch unavailable" when Home Assistant cannot read it; both said
+  "room off (kill switch)", which read like Room off. The words reach the zone status
+  ("Blocked: …"), the decision sensor, CS-207's "Blocked by:" and Earlier today.
+- Dashboard: `holdWords` and `zoneLabelWords` (`lib/controller-health.ts`) put an older
+  controller's words the same way. A zone held for the engine switch reads **Watching only**, or
+  **Watering switch unavailable** beside the room's own notice, and raises no zone notice of its
+  own; any other hold still does.
+- Dashboard: `roomStatus`'s Watching only line says so and carries `action.steering`.
+  `StartSteering` (`overview-parts.tsx`) opens the mode pill's Steering review from the Overview's
+  status row and from the selected room's status line on every page. Another room's line opens that
+  room ("Open <room>"), since a write reaches only the selected room. The Zones heading says "none
+  watering: the room is Watching only", and a zone card's foot "Not watering: the room is Watching
+  only".
+- Demo: switching a room's engine switch off holds its daytime zones as the controller does.
+  `verify-dashboard.mjs` walks it: the row, no zone notice, another room's line, the review, Apply.
+- Help: CS-207's causes and fixes use the dashboard's words (`docs/error-codes.json`, rendered
+  `ERROR_CODES.md`).
+
 ## [1.3.0] - 2026-10-17
 
 Integration and controller **1.3.0**.
