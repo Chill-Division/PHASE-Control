@@ -1777,6 +1777,21 @@ try {
     assert.equal(layout.today.top, layout.coming.top, "the day's clock beside what comes next");
     assert.equal(layout.tank.top, layout.earlier.top, "the tank beside the day's events");
     assert.equal(new Set(layout.cards).size, 1, "the zones side by side");
+    // The zones across the page: one card the whole width, two halves, three thirds, and more in
+    // rows of three beneath (data-columns is the zones, up to 3); fewer a row where three cards of
+    // about 300 px don't fit, and one on a phone.
+    const grid = page.locator(".zone-cards");
+    const columns = () =>
+      grid.evaluate((el) => getComputedStyle(el).gridTemplateColumns.split(" ").length);
+    const room = () => grid.evaluate((el) => el.parentElement.getBoundingClientRect().width);
+    assert.equal(await grid.getAttribute("data-columns"), "3");
+    assert.ok((await room()) >= 940, "three zones fit a row on a laptop beside the rooms");
+    assert.equal(await columns(), 3, "three zones, three a row");
+    for (const zones of [1, 2]) {
+      await grid.evaluate((el, value) => (el.dataset.columns = value), String(zones));
+      assert.equal(await columns(), zones, `${zones} zone(s) across the whole width`);
+    }
+    await grid.evaluate((el) => (el.dataset.columns = "3"));
     assert.equal(layout.sticking, 0, "a zone card's contents stick out of it");
     assert.equal(layout.subtitles, 0, "a panel on the Overview repeats its title in a subtitle");
     await page.screenshot({
@@ -1790,11 +1805,19 @@ try {
     layout = await measure();
     assert.equal(layout.today.top, layout.coming.top, "at 1100 px the day beside what comes next");
     assert.equal(layout.tank.top, layout.earlier.top, "at 1100 px the tank beside the events");
+    assert.equal(
+      await columns(),
+      (await room()) >= 940 ? 3 : 2,
+      "at 1100 px, three zones a row only where they fit",
+    );
+    await page.setViewportSize({ width: 900, height: 800 });
+    assert.equal(await columns(), 2, "a tablet: two zones a row");
     await page.setViewportSize({ width: 390, height: 844 });
     await noOverflow();
     layout = await measure();
     assert.ok(layout.coming.top >= layout.today.bottom, "on a phone, the day's next under it");
     assert.ok(layout.earlier.top >= layout.tank.bottom, "on a phone, the events under the tank");
+    assert.equal(await columns(), 1, "on a phone, one zone a row");
     await page.setViewportSize({ width: 1440, height: 1000 });
   });
   await check("help: every error code is listed, searchable and linkable", async () => {

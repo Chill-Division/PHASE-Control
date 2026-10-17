@@ -126,7 +126,7 @@ export function Overview({
                   {room.zones.length > 0 && <AllZonesSwitch controller={controller} />}
                 </div>
                 {room.zones.length ? (
-                  <div className="zone-cards">
+                  <div className="zone-cards" data-columns={Math.min(room.zones.length, 3)}>
                     {room.zones.map((item, index) => (
                       <ZoneCard
                         key={item.id}

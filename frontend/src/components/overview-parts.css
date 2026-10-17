@@ -399,10 +399,32 @@
   font-size: 13px;
   color: var(--muted-foreground);
 }
+/* The zones across the page: one card the whole width, two halves, three thirds, and more in rows
+ * of three beneath. A card needs about 300 px, so where the zones have less room (a tablet, or the
+ * rooms column beside them) they take two a row, and on a phone one. */
+.zones-section {
+  container: zones / inline-size;
+}
 .zone-cards {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 20px;
+}
+.zone-cards[data-columns="1"] {
+  grid-template-columns: minmax(0, 1fr);
+}
+.zone-cards[data-columns="2"] {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+@container zones (max-width: 939px) {
+  .zone-cards[data-columns="3"] {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@container zones (max-width: 619px) {
+  .zone-cards[data-columns] {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 .zone-card {
   background: var(--surface);
@@ -746,7 +768,6 @@
     justify-content: flex-start;
   }
   .zone-cards {
-    grid-template-columns: minmax(0, 1fr);
     gap: 12px;
   }
   .zones-head > .zones-note {
