@@ -1,6 +1,8 @@
 # Unreleased
 
 - A zone held because its room is Watching only now says "watering off (Watching only)", and one whose watering switch Home Assistant can't read says "watering switch unavailable". Both used to say "room off (kill switch)".
+- The Overview's zone cards fill the page: one zone across it, two side by side, three a row, and more beneath.
+- Bug fixes and improvements.
 
 # 1.3.0
 
