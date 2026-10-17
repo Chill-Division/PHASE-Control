@@ -1,4 +1,4 @@
-import { ageText } from "./controller-health";
+import { ageText, holdWords } from "./controller-health";
 import { descriptor } from "./model";
 import { smoothRecorded, type RecordedPoint } from "./planning-curve";
 import type { RoomView, States } from "./types";
@@ -258,7 +258,8 @@ export function alignBands(bands: PhaseBand[], shots: Shot[]): PhaseBand[] {
 const blockKind = (text: string): Block["kind"] =>
   /daily-cap/i.test(text) ? "cap" : /\bBLOCK\b/.test(text) ? "block" : "hold";
 /** What held a zone back: the entries the controller listed as blocked for it, one interval per
- * unbroken run of the same hold (numbers in the text, such as litres used, may change within it). */
+ * unbroken run of the same hold (numbers in the text, such as litres used, may change within it),
+ * in the dashboard's words (an older controller's "room off (kill switch)" is Watching only). */
 export function zoneBlocks(
   decisions: TimelineRow[] = [],
   zoneId: number,
@@ -268,7 +269,8 @@ export function zoneBlocks(
   const blocks: Block[] = [];
   let current: { key: string; block: Block } | null = null;
   for (const row of decisions) {
-    const held = entry(row, "blocked", zoneId);
+    const found = entry(row, "blocked", zoneId);
+    const held = found && { ...found, text: holdWords(found.text) };
     const kind = held && blockKind(held.text);
     const key = held ? `${kind}|${held.text.replace(/\d+(?:\.\d+)?/g, "#")}` : "";
     if (current && current.key === key) continue;

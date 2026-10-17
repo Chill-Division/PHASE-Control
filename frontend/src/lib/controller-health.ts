@@ -73,6 +73,24 @@ export const RESTING: Record<string, string> = {
   P2: "Optimal",
   P3: "Overnight dryback",
 };
+/** Why the controller holds a zone while its room's watering switch is off: Watching only. */
+export const WATCHING_HOLD = "watering off (Watching only)";
+/** A hold in the dashboard's words: controllers before 1.3.1 said "room off (kill switch)" for
+ * Watching only, which read like Room off. */
+export const holdWords = (text: string) => text.replace(/room off \(kill switch\)/g, WATCHING_HOLD);
+/** A zone's status while the controller holds it for the room's watering switch. */
+export const WATCHING_LABEL = "Watching only";
+/** A zone's status label in the dashboard's words. The controller labels a held zone "Blocked:"
+ * and its hold; held for the room's watering switch, that is the room's Watching only (its status
+ * line says so, with the way back to Steering), not a fault of the zone's. */
+export function zoneLabelWords(label: string): string {
+  const held = label.match(/^Blocked: (.*)$/)?.[1];
+  if (held === undefined) return label;
+  const words = holdWords(held);
+  if (words === WATCHING_HOLD) return WATCHING_LABEL;
+  if (words === "watering switch unavailable") return "Watering switch unavailable";
+  return label;
+}
 /** The controller's own zone label (`zone_status_label` in crop_steering_engine/core.py), rebuilt
  * from what it publishes beside the zone status sensor: the zone phase with its reason, and this
  * cycle's decision. The status sensor itself has a second writer, the integration's
@@ -92,7 +110,7 @@ export function controllerZoneLabel(
           (item): item is string => typeof item === "string" && item.startsWith(`Z${zoneId} `),
         )
       : undefined;
-    return hit === undefined ? null : hit.replace(/^Z\d+ \S+ /, "");
+    return hit === undefined ? null : holdWords(hit.replace(/^Z\d+ \S+ /, ""));
   };
   // A zone without a live probe copies a sibling or runs the blind schedule.
   if (/probe dead|no live probe|blind irrigation budget/i.test(reason))

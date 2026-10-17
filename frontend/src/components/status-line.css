@@ -54,6 +54,17 @@
   font-weight: 600;
   white-space: nowrap;
 }
+button.status-line-action {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+button.status-line-action:hover {
+  text-decoration: underline;
+}
 .status-line-age {
   grid-area: age;
   color: var(--muted-foreground);

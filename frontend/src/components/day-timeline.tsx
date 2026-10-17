@@ -614,7 +614,7 @@ export function useLanes(
       : zone.stale
         ? NOT_REPORTING
         : room.engine.enabled === false
-          ? "watering is switched off"
+          ? "the room is Watching only"
           : zone.enabled === false
             ? "zone scheduling is paused"
             : null;

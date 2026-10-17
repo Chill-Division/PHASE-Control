@@ -161,6 +161,10 @@
   min-height: 0;
   font-size: inherit;
 }
+.status-row-fix {
+  display: flex;
+  margin-top: 10px;
+}
 .status-row-totals {
   font-size: 13px;
   line-height: 1.5;

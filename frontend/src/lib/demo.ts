@@ -508,6 +508,38 @@ export function demoReact(states: States, entityId: string, value: unknown): Sta
       ...states,
       [status.entity_id]: { ...status, attributes: { ...status.attributes, auto: value } },
     };
+  // What the controller does with a room's watering switch: off (Watching only), it holds each
+  // zone it would water by day, in its decision and in the zone's status; on, its next pass
+  // clears the holds.
+  const room = Object.values(states).find(
+    (entity) =>
+      entity.entity_id.endsWith("engine_config") && entity.attributes.enable_flag === entityId,
+  );
+  if (room && typeof value === "boolean") {
+    const prefix = String(room.attributes.prefix ?? "");
+    const decision = states[`sensor.crop_steering_${prefix}current_decision`];
+    if (!decision) return states;
+    const HELD = "watering off (Watching only)";
+    const next = { ...states };
+    const blocked: string[] = [];
+    for (let zone = 1; zone <= (Number(room.attributes.num_zones) || 0); zone++) {
+      const phase = states[`sensor.crop_steering_${prefix}zone_${zone}_phase`]?.state;
+      const status = states[`sensor.crop_steering_${prefix}zone_${zone}_status`];
+      const held = !value && (phase === "P1" || phase === "P2");
+      if (held) blocked.push(`Z${zone} ${phase} ${HELD}`);
+      if (status && (held || status.state === `Blocked: ${HELD}`))
+        next[status.entity_id] = {
+          ...status,
+          state: held ? `Blocked: ${HELD}` : "Holding — within target band",
+        };
+    }
+    next[decision.entity_id] = {
+      ...decision,
+      state: blocked[0] ?? "Holding — all zones in band",
+      attributes: { ...decision.attributes, fired: [], blocked },
+    };
+    return next;
+  }
   const auto = entityId.match(/^switch\.crop_steering_(.*)auto_setpoints$/);
   if (!auto || typeof value !== "boolean") return states;
   const sensor = new RegExp(`^sensor\\.crop_steering_${auto[1]}zone_\\d+_auto_setpoints$`);
