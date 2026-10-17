@@ -51,36 +51,41 @@ try {
   await page.goto(origin + "/crop-steering");
   const frame = page.frameLocator("crop-steering-panel iframe");
   // The panel's element holds the dashboard in a frame filling the panel: no title bar above it.
-  await frame.getByRole("heading", { name: "Flower 2 overview" }).waitFor();
+  // The Overview's heading is the room's name.
+  const heading = frame.getByRole("heading", { name: "Flower 2", exact: true, level: 1 });
+  await heading.waitFor();
   const box = await page.locator("crop-steering-panel iframe").boundingBox();
   assert.ok(box.y === 0 && box.height === 1000 && box.width === 1440, JSON.stringify(box));
-  // Home Assistant's menu opens from the foot of the dashboard's own menu, and only there: the top
-  // bar has no second button for it.
-  assert.equal(
-    await frame
-      .locator(".topbar")
-      .getByRole("button", { name: /Home Assistant/ })
-      .count(),
-    0,
-  );
-  await frame
-    .locator(".desktop-sidebar")
-    .getByRole("button", { name: "Home Assistant", exact: true })
-    .click();
+  // Home Assistant's menu opens from the foot of the dashboard's rail, under Settings and Help, and
+  // only there: nothing else on the page is a second button for it.
+  const rail = frame.locator("nav.app-rail");
+  const haButton = rail.getByRole("button", { name: "Home Assistant", exact: true });
+  assert.equal(await frame.getByRole("button", { name: /Home Assistant/ }).count(), 1);
+  assert.equal(await haButton.count(), 1);
+  assert.equal((await rail.locator("button").last().innerText()).trim(), "Home Assistant");
+  const help = await rail.getByRole("button", { name: "Help", exact: true }).boundingBox();
+  const foot = await haButton.boundingBox();
+  assert.ok(foot.y >= help.y + help.height, `Home Assistant ${foot.y}, Help ${help.y}`);
+  await haButton.click();
   assert.equal(
     await page.evaluate(() => document.querySelector("home-assistant").hass.kioskMode),
     true,
   );
   assert.ok(await page.evaluate(() => events.some((e) => e[0] === "menu")));
+  // A phone has no rail: the menu is a row on More, the last of the tabs at the foot.
   await page.setViewportSize({ width: 390, height: 844 });
-  await frame.getByRole("button", { name: "Open navigation", exact: true }).click();
-  await frame
-    .locator(".mobile-sidebar")
-    .getByRole("button", { name: "Home Assistant", exact: true })
-    .click();
+  await haButton.waitFor({ state: "hidden" });
+  await frame.locator("nav.phone-tabs").getByRole("button", { name: "More", exact: true }).click();
+  await frame.getByRole("button", { name: /^Home Assistant’s menu/ }).click();
   assert.equal(await page.evaluate(() => events.filter((e) => e[0] === "menu").length), 2);
   const panel = await page.locator("crop-steering-panel iframe").elementHandle();
-  await fitsWidth(await panel.contentFrame());
+  await fitsWidth(await panel.contentFrame(), "More has horizontal overflow at 390 px");
+  await frame
+    .locator("nav.phone-tabs")
+    .getByRole("button", { name: "Overview", exact: true })
+    .click();
+  await heading.waitFor();
+  await fitsWidth(await panel.contentFrame(), "the Overview has horizontal overflow at 390 px");
   await page.evaluate(() => {
     history.pushState({}, "", "/lovelace");
     dispatchEvent(new Event("location-changed"));
@@ -90,8 +95,10 @@ try {
     false,
   );
   await page.goto(origin + "/crop-steering?existing=1");
+  // The rail's button comes once the dashboard has reached Home Assistant (the rail is hidden on a
+  // phone, but there all the same).
   await frame
-    .locator(".sidebar-footer button", { hasText: "Home Assistant" })
+    .locator("nav.app-rail button", { hasText: "Home Assistant" })
     .first()
     .waitFor({ state: "attached" });
   await page.evaluate(() => {
@@ -103,11 +110,12 @@ try {
     true,
   );
   await page.goto(origin + "/dashboard.html?demo=1");
-  await page.getByRole("heading", { name: "Flower 2 overview" }).waitFor();
-  assert.equal(
-    await page.locator(".sidebar-footer button", { hasText: "Home Assistant" }).count(),
-    0,
-  );
+  await page.getByRole("heading", { name: "Flower 2", exact: true, level: 1 }).waitFor();
+  // On its own, the dashboard has no way to Home Assistant's menu: not on the rail, not on More.
+  assert.equal(await page.locator("nav.app-rail button", { hasText: "Home Assistant" }).count(), 0);
+  await page.locator("nav.phone-tabs").getByRole("button", { name: "More", exact: true }).click();
+  await page.getByRole("button", { name: /^Take the tour/ }).waitFor();
+  assert.equal(await page.getByRole("button", { name: /Home Assistant’s menu/ }).count(), 0);
   assert.deepEqual(errors, []);
   const out = new URL("../../output/playwright/", import.meta.url);
   await mkdir(out, { recursive: true });
@@ -118,7 +126,7 @@ try {
         checks: [
           "the custom panel's element holds the dashboard, filling the panel",
           "temporary kiosk enabled",
-          "desktop/mobile recovery button",
+          "desktop/mobile recovery button: the rail's foot, and More on a phone",
           "leaving restores previous state",
           "preexisting kiosk preserved",
           "standalone unchanged",

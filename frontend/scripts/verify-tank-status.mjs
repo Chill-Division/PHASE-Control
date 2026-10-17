@@ -1,4 +1,5 @@
-/** Graphical room telemetry against the isolated compiled demo. */
+/** Graphical room telemetry against the isolated compiled demo: the reservoir's full card on Feed ›
+ * Reservoir, and its summary on the Overview. */
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { readFile, mkdir, writeFile } from "node:fs/promises";
@@ -49,10 +50,14 @@ async function open(target) {
   });
   return page;
 }
+// The full card (Feed › Reservoir) and the Overview's summary of it.
+const FULL = ".tank-panel[data-tank-status]",
+  SUMMARY = ".reservoir-summary[data-tank-status]";
 const page = await open(context);
 try {
-  await page.goto(`${origin}/dashboard.html?demo=1#/overview`);
-  const tank = page.locator("[data-tank-status]");
+  // Feed › Reservoir has the whole tank card, after the nutrient batch.
+  await page.goto(`${origin}/dashboard.html?demo=1#/reservoir`);
+  const tank = page.locator(FULL);
   await tank.waitFor();
   // The reservoir's own level, as the controller works it out: 640 mm between 125 (full) and 850
   // (empty) is 29%.
@@ -78,7 +83,6 @@ try {
   await page.waitForFunction(() =>
     /last 24 hours/.test(document.querySelector("[data-tank-history]")?.getAttribute("aria-label")),
   );
-  assert.ok(await page.locator('[data-last-irrigation="1"]:visible').getAttribute("datetime"));
   // The tank and its first reading sit as far below the heading as the tank sits from the left.
   const inset = await tank.evaluate((panel) => {
     const box = panel.getBoundingClientRect();
@@ -103,9 +107,9 @@ try {
   await lightShot(page, tank, { path: img("tank-status.png") });
   for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: 1000 });
-    await fitsWidth(page, `horizontal overflow at ${width}`);
-    // The times under the level chart stay apart: a chart too narrow for three (the side column
-    // at 1440) leaves the middle one out. The chart redraws for the new width a little later.
+    await fitsWidth(page, `Feed › Reservoir: horizontal overflow at ${width}`);
+    // The times under the level chart stay apart: a chart too narrow for three leaves the middle
+    // one out. The chart redraws for the new width a little later.
     const apart = await page
       .waitForFunction(
         () => {
@@ -125,7 +129,7 @@ try {
       );
     assert.ok(apart, `the level chart's times run together at ${width} px`);
     await settled(page);
-    const audit = await new AxeBuilder({ page }).include("[data-tank-status]").analyze();
+    const audit = await new AxeBuilder({ page }).include(FULL).analyze();
     assert.deepEqual(
       audit.violations.map((v) => ({ id: v.id, impact: v.impact })),
       [],
@@ -133,9 +137,55 @@ try {
   }
   await page.screenshot({ path: file("tank-status-mobile.png"), fullPage: true });
 
-  // The Overview stays two screens at most at 1440×800, zones beside the tank, and Map sensors
-  // on the tank heading's line.
+  // The Overview has the reservoir at a glance: how full it is against its minimum, the pump, the
+  // last refill, and the way to Feed.
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.evaluate(() => {
+    location.hash = "#/overview";
+  });
+  const summary = page.locator(SUMMARY);
+  await summary.waitFor();
+  assert.equal(await page.locator(FULL).count(), 0, "the full card is on Feed, not the Overview");
+  assert.equal(await summary.locator("[data-tank-level]").getAttribute("data-tank-level"), "29");
+  assert.match(
+    await summary.locator("[data-tank-level]").getAttribute("aria-label"),
+    /Reservoir 29% full; its minimum 5%/,
+  );
+  assert.equal(await summary.locator("[data-pump-state]").getAttribute("data-pump-state"), "on");
+  assert.match(await summary.innerText(), /29%\s*full/);
+  assert.match(await summary.innerText(), /last refill .*minimum 5%/);
+  assert.doesNotMatch(await summary.innerText(), /°C/, "no water temperature on the summary");
+  assert.doesNotMatch(
+    await summary.innerText(),
+    /mS\/cm|\bpH\b/,
+    "no tank EC or pH on the summary",
+  );
+  assert.doesNotMatch(await summary.innerText(), /Not mapped/, "nothing asks to be mapped");
+  assert.equal(await summary.locator("[data-refill-soon]").count(), 0, "no reminder set yet");
+  // A zone's events keep their timestamps: its last irrigation, in its details.
+  await page.locator('[data-zone-card="1"] .zone-card-name').click();
+  assert.ok(await page.locator('[data-last-irrigation="1"]:visible').getAttribute("datetime"));
+  await page.keyboard.press("Escape");
+  await page.getByRole("dialog").waitFor({ state: "detached" });
+  for (const width of [1440, 390]) {
+    await page.setViewportSize({ width, height: 1000 });
+    await fitsWidth(page, `Overview: horizontal overflow at ${width}`);
+    await settled(page);
+    const audit = await new AxeBuilder({ page }).include(SUMMARY).analyze();
+    assert.deepEqual(
+      audit.violations.map((v) => ({ id: v.id, impact: v.impact })),
+      [],
+      `reservoir summary accessibility at ${width} px`,
+    );
+  }
+  await page.screenshot({ path: file("reservoir-summary-mobile.png"), fullPage: true });
+
+  // The Overview stays two screens at most at 1440×800, the reservoir's summary beside Earlier
+  // today in the row under the zones, its Feed link on its title's line; on Feed › Reservoir, the
+  // full card comes straight after the nutrient batch, Map sensors on its title's line.
   await page.setViewportSize({ width: 1440, height: 800 });
+  // Measured once the page has caught up with the window.
+  await fitsWidth(page, "Overview: horizontal overflow at 1440×800");
   const layout = await page.evaluate(() => {
     const box = (selector) => document.querySelector(selector).getBoundingClientRect();
     // A live Overview has no demo banner: the room it takes here is not counted.
@@ -143,48 +193,72 @@ try {
     const demo = banner
       ? banner.nextElementSibling.getBoundingClientRect().top - banner.getBoundingClientRect().top
       : 0;
-    // Each zone's line on the grow day wraps so it can be read whole: what it adds is not counted.
-    const wrapped = [...document.querySelectorAll(".timeline-zone-line")].reduce(
-      (sum, line) =>
-        sum + line.getBoundingClientRect().height - parseFloat(getComputedStyle(line).lineHeight),
-      0,
-    );
     return {
-      height: document.documentElement.scrollHeight - demo - wrapped,
+      height: document.documentElement.scrollHeight - demo,
       window: innerHeight,
-      zonesTop: box(".overview-grid > .panel").top,
-      tankTop: box("[data-tank-status]").top,
-      mapTop: box("[data-tank-status] .tank-actions button").top,
-      titleBottom: box("[data-tank-status] .panel-heading h2").bottom,
+      zonesBottom: box(".zones-section").bottom,
+      tankTop: box(".reservoir-summary[data-tank-status]").top,
+      tankRight: box(".reservoir-summary[data-tank-status]").right,
+      earlierTop: box("[data-earlier-today]").top,
+      earlierLeft: box("[data-earlier-today]").left,
+      feedTop: box(".reservoir-summary > .link-button").top,
+      titleBottom: box(".reservoir-summary h2").bottom,
     };
   });
   assert.ok(
     layout.height <= 2 * layout.window,
-    `Overview is ${layout.height}px tall without the demo banner and the zone lines' wrapping, in a ${layout.window}px window`,
+    `Overview is ${layout.height}px tall without the demo banner, in a ${layout.window}px window`,
   );
-  assert.equal(layout.zonesTop, layout.tankTop, "zones and tank share a row");
-  assert.ok(layout.mapTop < layout.titleBottom, "the tank's action shares the title's line");
+  assert.ok(layout.tankTop > layout.zonesBottom, "the reservoir comes after the zones");
+  assert.equal(layout.tankTop, layout.earlierTop, "the reservoir and Earlier today share a row");
+  assert.ok(layout.tankRight < layout.earlierLeft, "the reservoir beside Earlier today");
+  assert.ok(layout.feedTop < layout.titleBottom, "the summary's Feed link shares its title's line");
+  await summary.getByRole("button", { name: "Feed", exact: true }).click();
+  await page.waitForFunction(() => location.hash === "#/reservoir");
+  await tank.waitFor();
+  assert.equal(
+    await page.locator(".res-batch + .tank-panel[data-tank-status]").count(),
+    1,
+    "the tank card follows the nutrient batch",
+  );
+  const card = await tank.evaluate((panel) => ({
+    mapTop: panel.querySelector(".tank-actions button").getBoundingClientRect().top,
+    titleBottom: panel.querySelector(".panel-heading h2").getBoundingClientRect().bottom,
+  }));
+  assert.ok(card.mapTop < card.titleBottom, "the tank's action shares the title's line");
 
-  // Light theme: the panel stays accessible.
+  // Light theme: the card and the summary stay accessible.
   const lightContext = await browser.newContext({
     viewport: { width: 1440, height: 1000 },
     colorScheme: "light",
   });
   const light = await open(lightContext);
-  await light.goto(`${origin}/dashboard.html?demo=1#/overview`);
-  await light.locator("[data-tank-status]").waitFor();
+  await light.goto(`${origin}/dashboard.html?demo=1#/reservoir`);
+  await light.locator(FULL).locator("[data-tank-history]").waitFor();
   await settled(light);
-  const audit = await new AxeBuilder({ page: light }).include("[data-tank-status]").analyze();
+  const audit = await new AxeBuilder({ page: light }).include(FULL).analyze();
   assert.deepEqual(
     audit.violations.map((v) => ({ id: v.id, nodes: v.nodes.map((n) => n.target) })),
     [],
     "tank panel accessibility, light",
   );
+  await light.evaluate(() => {
+    location.hash = "#/overview";
+  });
+  await light.locator(SUMMARY).waitFor();
+  await settled(light);
+  const summaryAudit = await new AxeBuilder({ page: light }).include(SUMMARY).analyze();
+  assert.deepEqual(
+    summaryAudit.violations.map((v) => ({ id: v.id, nodes: v.nodes.map((n) => n.target) })),
+    [],
+    "reservoir summary accessibility, light",
+  );
   await lightContext.close();
 
   // Without automatic refills, a reminder to refill the reservoir by hand comes at a level of its
   // own: set on the Reservoir page, a dotted line on the chart, and Refill soon under the tank once
-  // it is down to it. While automatic refills keep it up, there is no reminder to set.
+  // it is down to it, and on the Overview's summary. While automatic refills keep it up, there is
+  // no reminder to set.
   await page.goto(`${origin}/dashboard.html?demo=1#/reservoir`);
   await page.locator(".res-batch").waitFor();
   const remind = page.getByLabel("Remind me at (%)");
@@ -200,10 +274,7 @@ try {
   await page.getByRole("button", { name: "Save", exact: true }).click();
   await page.getByText("Saved. The controller app runs the next batch").waitFor();
   await page.locator(".res-batch [data-refill-soon]").waitFor(); // 29%, at or under 30%
-  await page.evaluate(() => {
-    location.hash = "#/overview";
-  });
-  const reminded = page.locator("[data-tank-status]");
+  const reminded = page.locator(FULL);
   await reminded.locator("[data-refill-soon]").waitFor();
   await reminded.locator(".tank-remind-line").first().waitFor({ state: "attached" });
   assert.match(
@@ -216,16 +287,34 @@ try {
   }));
   assert.ok(heading.mapTop < heading.titleBottom, "Map sensors stays on the title's line");
   await settled(page);
-  const remindAudit = await new AxeBuilder({ page }).include("[data-tank-status]").analyze();
+  const remindAudit = await new AxeBuilder({ page }).include(FULL).analyze();
   assert.deepEqual(
     remindAudit.violations.map((v) => ({ id: v.id, nodes: v.nodes.map((n) => n.target) })),
     [],
     "tank panel accessibility, with Refill soon",
   );
+  await page.evaluate(() => {
+    location.hash = "#/overview";
+  });
+  await summary.locator("[data-refill-soon]").waitFor();
+  assert.match(await summary.innerText(), /reminder at 30%/);
+  const line = await summary.evaluate((panel) => ({
+    feedTop: panel.querySelector(":scope > .link-button").getBoundingClientRect().top,
+    titleBottom: panel.querySelector("h2").getBoundingClientRect().bottom,
+  }));
+  assert.ok(line.feedTop < line.titleBottom, "the Feed link stays on the title's line");
+  await settled(page);
+  const summaryRemindAudit = await new AxeBuilder({ page }).include(SUMMARY).analyze();
+  assert.deepEqual(
+    summaryRemindAudit.violations.map((v) => ({ id: v.id, nodes: v.nodes.map((n) => n.target) })),
+    [],
+    "reservoir summary accessibility, with Refill soon",
+  );
 
   await page.goto(`${origin}/dashboard.html?demo=1&room=room%3Af1_#/overview`);
   // Flower 1 has no reservoir: no level sensor reads it and nothing refills it, so its level is not
-  // mapped, there is nothing to chart and the card has no refill rows.
+  // mapped, there is nothing to chart and no refill to report. Only its pump is mapped, and its
+  // summary asks for the rest to be mapped, in Rooms & hardware.
   await page.waitForFunction(() =>
     /Not mapped/.test(document.querySelector("[data-tank-status]")?.textContent ?? ""),
   );
@@ -234,21 +323,30 @@ try {
     "unknown",
   );
   assert.equal(await page.locator("[data-pump-state]").getAttribute("data-pump-state"), "off");
+  assert.doesNotMatch(await summary.innerText(), /last refill|minimum|reminder/);
+  assert.equal(await page.locator("[data-refill-soon]").count(), 0);
   assert.equal(await page.locator("[data-refill-state]").count(), 0);
-  assert.match(
-    await page.locator("[data-tank-status]").innerText(),
-    /Map the reservoir's level sensor to chart it\./,
-  );
+  assert.equal(await page.locator("[data-tank-history]").count(), 0);
+  assert.equal(await summary.getByRole("button", { name: "Feed", exact: true }).count(), 0);
+  await summary.getByRole("button", { name: "Map sensors", exact: true }).click();
+  await page.waitForFunction(() => location.hash === "#/setup");
+  // Nor does its Feed › Reservoir page have a tank to draw or a refill to report.
+  await page.evaluate(() => {
+    location.hash = "#/reservoir";
+  });
+  await page.getByText("No reservoir mapped").waitFor();
+  assert.equal(await page.locator("[data-tank-status]").count(), 0);
+  assert.equal(await page.locator("[data-refill-state]").count(), 0);
   assert.equal(await page.locator("[data-tank-history]").count(), 0);
   assert.deepEqual(errors, []);
   assert.deepEqual(forbidden, []);
   const checks = [
-    "graphical mapped tank readings, no tank EC or pH",
+    "graphical mapped tank readings, no tank EC or pH, on Feed › Reservoir and the Overview",
     "refills from the controller's record, none for a room without a reservoir",
     "the level over the last 12 or 24 hours beside the tank, its times apart at 1440 and 390 px",
     "zone event timestamps",
-    "mobile layout and accessibility, light and dark",
-    "Overview two screens at most, zones beside the tank, Map sensors on the heading's line",
+    "mobile layout and accessibility, light and dark, of the card and the summary",
+    "Overview two screens at most, the reservoir beside Earlier today under the zones, its Feed link on the title's line; on Feed › Reservoir the card after the batch, Map sensors on the heading's line",
     "without automatic refills, a reminder level: its setting, a line on the chart and Refill soon",
     "room isolation",
   ];

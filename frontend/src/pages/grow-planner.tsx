@@ -23,6 +23,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Heading, Empty, number } from "@/components/dashboard";
+import { TargetsBanner } from "@/components/targets-banner";
 import { PlanningCurve } from "@/components/planning-curve";
 import { PlanCellContext } from "@/components/plan-cell-context";
 import { RecipeLibrary } from "@/components/recipe-library";
@@ -424,28 +425,39 @@ export function GrowPlanner({
         />
       </>
     );
+  // A running schedule is in charge once the controller requires it, whatever its sensor says yet.
+  const shown =
+    controller.room.strategy.engaged && !["active", "disarming", "error"].includes(status)
+      ? "active"
+      : status;
   return (
-    <>
-      <Heading
-        title="Scheduled targets"
-        description="Plan each zone’s targets by date. A schedule steers the room only once it’s armed; until then the room runs on Today’s targets."
-        action={
-          <div className="workspace-actions">
-            <Button variant="outline" onClick={exportPlan} disabled={!plan}>
-              <Download size={16} />
-              Export
-            </Button>
-            <Button
-              variant="outline"
-              disabled={disabled || !plan}
-              onClick={() => importRef.current?.click()}
-            >
-              <Upload size={16} />
-              Import
-            </Button>
-          </div>
-        }
+    <div className="schedule-page">
+      <TargetsBanner
+        controller={controller}
+        status={shown}
+        open={{ label: "Open Today’s targets", href: "#/strategy" }}
+        from="schedule"
       />
+      <div className="schedule-intro">
+        <p>
+          Plan each zone’s targets by date. A schedule steers the room only once it’s armed; until
+          then the room runs on Today’s targets.
+        </p>
+        <div className="workspace-actions">
+          <Button variant="outline" onClick={exportPlan} disabled={!plan}>
+            <Download size={16} />
+            Export
+          </Button>
+          <Button
+            variant="outline"
+            disabled={disabled || !plan}
+            onClick={() => importRef.current?.click()}
+          >
+            <Upload size={16} />
+            Import
+          </Button>
+        </div>
+      </div>
       <input
         ref={importRef}
         type="file"
@@ -518,8 +530,11 @@ export function GrowPlanner({
             <div>
               <span className="eyebrow">Strategy status</span>
               <strong className="plan-state">
-                {STATUS_NAMES[status]}
-                {dirty ? " · unsaved changes" : ""}
+                <span className="plan-status-chip" data-status={status}>
+                  <i aria-hidden="true" />
+                  {STATUS_NAMES[status]}
+                </span>
+                {dirty ? <span className="plan-unsaved">Unsaved changes</span> : null}
               </strong>
               <p className="plan-meaning">
                 {scheduleMeaning(
@@ -680,19 +695,21 @@ export function GrowPlanner({
                       Enter applies, Esc cancels, arrows move.
                     </p>
                   </div>
-                  <div className="workspace-actions">
-                    <Button
-                      variant={granularity === "week" ? "default" : "outline"}
+                  <div className="segmented" role="group" aria-label="Show the grow in">
+                    <button
+                      type="button"
+                      aria-pressed={granularity === "week"}
                       onClick={() => setGranularity("week")}
                     >
                       Weeks
-                    </Button>
-                    <Button
-                      variant={granularity === "day" ? "default" : "outline"}
+                    </button>
+                    <button
+                      type="button"
+                      aria-pressed={granularity === "day"}
                       onClick={() => setGranularity("day")}
                     >
                       Days
-                    </Button>
+                    </button>
                   </div>
                 </div>
                 <div
@@ -787,6 +804,12 @@ export function GrowPlanner({
                     })}
                   </div>
                 </div>
+                <p className="plan-balance-key">
+                  <span>Vegetative</span>
+                  <i aria-hidden="true" />
+                  <span>Generative</span>
+                  <span className="muted">· a cell’s number is how generative it runs</span>
+                </p>
                 <p id="plan-cell-message" className="plan-cell-message" aria-live="polite">
                   {cellError || rejected}
                 </p>
@@ -1216,6 +1239,6 @@ export function GrowPlanner({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </>
+    </div>
   );
 }

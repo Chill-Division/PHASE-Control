@@ -1,0 +1,469 @@
+/* The shell: a rail of sections on a tablet or a desktop, the rooms as a second column on a desktop
+   (as chips above the page on a tablet or a phone), and tabs at the foot of a phone. */
+.app-frame {
+  min-height: 100vh;
+  display: flex;
+  background: var(--canvas);
+}
+/* Each column runs the page's full height, its contents held at the top of the window. */
+.app-rail {
+  width: 76px;
+  flex: none;
+  align-self: stretch;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  z-index: 30;
+}
+.app-rail-inner {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  height: 100dvh;
+  box-sizing: border-box;
+  padding: 18px 8px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow-y: auto;
+}
+.rail-brand {
+  display: flex;
+  justify-content: center;
+  padding-bottom: 14px;
+}
+.rail-brand .brand-mark {
+  width: 40px;
+  height: 40px;
+  border-radius: 11px;
+}
+.brand-mark {
+  background: var(--primary);
+  color: var(--primary-foreground);
+  display: grid;
+  place-items: center;
+}
+.rail-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 9px 2px 8px;
+  border: 0;
+  border-radius: 14px;
+  background: transparent;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.2;
+  text-align: center;
+}
+.rail-item:hover {
+  background: var(--well);
+}
+.rail-item[aria-current="page"] {
+  color: var(--tone-info-ink);
+  background: var(--tone-info-bg);
+  font-weight: 600;
+}
+.rail-ha {
+  border: 1px solid var(--border);
+}
+.rail-icon,
+.phone-tab-icon {
+  position: relative;
+  display: inline-flex;
+}
+.rail-badge {
+  position: absolute;
+  top: -6px;
+  right: -10px;
+  min-width: 20px;
+  height: 20px;
+  box-sizing: border-box;
+  padding: 0 5px;
+  border-radius: 10px;
+  border: 2px solid var(--surface);
+  background: #e9b949;
+  color: #16202a;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 700;
+  font-style: normal;
+  text-align: center;
+}
+.rail-spacer {
+  flex: 1;
+}
+
+.rooms-column {
+  width: 284px;
+  flex: none;
+  align-self: stretch;
+  background: color-mix(in srgb, var(--surface) 55%, var(--canvas));
+  border-right: 1px solid var(--border);
+}
+.rooms-column-inner {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  height: 100dvh;
+  box-sizing: border-box;
+  padding: 24px 14px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
+}
+.rooms-column-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 0 8px 10px;
+}
+.rooms-column-head h2 {
+  font-size: 15px;
+}
+.rooms-column-head span {
+  font-size: 13px;
+  color: var(--muted-foreground);
+}
+.room-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--foreground);
+  text-align: left;
+}
+.room-card[aria-current="page"] {
+  background: var(--tone-info-bg);
+  border-color: var(--tone-info-line);
+}
+.room-card-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+.room-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.room-card-head strong {
+  flex: 1;
+  font-size: 15px;
+  font-weight: 600;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.room-card-mode {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--tone-paused-ink);
+  white-space: nowrap;
+}
+.room-card-mode i {
+  width: 7px;
+  height: 7px;
+  border-radius: 4px;
+}
+.room-card-line {
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--muted-foreground);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.rooms-column[data-offline] .room-card {
+  opacity: 0.7;
+}
+.room-card[data-tone="stopped"] .room-card-line,
+.room-chip[data-tone="stopped"] {
+  color: var(--tone-critical-ink);
+}
+.room-card[data-tone="stale"] .room-card-line {
+  color: var(--tone-warning-ink);
+}
+.rooms-column-foot {
+  margin-top: auto;
+  padding: 0 8px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--muted-foreground);
+}
+.mini-dial-none {
+  display: inline-block;
+  border-radius: 50%;
+  border: 2px dashed var(--border);
+  box-sizing: border-box;
+  flex: none;
+}
+
+.room-chips {
+  display: flex;
+  flex-direction: row;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 2px 0 4px;
+  scrollbar-width: none;
+}
+.room-chip {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 44px;
+  box-sizing: border-box;
+  padding: 0 12px 0 8px;
+  border-radius: 22px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--foreground);
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.room-chip[aria-current="page"] {
+  background: var(--tone-info-bg);
+  border-color: var(--tone-info-line);
+}
+.room-chip > i {
+  width: 8px;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--good);
+}
+.room-chip[data-tone="stopped"] > i {
+  background: var(--destructive);
+}
+.room-chip[data-tone="stale"] > i {
+  background: var(--warning);
+}
+.room-chip[data-tone="off"] > i {
+  background: var(--muted-foreground);
+}
+
+.app-page {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.app-page > .room-chips {
+  padding: 12px 24px 0;
+}
+#main-content {
+  flex: 1;
+  outline: none;
+  padding: 24px 32px 40px;
+}
+.main-inner {
+  max-width: 1320px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px 16px;
+}
+.section-title {
+  font-size: 28px;
+  line-height: 1.2;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.section-header-gap {
+  flex: 1;
+}
+.segmented {
+  display: inline-flex;
+  padding: 4px;
+  gap: 4px;
+  border-radius: 14px;
+  background: var(--well);
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.segmented > button {
+  flex: none;
+  height: 36px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--muted-foreground);
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.segmented > button[aria-current="page"],
+.segmented > button[aria-pressed="true"],
+.segmented > button[aria-checked="true"] {
+  background: var(--surface);
+  color: var(--foreground);
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgb(22 32 42 / 12%);
+}
+.page-utilities {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.live-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: 4px;
+  font-size: 12px;
+  color: var(--muted-foreground);
+  white-space: nowrap;
+}
+.live-status i {
+  width: 7px;
+  height: 7px;
+  border-radius: 4px;
+  background: var(--muted-foreground);
+}
+.live-status[data-connection="live"] i {
+  background: var(--good);
+}
+.live-status[data-connection="demo"] i {
+  background: var(--warning);
+}
+.live-status[data-connection="offline"] {
+  color: var(--tone-critical-ink);
+}
+.live-status[data-connection="offline"] i {
+  background: var(--destructive);
+}
+.icon-button {
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 22px;
+  background: transparent;
+  color: var(--muted-foreground);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.icon-button:hover:not(:disabled) {
+  background: var(--well);
+  color: var(--foreground);
+}
+.icon-button:disabled {
+  opacity: 0.5;
+}
+
+.phone-tabs {
+  display: none;
+}
+.running-versions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin: 0;
+  font-size: 13px;
+}
+.running-versions > div {
+  display: flex;
+  gap: 6px;
+}
+.running-versions dt {
+  color: var(--muted-foreground);
+}
+.running-versions dd {
+  margin: 0;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* A desktop with one room has no rooms column; a tablet has the chips instead. */
+@media (max-width: 1279px) {
+  .rooms-column {
+    display: none;
+  }
+}
+@media (min-width: 1280px) {
+  .app-page > .room-chips {
+    display: none;
+  }
+}
+/* A phone: no rail, the tabs at the foot, the page full width. */
+@media (max-width: 767px) {
+  .app-rail {
+    display: none;
+  }
+  .app-page > .room-chips {
+    padding: 10px 16px 0;
+  }
+  #main-content {
+    padding: 14px 16px 100px;
+  }
+  .section-title {
+    font-size: 22px;
+  }
+  /* The live status, refresh and recent activity are under More on a phone. */
+  .section-header .page-utilities,
+  .section-header-gap {
+    display: none;
+  }
+  .phone-tabs {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 72px;
+    padding: 6px 4px calc(10px + env(safe-area-inset-bottom));
+    box-sizing: content-box;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    z-index: 40;
+  }
+  .phone-tab {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    border: 0;
+    background: transparent;
+    color: var(--muted-foreground);
+    font-size: 12px;
+    font-weight: 500;
+  }
+  .phone-tab-icon {
+    align-items: center;
+    justify-content: center;
+    width: 56px;
+    height: 30px;
+    border-radius: 15px;
+  }
+  .phone-tab[aria-current="page"] {
+    color: var(--tone-info-ink);
+    font-weight: 600;
+  }
+  .phone-tab[aria-current="page"] .phone-tab-icon {
+    background: var(--tone-info-bg);
+  }
+}

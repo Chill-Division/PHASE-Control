@@ -5,8 +5,17 @@ import type { Controller } from "@/lib/types";
 import "./status-line.css";
 
 /** Every room, on every page: watering, holding and why, or not watering and what to do, with
- * how old the controller's last report is. */
-export function StatusLines({ controller }: { controller: Controller }) {
+ * how old the controller's last report is. `problemsOnly`: only a room not watering or not
+ * reporting (the rooms column and the Overview say the rest); `skip`: a room said elsewhere. */
+export function StatusLines({
+  controller,
+  problemsOnly = false,
+  skip = null,
+}: {
+  controller: Controller;
+  problemsOnly?: boolean;
+  skip?: string | null;
+}) {
   const [, tick] = useState(0);
   useEffect(() => {
     // Ages keep counting between snapshots, and a silent controller sends none.
@@ -15,10 +24,14 @@ export function StatusLines({ controller }: { controller: Controller }) {
   }, []);
   if (!controller.rooms.length) return null;
   const now = Date.now();
+  const shown = controller.rooms
+    .filter((room) => room.id !== skip)
+    .map((room) => ({ room, status: roomStatus(controller.states, room, now) }))
+    .filter(({ status }) => !problemsOnly || status.tone === "stopped" || status.tone === "stale");
+  if (!shown.length) return null;
   return (
     <section className="status-lines" aria-label="Irrigation status by room">
-      {controller.rooms.map((room) => {
-        const status = roomStatus(controller.states, room, now);
+      {shown.map(({ room, status }) => {
         const age = status.reportedAt === null ? null : now - status.reportedAt;
         return (
           <p key={room.id} className="status-line" data-tone={status.tone} data-room={room.id}>

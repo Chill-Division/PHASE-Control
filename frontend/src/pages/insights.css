@@ -1,75 +1,24 @@
-.insight-zone-picker {
+.insights-page {
   display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.insights-page > .panel {
+  margin: 0;
+}
+.probe-cover .table-scroll {
+  margin-top: 8px;
+}
+.probe-zone {
+  display: inline-flex;
   align-items: center;
-  gap: 14px;
-  margin-bottom: 22px;
-  flex-wrap: wrap;
+  gap: 8px;
+  font-weight: 600;
 }
-.insight-zone-picker label {
-  font-size: 12px;
-}
-.insight-zone-picker select {
-  min-width: 150px;
-}
-.insight-references {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 14px;
-  margin-bottom: 22px;
-}
-.insight-reference {
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 17px;
-  background: var(--surface);
-  min-width: 0;
-}
-.insight-reference > strong {
-  display: block;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--muted-foreground);
-}
-.insight-reference > span {
-  display: block;
-  font-size: 26px;
-  font-weight: 400;
-  margin: 9px 0;
-  font-variant-numeric: tabular-nums;
-}
-.insight-reference small {
-  display: block;
-  font-size: var(--text-xs);
-  color: var(--muted-foreground);
-}
-.insight-findings {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  padding: 22px;
-  gap: 30px;
-}
-.insight-findings strong {
-  font-size: 13px;
-  font-weight: 500;
-}
-.insight-findings p {
-  margin-top: 8px;
-  font-size: 13px;
-}
-.insight-findings small {
-  display: block;
-  color: var(--muted-foreground);
-  font-size: var(--text-xs);
-  margin-top: 8px;
-  line-height: 1.5;
-}
-.insight-notice {
-  background: var(--warning-bg);
-  color: var(--warning);
-  padding: 13px 20px;
-  margin: 0 20px 18px;
-  border-radius: 6px;
-  font-size: 12px;
+.probe-zone i {
+  width: 8px;
+  height: 8px;
+  border-radius: 4px;
 }
 .insight-water-grid {
   display: grid;
@@ -159,4 +108,17 @@
   .insight-water-grid .panel-heading {
     flex-wrap: wrap;
   }
+}
+.water-calculator-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+}
+.water-calculator-head h2 {
+  font-size: 17px;
+  font-weight: 600;
+}
+.water-calculator-head .target-chips {
+  flex: 1;
 }

@@ -90,7 +90,7 @@ function overrideUntil(entity?: EntityState): number | null {
 function boolean(entity?: EntityState): boolean | null {
   return entity?.state === "on" ? true : entity?.state === "off" ? false : null;
 }
-const roomActiveId = (room: Room) => `switch.${ROOT}${room.prefix}room_active`;
+export const roomActiveId = (room: Room) => `switch.${ROOT}${room.prefix}room_active`;
 /** Off means nothing is growing: the engine neither irrigates nor alerts. A missing or
  * unreadable switch is never treated as off, so an unknown state cannot hide warnings. */
 export function roomIsActive(states: States, room: Room): boolean {
@@ -204,7 +204,7 @@ const F1_ALIASES: Record<string, string> = {
   zone_2_irrigations_today: "sensor.crop_steering_system_zone_2_irrigations_today",
   zone_3_irrigations_today: "sensor.crop_steering_system_zone_3_irrigations_today",
 };
-function resolve(
+export function resolve(
   states: States,
   room: Room,
   domain: string,

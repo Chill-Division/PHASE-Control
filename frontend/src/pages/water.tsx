@@ -1,7 +1,6 @@
 import { useState } from "react";
-import { Label } from "@/components/ui/label";
-import { Heading } from "@/components/dashboard";
 import { WaterDelivery } from "@/components/water-delivery";
+import { zoneColor } from "@/lib/room-mode";
 import { WaterUsePanel } from "@/components/water-use";
 import type { Controller } from "@/lib/types";
 import "./insights.css";
@@ -12,28 +11,30 @@ export function Water({ controller }: { controller: Controller }) {
   const [zoneId, setZoneId] = useState<number | null>(zones[0]?.id ?? null);
   const zone = zones.find((item) => item.id === zoneId) ?? zones[0];
   return (
-    <>
-      <Heading title="Water" />
+    <div className="insights-page">
       <WaterUsePanel controller={controller} zones={zones} />
       {zone && (
         <>
-          <div className="insight-zone-picker">
-            <Label htmlFor="water-zone">Shot calculator for</Label>
-            <select
-              id="water-zone"
-              value={zone.id}
-              onChange={(event) => setZoneId(Number(event.target.value))}
-            >
-              {zones.map((item) => (
-                <option key={item.id} value={item.id}>
+          <div className="water-calculator-head">
+            <h2>Shot calculator</h2>
+            <div className="target-chips" role="group" aria-label="Shot calculator for">
+              {zones.map((item, index) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  className="target-chip"
+                  aria-pressed={item.id === zone.id}
+                  onClick={() => setZoneId(item.id)}
+                >
+                  <i style={{ background: zoneColor(index) }} aria-hidden="true" />
                   {item.name}
-                </option>
+                </button>
               ))}
-            </select>
+            </div>
           </div>
           <WaterDelivery controller={controller} zoneId={zone.id} />
         </>
       )}
-    </>
+    </div>
   );
 }

@@ -1,0 +1,64 @@
+.more-page {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.more-group {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 2px 14px;
+}
+.more-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 56px;
+  border: 0;
+  border-bottom: 1px solid var(--hairline);
+  background: transparent;
+  color: var(--foreground);
+  text-align: left;
+}
+.more-row:last-child {
+  border-bottom: 0;
+}
+.more-row > svg:first-child {
+  color: var(--muted-foreground);
+  flex: none;
+}
+.more-row > span {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 8px 0;
+}
+.more-row strong {
+  font-size: 15px;
+  font-weight: 500;
+}
+.more-row small {
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+.more-activity {
+  padding: 8px 14px 4px;
+}
+.more-activity-head {
+  display: flex;
+  align-items: center;
+}
+.more-activity-head h2 {
+  flex: 1;
+  font-size: 15px;
+}
+.more-foot {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0 4px;
+  font-size: 12px;
+  color: var(--muted-foreground);
+}

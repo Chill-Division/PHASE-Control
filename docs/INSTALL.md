@@ -88,7 +88,7 @@ The existing app slug `f2_control` and entity IDs are deliberately stable. A roo
 
 ## The tank on the Overview
 
-The Overview's tank is the room's reservoir. Its level comes from the level sensor mapped under **Settings → Rooms & hardware → Reservoir & dosers**, with the distances when full and when empty set on **Feed → Reservoir**; until then it reads **Not mapped** or **Not set up**. The room pump is mapped under **Shared room hardware**, or from **Map sensors** on the tank. **Refill** and **Last refill** need no mapping: they are the controller's own record of the refills it runs for the room's reservoir. See [Tank and pump display](USER_GUIDE.md#tank-and-pump-display).
+The tank card on **Feed → Reservoir** (and the compact reservoir card on the Overview) is the room's reservoir. Its level comes from the level sensor mapped under **Settings → Rooms & hardware → Reservoir & dosers**, with the distances when full and when empty set on **Feed → Reservoir**; until then it reads **Not mapped** or **Not set up**. The room pump is mapped under **Shared room hardware**, or from **Map sensors** on the tank. **Refill** and **Last refill** need no mapping: they are the controller's own record of the refills it runs for the room's reservoir. See [Tank and pump display](USER_GUIDE.md#tank-and-pump-display).
 
 Save setup with the affected engines and irrigation equipment off, then verify the readings in **Overview** before restoring the previous engine state. Missing mappings remain labelled; an unavailable pump is never displayed as off.
 

@@ -5,7 +5,7 @@ import { textPieces, tourSteps } from "./tour";
 import { readWhatsNew } from "./whats-new";
 
 describe("the first-run tour", () => {
-  it("walks Overview, Irrigation plan, Feed and Settings, and ends on the room's switches", () => {
+  it("walks Overview, Irrigation plan, Feed and Settings, and ends on how the room runs", () => {
     const steps = tourSteps(true);
     expect(steps.map((step) => step.page)).toEqual([
       null,
@@ -15,7 +15,7 @@ describe("the first-run tour", () => {
       "setup",
       "overview",
     ]);
-    expect(steps.at(-1)!.target).toEqual([".page-heading .room-power"]);
+    expect(steps.at(-1)!.target).toEqual([".mode-pill"]);
     expect(steps[0].target).toEqual([]); // the welcome points at nothing
   });
   it("opens Feed on the stock tanks in a room without a reservoir, as the menu does", () => {

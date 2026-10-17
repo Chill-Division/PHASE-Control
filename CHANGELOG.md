@@ -12,9 +12,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- **One Home Assistant button.** The top bar's house button is gone, and the room and page move
-  left into its space. Home Assistant's menu opens from **Home Assistant** at the foot of the side
-  menu, under ☰ on a phone, as it already could.
+- **One Home Assistant button.** Home Assistant's own menu opens from **Home Assistant** at the foot
+  of the menu on the left, or from **More** on a phone; the top bar and its second house button
+  are gone.
 - **No hidden switch can stop watering.** Two on/off switches left over from older versions,
   System Enabled and Auto Irrigation Enabled, are gone. Hidden in Home Assistant, either one, off,
   kept a room from watering: switching watering on in PHASE Control never lasted, and only Home
@@ -40,14 +40,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   parameters** screen is gone, and so are the pot size, drippers, field capacity and maximum EC on
   **Edit zones**: what they saved never reached the controller. A save there now keeps each zone's
   name, plant count and sizing instead of resetting them.
+- **A new look, the same controls.** Every page is redesigned, alike on a phone, a tablet and a
+  computer. The sections run down the left, or along the foot of a phone with **More** for Settings,
+  Help and the tour. With more than one room, each room has a card with a small clock of its day,
+  its mode and its status; **Settings → General → Open on** picks the room this device opens on.
+- **The Overview reads the room at a glance.** Its grow day as a clock, what comes next, a card for
+  each zone with its own small day chart and its band from trigger to peak, the reservoir, and the
+  day's events. A zone's details hold its whole grow-day chart, and what needs you comes first.
+- **How a room runs is one choice:** **Steering**, **Watching only** or **Room off**, in a pill on the
+  Overview, in place of the room and watering switches. Each lists what it changes before it applies.
+- **Schedule or Today's targets, told apart at a glance.** The Overview, Today and the Schedule say
+  which targets a room runs on: a running schedule in indigo with a calendar and its day, Today's
+  targets in blue with sliders.
+- **Today, rearranged.** The zone's day beside its phase cards. Every percentage keeps its gauge or
+  pie mark, now on a phone too, and says what it works out to: a shot's millilitres a plant and its
+  time at the drippers, the P3 dryback's level from the peak. A draft waits in a bar at the foot.
+- **Insights → Zone shows the week:** the overnight dryback against its target, when the peak came,
+  the shots a day, and each grow-day drawn small. **Feed** has a **Recipes** tab, and the tank's
+  24-hour level chart is on Feed → Reservoir. **Rooms & hardware** draws how water reaches each
+  zone. The running versions are at the top of **Help**.
 
 ### 🔧 Technical notes
 
-- Dashboard: the top bar no longer has the HA shell's menu button ("Open Home Assistant menu"); the
-  sidebar footer's **Home Assistant** button, in the desktop sidebar and the phone's sheet, is the
-  one way to `haShell.toggle()`. `verify-ha-shell.mjs` opens HA's menu from the sidebar at 1440 px
-  and from the sheet at 390 px, and fails if the top bar has a Home Assistant button. The sidebar
-  docs (`HA_SIDEBAR.md`, `INSTALL.md`, `USER_GUIDE.md`) say where the button is.
+- Dashboard: `haShell.toggle()` (Home Assistant's menu) has one button, the rail's **Home
+  Assistant** at its foot, or More's row on a phone. `verify-ha-shell.mjs` opens HA's menu from both
+  and fails on a second Home Assistant button anywhere. The sidebar docs (`HA_SIDEBAR.md`,
+  `INSTALL.md`, `USER_GUIDE.md`) say where it is.
 - Integration: `switch.crop_steering_<prefix>system_enabled` and `…auto_irrigation_enabled`, retired
   in 2.25.0 and kept hidden for controllers from 2.24.0 or before, are no longer created, and setup
   removes them from an existing room's entity registry (`_RETIRED`). `tests_ha/test_retired_switches.py`
@@ -95,6 +113,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   untouched save moves nothing (three seeded fixtures), and that a save with a switch on is refused.
   `_save_zones` (`test_setup_entry.py`) names and sizes zones as Rooms & hardware does, for the
   tests that used to do it in the wizard.
+- Dashboard, the redesign. Shell (`shell.tsx`): `Rail` (sections; Strategy's draft badge; the HA
+  menu button when embedded), `RoomsColumn` (≥1280 px with more than one room: a `DayDial` mini
+  clock, `roomMode` and `roomStatus` per room), `RoomChips` (narrower), `PhoneTabs` and the **More**
+  page (`pages/more.tsx`), `SectionHeader` (title, tabs as `.segmented`, `LiveStatus`, refresh,
+  `ActivityPanel`) and `RunningVersions` (Help, More; was the sidebar's). The columns run the page's
+  full height with sticky inner columns. `Heading` keeps its title as a hidden `h2`.
+- Dashboard: design tokens in `styles.css`: phase colours (`--phase-p0..3`, dark variants), six zone
+  blues (`--zone-N`, also the history and water charts' colours), notice tones, `--schedule` and
+  `--today-src`, lights on/off; `.card`, `.link-button`, `.button-quiet`, `.tone-badge`; `.panel`
+  takes the card's look. Pills and the grow-day chart use the phase colours.
+- Dashboard: the Overview (`pages/overview.tsx`, `components/overview-parts.tsx`): `ModeControl`
+  (`lib/room-mode.ts`: `roomMode`, `modeChanges` onto `room_active` and the engine switch, reviewed),
+  `TargetsSource`, `StatusRow`, `NeedsYou`, `TodayCard` (`components/day-dial.tsx`), `ComingUp`
+  (`comingUp` from the lanes' next shots and projections), `ZoneCard` with `ZoneMiniChart`,
+  `EarlierToday`, `ReservoirSummary` (`tank-status.tsx`). `day-timeline.tsx` splits into `useDayData`,
+  `useLanes`, `WithLanes` and `DayChart` (one zone's lane with `zoneId`), which `ZoneDetails` shows.
+  `TankStatus` moves to Feed › Reservoir. The metric strip, the zone table and the attention list go.
+- Dashboard: Today (`pages/strategy.tsx`, `strategy.css`): `TargetsBanner` (`targets-banner.tsx`,
+  also on the Schedule with its own words), zone chips and **Whole room**, the planning curve beside
+  phase cards (one open at a time, the zone's phase first; the curve marks it), `.scale-words` from
+  `estimatePercent` and the peak target, and a dark sticky draft bar. The workflow steps, the zone
+  aside, the phase filter and **Expand preview** go.
+- Dashboard: the Schedule's status chip, `.segmented` Weeks/Days and cells coloured from the P1 green
+  to the P3 indigo by balance, with a key. Insights › Zone: `lib/zone-week.ts` (`weekDays`,
+  `weekFindings`, with `zone-week.test.ts`) over `useEarlierDays`' traces, `components/zone-week.tsx`
+  (findings, small multiples, trend tiles); the reference tiles go. Water: zone chips for the shot
+  calculator. Feed: a `recipes` page (`Reservoir` with `view`), sharing the reservoir's draft
+  (`SHARED_DRAFT` in `App.tsx`: no discard prompt between the two). Rooms & hardware:
+  `PlumbingDiagram` (`plumbing-diagram.tsx`). Settings → General → **Open on**
+  (`lib/default-room.ts`, per browser; a `?room=` link still wins). The tour points at the new places.
+- Dashboard: the seven browser checks follow the new layout, and the README's screenshots are
+  retaken from it.
 
 ## [1.2.0] - 2026-10-16
 

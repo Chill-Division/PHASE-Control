@@ -85,6 +85,7 @@ import {
 import { descriptor } from "@/lib/model";
 import type { Controller } from "@/lib/types";
 import { errorText } from "@/lib/utils";
+import { TankStatus } from "@/components/tank-status";
 import "./reservoir.css";
 
 const when = (at: number | null) =>
@@ -1077,10 +1078,13 @@ export function Reservoir({
   controller,
   navigate,
   onDirtyChange,
+  view = "reservoir",
 }: {
   controller: Controller;
   navigate: (page: Page) => void;
   onDirtyChange: (dirty: boolean) => void;
+  /** Feed › Reservoir (batches, the schedule, dosers) or Feed › Recipes: one draft, one save. */
+  view?: "reservoir" | "recipes";
 }) {
   const [doc, setDoc] = useState<FeedDocument | null>(null);
   const [draft, setDraft] = useState<FeedDraft | null>(null);
@@ -1247,7 +1251,7 @@ export function Reservoir({
 
   return (
     <>
-      <Heading title="Reservoir" />
+      <Heading title={view === "recipes" ? "Feed recipes" : "Reservoir"} />
       {error && (
         <p className="workspace-message error" role="alert">
           {error}
@@ -1273,245 +1277,259 @@ export function Reservoir({
       )}
       {doc && draft && (reservoir || !!mapped.length) && (
         <>
-          <BatchPanel
-            controller={controller}
-            doc={doc}
-            status={status}
-            level={level}
-            pct={pct}
-            mapped={reservoir}
-            refillable={canRefill(attributes)}
-          />
-          <FeedSchedulePanel draft={draft} today={today} onChange={setDraft} />
-          <div className="res-columns">
-            <section className="panel workspace-card res-stage">
-              <h2>Feed stage</h2>
-              <p className="muted small">
-                The recipe the next batch mixes: the feed schedule&apos;s this week, or one picked
-                here. Swap the bottles on the dosers if that stage uses other nutrients.
-              </p>
-              <Label htmlFor={`${listId}-stage`}>Stage in use</Label>
-              <select
-                id={`${listId}-stage`}
-                className="res-select"
-                value={using ?? ""}
-                onChange={(event) => setDraft(pickStage(draft, event.target.value || null, today))}
-              >
-                <option value="">None: no batches</option>
-                {draft.recipes.map((recipe, index) => (
-                  <option key={recipe.id} value={recipe.id}>
-                    {recipe.name || `Recipe ${index + 1}`}
-                  </option>
-                ))}
-              </select>
-              {week &&
-                (holding ? (
-                  <p className="workspace-message" data-stage-held>
-                    Held by hand only until Week {week.week + 1} starts on {dayLabel(holding)}; then
-                    the feed schedule takes over again. If you don&apos;t want the scheduled recipe,
-                    remove the schedule.
+          {view === "reservoir" && (
+            <>
+              <BatchPanel
+                controller={controller}
+                doc={doc}
+                status={status}
+                level={level}
+                pct={pct}
+                mapped={reservoir}
+                refillable={canRefill(attributes)}
+              />
+              <TankStatus controller={controller} onConfigure={() => navigate("setup")} />
+              <FeedSchedulePanel draft={draft} today={today} onChange={setDraft} />
+              <div className="res-columns">
+                <section className="panel workspace-card res-stage">
+                  <h2>Feed stage</h2>
+                  <p className="muted small">
+                    The recipe the next batch mixes: the feed schedule&apos;s this week, or one
+                    picked here. Swap the bottles on the dosers if that stage uses other nutrients.
                   </p>
-                ) : (
-                  <p className="muted small" data-stage-source>
-                    From the feed schedule: Week {week.week}. Another picked here holds only until
-                    the schedule&apos;s next week starts, on{" "}
-                    {dayLabel(weekStarts(draft, week.week + 1))}.
-                  </p>
-                ))}
-              {preview?.problem ? (
-                <p className="workspace-message" data-feed-problem>
-                  {preview.problem}
-                </p>
-              ) : (
-                preview && (
-                  <table className="data-table res-plan" aria-label="The next batch's doses">
-                    <thead>
-                      <tr>
-                        <th>#</th>
-                        <th>Nutrient</th>
-                        <th className="numeric">Dose</th>
-                        <th className="numeric">Runs</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {preview.doses.map((dose, index) => (
-                        <tr key={dose.doser}>
-                          <td>{index + 1}</td>
-                          <td>
-                            {dose.label} <span className="muted small">doser {dose.doser}</span>
-                          </td>
-                          <td className="numeric">
-                            {number(dose.ml, 0)}
-                            <span className="unit"> mL</span>
-                          </td>
-                          <td className="numeric">{duration(dose.seconds)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )
-              )}
-            </section>
-            <section className="panel workspace-card res-settings">
-              <h2>Batch</h2>
-              <div className="res-setting-grid">
-                {(Object.keys(SETTINGS) as (keyof FeedSettings)[])
-                  .filter((key) => key !== "remind_pct" || reminds)
-                  .map(setting)}
-              </div>
-            </section>
-          </div>
-          <section className="panel workspace-card">
-            <div className="res-dosers-head">
-              <h2>Dosers</h2>
-              {!!mapped.length && (
-                <Popover.Root>
-                  <Popover.Trigger asChild>
-                    <button
-                      type="button"
-                      className="setting-help-trigger"
-                      aria-label="About the dosers"
-                    >
-                      <CircleHelp size={15} aria-hidden="true" />
-                    </button>
-                  </Popover.Trigger>
-                  <Popover.Portal>
-                    <Popover.Content
-                      className="setting-help"
-                      side="bottom"
-                      align="start"
-                      sideOffset={6}
-                      collisionPadding={12}
-                    >
-                      <p>Each card shows what its doser pumps in the feed stage in use.</p>
-                      <p>
-                        Flow is how many mL the doser pumps a minute, as calibrated on the doser
-                        itself. The controller uses it to work out how long to run the doser for
-                        each dose.
+                  <Label htmlFor={`${listId}-stage`}>Stage in use</Label>
+                  <select
+                    id={`${listId}-stage`}
+                    className="res-select"
+                    value={using ?? ""}
+                    onChange={(event) =>
+                      setDraft(pickStage(draft, event.target.value || null, today))
+                    }
+                  >
+                    <option value="">None: no batches</option>
+                    {draft.recipes.map((recipe, index) => (
+                      <option key={recipe.id} value={recipe.id}>
+                        {recipe.name || `Recipe ${index + 1}`}
+                      </option>
+                    ))}
+                  </select>
+                  {week &&
+                    (holding ? (
+                      <p className="workspace-message" data-stage-held>
+                        Held by hand only until Week {week.week + 1} starts on {dayLabel(holding)};
+                        then the feed schedule takes over again. If you don&apos;t want the
+                        scheduled recipe, remove the schedule.
                       </p>
-                      <p>The order the dosers run in is set in each feed recipe.</p>
-                    </Popover.Content>
-                  </Popover.Portal>
-                </Popover.Root>
-              )}
-            </div>
-            {mapped.length ? (
-              <DoserFlows
-                draft={draft}
-                mapped={mapped}
-                entities={doc.mapped}
-                stage={stage}
-                onChange={setDraft}
-              />
-            ) : (
-              <p className="muted">
-                No doser is mapped.{" "}
-                <Button variant="link" className="inline-link" onClick={() => navigate("setup")}>
-                  Map them in Rooms & hardware
-                </Button>
-                .
-              </p>
-            )}
-          </section>
-          <section className="res-recipes" aria-labelledby={`${listId}-recipes`}>
-            <div className="workspace-section-heading">
-              <div>
-                <h2 id={`${listId}-recipes`}>Feed recipes</h2>
-                <p className="muted small">
-                  One per growth stage. Parts are the ratio, as on the nutrient chart (Athena Flower
-                  is 3 Core : 5 Bloom : 1 Balance : 0.5 Cleanse); the strength is how many mL per
-                  litre one part is. Each nutrient is the bottle on that doser in that stage.
+                    ) : (
+                      <p className="muted small" data-stage-source>
+                        From the feed schedule: Week {week.week}. Another picked here holds only
+                        until the schedule&apos;s next week starts, on{" "}
+                        {dayLabel(weekStarts(draft, week.week + 1))}.
+                      </p>
+                    ))}
+                  {preview?.problem ? (
+                    <p className="workspace-message" data-feed-problem>
+                      {preview.problem}
+                    </p>
+                  ) : (
+                    preview && (
+                      <table className="data-table res-plan" aria-label="The next batch's doses">
+                        <thead>
+                          <tr>
+                            <th>#</th>
+                            <th>Nutrient</th>
+                            <th className="numeric">Dose</th>
+                            <th className="numeric">Runs</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {preview.doses.map((dose, index) => (
+                            <tr key={dose.doser}>
+                              <td>{index + 1}</td>
+                              <td>
+                                {dose.label} <span className="muted small">doser {dose.doser}</span>
+                              </td>
+                              <td className="numeric">
+                                {number(dose.ml, 0)}
+                                <span className="unit"> mL</span>
+                              </td>
+                              <td className="numeric">{duration(dose.seconds)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )
+                  )}
+                </section>
+                <section className="panel workspace-card res-settings">
+                  <h2>Batch</h2>
+                  <div className="res-setting-grid">
+                    {(Object.keys(SETTINGS) as (keyof FeedSettings)[])
+                      .filter((key) => key !== "remind_pct" || reminds)
+                      .map(setting)}
+                  </div>
+                </section>
+              </div>
+              <section className="panel workspace-card">
+                <div className="res-dosers-head">
+                  <h2>Dosers</h2>
+                  {!!mapped.length && (
+                    <Popover.Root>
+                      <Popover.Trigger asChild>
+                        <button
+                          type="button"
+                          className="setting-help-trigger"
+                          aria-label="About the dosers"
+                        >
+                          <CircleHelp size={15} aria-hidden="true" />
+                        </button>
+                      </Popover.Trigger>
+                      <Popover.Portal>
+                        <Popover.Content
+                          className="setting-help"
+                          side="bottom"
+                          align="start"
+                          sideOffset={6}
+                          collisionPadding={12}
+                        >
+                          <p>Each card shows what its doser pumps in the feed stage in use.</p>
+                          <p>
+                            Flow is how many mL the doser pumps a minute, as calibrated on the doser
+                            itself. The controller uses it to work out how long to run the doser for
+                            each dose.
+                          </p>
+                          <p>The order the dosers run in is set in each feed recipe.</p>
+                        </Popover.Content>
+                      </Popover.Portal>
+                    </Popover.Root>
+                  )}
+                </div>
+                {mapped.length ? (
+                  <DoserFlows
+                    draft={draft}
+                    mapped={mapped}
+                    entities={doc.mapped}
+                    stage={stage}
+                    onChange={setDraft}
+                  />
+                ) : (
+                  <p className="muted">
+                    No doser is mapped.{" "}
+                    <Button
+                      variant="link"
+                      className="inline-link"
+                      onClick={() => navigate("setup")}
+                    >
+                      Map them in Rooms & hardware
+                    </Button>
+                    .
+                  </p>
+                )}
+              </section>
+            </>
+          )}
+          {view === "recipes" && (
+            <section className="res-recipes" aria-labelledby={`${listId}-recipes`}>
+              <div className="workspace-section-heading">
+                <div>
+                  <h2 id={`${listId}-recipes`}>Feed recipes</h2>
+                  <p className="muted small">
+                    One per growth stage. Parts are the ratio, as on the nutrient chart (Athena
+                    Flower is 3 Core : 5 Bloom : 1 Balance : 0.5 Cleanse); the strength is how many
+                    mL per litre one part is. Each nutrient is the bottle on that doser in that
+                    stage.
+                  </p>
+                </div>
+                <div className="res-recipes-actions">
+                  <Label htmlFor={`${listId}-template`} className="sr-only">
+                    Start from
+                  </Label>
+                  <select
+                    id={`${listId}-template`}
+                    className="res-select"
+                    value={template}
+                    onChange={(event) => setTemplate(event.target.value)}
+                  >
+                    <option value="">Blank recipe</option>
+                    {TEMPLATE_GROUPS.map(({ group, templates }) => (
+                      <optgroup key={group} label={group}>
+                        {templates.map((t) => (
+                          <option key={t.id} value={t.id}>
+                            {t.label}
+                          </option>
+                        ))}
+                      </optgroup>
+                    ))}
+                  </select>
+                  <Button
+                    variant="outline"
+                    disabled={full}
+                    onClick={() => add(TEMPLATES.find((t) => t.id === template) ?? null)}
+                  >
+                    <Plus size={16} /> Add a feed recipe
+                  </Button>
+                  <Button variant="outline" disabled={full} onClick={() => file.current?.click()}>
+                    <Upload size={16} /> Import recipe file
+                  </Button>
+                  <input
+                    ref={file}
+                    className="sr-only"
+                    type="file"
+                    accept="application/json,.json"
+                    aria-label="Import a feed recipe file"
+                    tabIndex={-1}
+                    onChange={(event) => void importFile(event.target.files?.[0])}
+                  />
+                </div>
+              </div>
+              {added && (
+                <p
+                  className={`workspace-message${added.error ? " error" : ""}`}
+                  role={added.error ? "alert" : "status"}
+                  data-recipe-added
+                >
+                  {added.text}
                 </p>
-              </div>
-              <div className="res-recipes-actions">
-                <Label htmlFor={`${listId}-template`} className="sr-only">
-                  Start from
-                </Label>
-                <select
-                  id={`${listId}-template`}
-                  className="res-select"
-                  value={template}
-                  onChange={(event) => setTemplate(event.target.value)}
-                >
-                  <option value="">Blank recipe</option>
-                  {TEMPLATE_GROUPS.map(({ group, templates }) => (
-                    <optgroup key={group} label={group}>
-                      {templates.map((t) => (
-                        <option key={t.id} value={t.id}>
-                          {t.label}
-                        </option>
-                      ))}
-                    </optgroup>
-                  ))}
-                </select>
-                <Button
-                  variant="outline"
-                  disabled={full}
-                  onClick={() => add(TEMPLATES.find((t) => t.id === template) ?? null)}
-                >
-                  <Plus size={16} /> Add a feed recipe
-                </Button>
-                <Button variant="outline" disabled={full} onClick={() => file.current?.click()}>
-                  <Upload size={16} /> Import recipe file
-                </Button>
-                <input
-                  ref={file}
-                  className="sr-only"
-                  type="file"
-                  accept="application/json,.json"
-                  aria-label="Import a feed recipe file"
-                  tabIndex={-1}
-                  onChange={(event) => void importFile(event.target.files?.[0])}
+              )}
+              <datalist id={`${listId}-stages`}>
+                {STAGE_NAMES.map((name) => (
+                  <option key={name} value={name} />
+                ))}
+              </datalist>
+              <datalist id={`${listId}-nutrients`}>
+                {[...new Set(Object.values(NUTRIENT_LINES).flat())].map((name) => (
+                  <option key={name} value={name} />
+                ))}
+              </datalist>
+              {!draft.recipes.length && (
+                <p className="muted">No feed recipes yet: add one for each stage you feed.</p>
+              )}
+              {draft.recipes.map((recipe, index) => (
+                <RecipeCard
+                  key={recipe.id || index}
+                  draft={draft}
+                  recipe={recipe}
+                  index={index}
+                  rows={rows(recipe)}
+                  mapped={mapped}
+                  listId={listId}
+                  onChange={(next) =>
+                    setDraft({
+                      ...draft,
+                      recipes: draft.recipes.map((r, i) => (i === index ? next : r)),
+                    })
+                  }
+                  onRemove={() =>
+                    setDraft({
+                      ...draft,
+                      recipes: draft.recipes.filter((_, i) => i !== index),
+                      stage: draft.stage === recipe.id ? null : draft.stage,
+                    })
+                  }
                 />
-              </div>
-            </div>
-            {added && (
-              <p
-                className={`workspace-message${added.error ? " error" : ""}`}
-                role={added.error ? "alert" : "status"}
-                data-recipe-added
-              >
-                {added.text}
-              </p>
-            )}
-            <datalist id={`${listId}-stages`}>
-              {STAGE_NAMES.map((name) => (
-                <option key={name} value={name} />
               ))}
-            </datalist>
-            <datalist id={`${listId}-nutrients`}>
-              {[...new Set(Object.values(NUTRIENT_LINES).flat())].map((name) => (
-                <option key={name} value={name} />
-              ))}
-            </datalist>
-            {!draft.recipes.length && (
-              <p className="muted">No feed recipes yet: add one for each stage you feed.</p>
-            )}
-            {draft.recipes.map((recipe, index) => (
-              <RecipeCard
-                key={recipe.id || index}
-                draft={draft}
-                recipe={recipe}
-                index={index}
-                rows={rows(recipe)}
-                mapped={mapped}
-                listId={listId}
-                onChange={(next) =>
-                  setDraft({
-                    ...draft,
-                    recipes: draft.recipes.map((r, i) => (i === index ? next : r)),
-                  })
-                }
-                onRemove={() =>
-                  setDraft({
-                    ...draft,
-                    recipes: draft.recipes.filter((_, i) => i !== index),
-                    stage: draft.stage === recipe.id ? null : draft.stage,
-                  })
-                }
-              />
-            ))}
-          </section>
+            </section>
+          )}
           {dirty && (
             <div className="res-savebar" role="region" aria-label="Unsaved changes">
               {!!errors.length && (

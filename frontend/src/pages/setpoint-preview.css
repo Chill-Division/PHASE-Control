@@ -1,74 +1,6 @@
-.strategy-layout.setpoint-workspace {
-  grid-template-columns: minmax(0, 1fr);
-  gap: 18px;
-}
-.setpoint-workspace .strategy-zone-picker {
-  position: static;
-  flex-direction: row;
-  flex-wrap: wrap;
-  align-items: center;
-}
-.setpoint-workspace .strategy-zone-picker > button {
-  flex-direction: row;
-  align-items: center;
-  gap: 12px;
-  border-color: var(--border);
-}
-.setpoint-workspace .strategy-zone-picker > p {
-  display: none;
-}
-.setpoint-editor-grid {
-  display: grid;
-  grid-template-columns: minmax(320px, 0.85fr) minmax(420px, 1.15fr);
-  align-items: start;
-  gap: 20px;
-}
 .setpoint-controls,
 .setpoint-preview {
   min-width: 0;
-}
-.setpoint-preview {
-  position: sticky;
-  top: 16px;
-}
-.setpoint-preview-context {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 12px;
-}
-.setpoint-preview-context strong {
-  display: block;
-  font-size: 14px;
-}
-.setpoint-preview-context span {
-  display: block;
-  color: var(--muted-foreground);
-  font-size: 12px;
-  margin-top: 4px;
-}
-.setpoint-phase-picker {
-  display: flex;
-  flex-direction: row;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-bottom: 12px;
-}
-.setpoint-phase-picker button {
-  width: auto;
-  flex: 0 0 auto;
-  text-align: center;
-  padding: 8px 12px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--surface);
-  font-size: 12px;
-}
-.setpoint-phase-picker button[aria-pressed="true"] {
-  background: var(--secondary);
-  color: var(--primary-strong);
-  border-color: var(--primary);
 }
 /* The input box, and beside it the column for its absolute or relative mark (scale-mark.css). */
 .setpoint-controls .setting-field {
@@ -112,12 +44,11 @@
   margin-top: 2px;
 }
 .setpoint-mode-visibility {
-  display: flex;
+  display: inline-flex;
   gap: 8px;
   align-items: center;
-  margin: 12px 0 18px;
-  font-size: 12px;
-  color: var(--muted-foreground);
+  font-size: 13px;
+  color: var(--tone-paused-ink);
 }
 .setpoint-preview-note {
   color: var(--muted-foreground);
@@ -176,42 +107,9 @@
 .setpoint-preview .planning-phase-legend > span {
   font-size: var(--text-xs);
 }
-.setpoint-expand {
-  display: none;
-}
-@media (max-width: 1150px) {
-  .setpoint-editor-grid {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .setpoint-preview {
-    grid-row: 1;
-    position: static;
-  }
-  .setpoint-expand {
-    display: inline-flex;
-  }
-  .setpoint-preview:not(.is-expanded) .planning-phase-legend,
-  .setpoint-preview:not(.is-expanded) .planning-assumptions,
-  .setpoint-preview:not(.is-expanded) .planning-curve > p.muted,
-  .setpoint-preview:not(.is-expanded) .setpoint-preview-note {
-    display: none;
-  }
-  .setpoint-preview:not(.is-expanded) .planning-svg-wrap svg {
-    height: 250px;
-  }
-  .setpoint-preview:not(.is-expanded) .planning-curve .panel-heading p {
-    display: none;
-  }
-}
 @media (max-width: 620px) {
-  .setpoint-preview:not(.is-expanded) .planning-svg-wrap svg {
-    height: 220px;
-  }
   .setpoint-controls .setting-field {
     grid-template-columns: minmax(0, 1fr) 138px;
-  }
-  .setpoint-preview-context strong {
-    font-size: 12px;
   }
   .setpoint-preview .planning-chart-key {
     font-size: var(--text-xs);

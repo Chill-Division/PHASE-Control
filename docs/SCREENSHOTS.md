@@ -4,9 +4,9 @@ Captured in October 2026 from the compiled application with isolated demo data, 
 
 ## Overview
 
-![Overview](../img/operator-dashboard.png)
+![The Overview: the room's day as a clock, what comes next, and a card for each zone with its own day](../img/operator-dashboard.png)
 
-## Tank and pump
+## Feed: the tank and pump
 
 ![The tank's level, its level over the last 24 hours, the pump, and the controller's refills](../img/tank-status.png)
 
@@ -40,7 +40,7 @@ Captured in October 2026 from the compiled application with isolated demo data, 
 
 ## Room switched off
 
-![Room off: readings shown, no irrigation and no alerts](../img/room-off.png)
+![The Overview with the room set to Room off: readings shown, no irrigation and no alerts](../img/room-off.png)
 
 ## Insights: Compare runs
 

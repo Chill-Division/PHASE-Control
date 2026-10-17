@@ -65,7 +65,10 @@ for (const prefix of ["", "f1_"]) {
     enable_flag: flag,
     // F1 runs a pair that reports its versions; the default room models an older pair that does not
     ...(prefix ? { integration_version: "2.19.1" } : {}),
+    // F1's pump is mapped: the Overview's reservoir card then shows a reading that can go stale.
+    ...(prefix ? { pump: "switch.f1_irrigation_pump" } : {}),
   });
+  if (prefix) put("switch.f1_irrigation_pump", "off");
   put(`sensor.crop_steering_${prefix}ai_heartbeat`, "online", {
     enable_flag: flag,
     last_beat: new Date().toISOString(),
@@ -86,6 +89,9 @@ for (const prefix of ["", "f1_"]) {
     put(`sensor.crop_steering_${prefix}ec_zone_${z}`, 3, {
       unit_of_measurement: "mS/cm",
     });
+    // Today's water and shots so far, for the Overview's totals.
+    put(`sensor.${k}daily_water_app`, 1.5, { unit_of_measurement: "L" });
+    put(`sensor.${k}irrigation_count_app`, 4);
     put(`number.${k}p1_target_vwc`, 64, {
       min: 10,
       max: 90,
@@ -163,56 +169,112 @@ async function check(name, run) {
   console.log("PASS " + name);
 }
 const field = (key) => page.locator(`input[id="setting-number.crop_steering_f1_zone_1_${key}"]`);
+/** Today's targets show one phase card open at a time (the zone's phase now, by default): opens the
+ * card of `phase`, whose settings the checks then type into. */
+async function openCard(phase) {
+  const head = page.locator(`section.phase-card[data-phase="${phase}"] > button.phase-card-head`);
+  await visible(head);
+  if ((await head.getAttribute("aria-expanded")) !== "true") await head.click();
+  await page
+    .locator(
+      `section.phase-card[data-phase="${phase}"] > button.phase-card-head[aria-expanded="true"]`,
+    )
+    .waitFor();
+}
+/** A section, from the rail down the left of a tablet or a desktop. */
+const openSection = (name) =>
+  page
+    .locator('nav.app-rail[aria-label="Sections"]')
+    .getByRole("button", { name, exact: true })
+    .click();
+/** The room shown, as the rooms column marks it (a desktop with more than one room); "" for none. */
+async function currentRoom() {
+  await visible(page.locator('nav.rooms-column[aria-label="Rooms"]'));
+  const current = page.locator('nav.rooms-column button.room-card[aria-current="page"]');
+  return (await current.count()) ? current.locator(".room-card-head strong").innerText() : "";
+}
+/** Picks a room the way a person does on a desktop: its card in the rooms column. */
+async function chooseRoom(name) {
+  await page
+    .locator("nav.rooms-column button.room-card")
+    .filter({ has: page.getByText(name, { exact: true }) })
+    .click();
+  await page
+    .locator('nav.rooms-column button.room-card[aria-current="page"]')
+    .filter({ has: page.getByText(name, { exact: true }) })
+    .waitFor();
+}
 try {
   await check("live connection selects requested room without showing demo", async () => {
     await page.goto(`${base}/dashboard.html?room=room:f1_#/strategy`, {
       waitUntil: "networkidle",
     });
-    await visible(page.getByText("Connected", { exact: true }));
-    assert.equal(await page.locator("#desktop-room").inputValue(), "room:f1_");
+    // The section header says live, and when the newest data came.
+    const status = page.locator('.section-header .live-status[data-connection="live"]');
+    await visible(status);
+    assert.match(await status.innerText(), /^Live · updated \d{1,2}:\d{2}/);
+    assert.equal(await currentRoom(), "Flower 1");
     assert.equal(await page.locator(".demo-banner").count(), 0);
+    await openCard("P1");
     await visible(field("p1_target_vwc"));
   });
   await check(
-    "sidebar shows the versions the running integration and controller report, per room",
+    "Help shows the versions the running integration and controller report, per room",
     async () => {
-      const versions = page.locator(".desktop-sidebar .sidebar-versions");
+      await openSection("Help");
+      const versions = page.locator('dl.running-versions[aria-label="Running versions"]');
       await visible(versions);
       assert.match(await versions.innerText(), /Integration\s+2\.19\.1/);
       assert.match(await versions.innerText(), /Controller\s+0\.16\.1/);
       // An older pair reports nothing: say so, never show a number this page made up.
-      await page.locator("#desktop-room").selectOption("room:");
+      await chooseRoom("Flower 2");
       await visible(versions.getByText("not reported").first());
       assert.equal((await versions.innerText()).match(/not reported/g).length, 2);
-      await page.locator("#desktop-room").selectOption("room:f1_");
+      await chooseRoom("Flower 1");
       await visible(versions.getByText("2.19.1"));
     },
   );
   await check(
-    "the navigation scrolls on a phone and in a short window, down to the versions in its footer",
+    "the versions stay reachable: on a phone at the foot of More, above its tabs, and in a short window down the rail to Help",
     async () => {
-      // Seen on a real phone: the drawer was screen-high, the menu taller, and it would not scroll.
+      // Seen on a real phone: the old drawer was screen-high, the menu taller, and it would not
+      // scroll. A phone now reaches the versions on More, which scrolls as a page under tabs fixed
+      // at the foot of the screen: the versions must come out from under them.
       const phone = await context.newPage();
       try {
         await phone.setViewportSize({ width: 390, height: 640 });
         await phone.goto(`${base}/dashboard.html?room=room:f1_#/overview`, { waitUntil: "networkidle" });
-        await phone.getByRole("button", { name: "Open navigation", exact: true }).click();
-        const drawer = phone.locator(".mobile-sidebar");
-        await drawer.waitFor({ state: "visible" });
-        const fits = await drawer.evaluate((el) => ({
-          taller: el.scrollHeight > el.clientHeight,
-          overflowY: getComputedStyle(el).overflowY,
-        }));
-        assert.ok(fits.taller, "the fixture must make the menu taller than the drawer");
-        assert.ok(["auto", "scroll"].includes(fits.overflowY), "the drawer must scroll");
-        const versions = drawer.locator(".sidebar-versions");
-        await versions.scrollIntoViewIfNeeded();
+        const tabs = phone.locator('nav.phone-tabs[aria-label="Sections"]');
+        await tabs.getByRole("button", { name: "More", exact: true }).click();
+        const versions = phone.locator(
+          '.more-foot dl.running-versions[aria-label="Running versions"]',
+        );
+        await versions.waitFor({ state: "visible" });
+        const fits = await phone.evaluate(() => {
+          // The window scrolls as the root says, or as the body says when the root leaves it.
+          const root = getComputedStyle(document.documentElement).overflowY;
+          return {
+            taller: document.scrollingElement.scrollHeight > innerHeight,
+            overflowY: root === "visible" ? getComputedStyle(document.body).overflowY : root,
+          };
+        });
+        assert.ok(fits.taller, "the fixture must make More taller than the phone's screen");
+        assert.ok(!["hidden", "clip"].includes(fits.overflowY), "More must scroll");
+        // Scrolled to its very end, the versions sit above the tabs, not under them.
+        await phone.evaluate(() => window.scrollTo(0, document.scrollingElement.scrollHeight));
         const box = await versions.boundingBox();
-        assert.ok(box && box.y >= 0 && box.y + box.height <= 640, "versions must be reachable");
+        const tabsBox = await tabs.boundingBox();
+        assert.ok(
+          box && tabsBox && box.y >= 0 && box.y + box.height <= tabsBox.y,
+          `versions must be reachable above the tabs (${JSON.stringify({ box, tabsBox })})`,
+        );
         assert.match(await versions.innerText(), /Controller\s+0\.16\.1/);
-        assert.ok((await drawer.evaluate((el) => el.scrollTop)) > 0, "it really scrolled");
+        assert.ok((await phone.evaluate(() => window.scrollY)) > 0, "it really scrolled");
         // and the first item is still reachable on the way back
-        await drawer.getByRole("button", { name: "Overview" }).scrollIntoViewIfNeeded();
+        await phone
+          .locator(".more-page")
+          .getByRole("button", { name: /^Settings/ })
+          .scrollIntoViewIfNeeded();
       } finally {
         await phone.close();
       }
@@ -220,17 +282,29 @@ try {
       try {
         await short.setViewportSize({ width: 1280, height: 480 });
         await short.goto(`${base}/dashboard.html?room=room:f1_#/overview`, { waitUntil: "networkidle" });
-        const versions = short.locator(".desktop-sidebar .sidebar-versions");
+        // The rail's last section is reachable in a short window, and so are the versions it opens.
+        const help = short
+          .locator('nav.app-rail[aria-label="Sections"]')
+          .getByRole("button", { name: "Help", exact: true });
+        await help.scrollIntoViewIfNeeded();
+        const helpBox = await help.boundingBox();
+        assert.ok(
+          helpBox && helpBox.y >= 0 && helpBox.y + helpBox.height <= 480,
+          "the rail's Help must be reachable in a short window",
+        );
+        await help.click();
+        const versions = short.locator('dl.running-versions[aria-label="Running versions"]');
         await versions.scrollIntoViewIfNeeded();
         const box = await versions.boundingBox();
         assert.ok(box && box.y + box.height <= 480, "versions must be reachable in a short window");
+        assert.match(await versions.innerText(), /Controller\s+0\.16\.1/);
       } finally {
         await short.close();
       }
     },
   );
   await check(
-    "an open dropdown can be read on a dark Home Assistant theme (steering mode, activity, zone)",
+    "an open dropdown can be read on a dark Home Assistant theme (steering mode, activity, history, compare runs)",
     async () => {
       // Home Assistant's input fill is a translucent rgba of the text colour. The browser cannot
       // paint an option list with it and fell back to white under light text.
@@ -244,7 +318,9 @@ try {
           const [r, g, b] = colour.match(/[\d.]+/g).map(Number);
           return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
         };
-        for (const route of ["strategy", "activity", "insights", "comparison"]) {
+        // Compare runs is #/compare. ("comparison" was never a page: it opened the Overview, whose
+        // one dropdown here was the old sidebar's room picker, now buttons.)
+        for (const route of ["strategy", "activity", "insights", "compare"]) {
           await themed.goto(`${base}/dashboard.html?room=room:f1_#/${route}`, {
             waitUntil: "networkidle",
           });
@@ -284,10 +360,16 @@ try {
     },
   );
   await check("partial failure keeps failed draft and writes only selected room", async () => {
+    await openSection("Strategy");
     failWrite = "number.crop_steering_f1_zone_1_p2_vwc_threshold";
+    await openCard("P1");
     await field("p1_target_vwc").fill("65");
+    await openCard("P2");
     await field("p2_vwc_threshold").fill("55");
-    await page.getByRole("button", { name: /^Review 2 changes/ }).click();
+    // Both wait in the draft bar, whose Review and apply opens the review.
+    const bar = page.getByRole("region", { name: "Unsaved changes", exact: true });
+    await bar.locator(".draft-count", { hasText: /^2$/ }).waitFor();
+    await bar.getByRole("button", { name: "Review and apply", exact: true }).click();
     await page
       .getByRole("dialog")
       .getByRole("button", { name: "Apply 2 changes", exact: true })
@@ -315,8 +397,11 @@ try {
   });
   await check("service acknowledgement without readback is a visible failure", async () => {
     ignoreWrite = "number.crop_steering_f1_zone_1_p1_target_vwc";
+    await openCard("P1");
     await field("p1_target_vwc").fill("66");
-    await page.getByRole("button", { name: /^Review 1 change/ }).click();
+    const bar = page.getByRole("region", { name: "Unsaved changes", exact: true });
+    await bar.locator(".draft-count", { hasText: /^1$/ }).waitFor();
+    await bar.getByRole("button", { name: "Review and apply", exact: true }).click();
     await page
       .getByRole("dialog")
       .getByRole("button", { name: "Apply 1 change", exact: true })
@@ -324,41 +409,71 @@ try {
     await visible(page.getByText("Some changes were not applied.", { exact: true }));
     assert.equal(states[ignoreWrite].state, "65");
     await page.getByRole("button", { name: "Back to editing" }).click();
-    await page.getByRole("button", { name: "Discard draft" }).click();
+    await bar.getByRole("button", { name: "Discard", exact: true }).click();
+    await bar.waitFor({ state: "detached" });
     ignoreWrite = "";
   });
   await check("missing live sensor stays unavailable and timestamps remain honest", async () => {
     states["sensor.crop_steering_f1_ec_zone_1"].state = "unavailable";
     await page.getByRole("button", { name: "Refresh controller data" }).click();
-    await page
-      .getByRole("navigation", { name: "Main navigation" })
-      .getByRole("button", { name: "Overview", exact: true })
-      .click();
-    await visible(page.getByText("Zone 1: sensor data unavailable", { exact: true }));
+    await openSection("Overview");
+    // Needs you says so, and so does Zone 1's card, its EC a dash rather than the last number.
+    await visible(
+      page
+        .locator("[data-needs-you]")
+        .getByText("Zone 1: sensor data unavailable", { exact: true }),
+    );
+    const card = page.locator('article.zone-card[data-zone-card="1"]');
+    const foot = card.locator('p.zone-card-foot[data-zone-status="1"]');
+    assert.equal(await foot.innerText(), "Zone 1: sensor data unavailable");
+    assert.equal(await foot.getAttribute("data-tone"), "warning");
+    assert.equal(
+      await card.locator(".zone-stat").filter({ hasText: "EC" }).locator("strong").innerText(),
+      "–",
+    );
+    // The reservoir card's pump reading is live: nothing says it is an old one.
+    assert.equal(
+      await page.locator("[data-tank-status] [data-pump-state]").innerText(),
+      "Pump off",
+    );
     assert.equal(await page.getByText("Invalid Date", { exact: false }).count(), 0);
     assert.equal(await page.locator(".demo-banner").count(), 0);
-    // Notices first, then the totals, the grow day, and the zones beside the tank.
+    // The room's status line and today's totals first, then the notices, the day's clock, the zones,
+    // and the reservoir below them. (The redesign put the status line with the totals above the
+    // notices, and moved the grow-day chart into each zone's details.)
     const order = await page.evaluate(() =>
       [
         ...document.querySelectorAll(
-          ".attention-list, .metric-strip, [data-day-timeline], .overview-grid",
+          ".status-row[data-room-status], [data-needs-you], [data-today], .zones-section, [data-tank-status]",
         ),
-      ].map((el) => (el.matches("[data-day-timeline]") ? "timeline" : el.classList[0])),
+      ].map((el) =>
+        el.matches(".status-row")
+          ? "status"
+          : el.matches("[data-needs-you]")
+            ? "needs-you"
+            : el.matches("[data-today]")
+              ? "today"
+              : el.matches(".zones-section")
+                ? "zones"
+                : "reservoir",
+      ),
     );
-    assert.deepEqual(order, ["attention-list", "metric-strip", "timeline", "overview-grid"]);
+    assert.deepEqual(order, ["status", "needs-you", "today", "zones", "reservoir"]);
+    assert.match(
+      await page.locator(".status-row[data-room-status] .status-row-totals").innerText(),
+      /^Today so far: 3 L · 8 shots$/,
+    );
   });
   await check("stale probe is unavailable in zone diagnostics, with its age", async () => {
     const probe = "sensor.crop_steering_f1_vwc_zone_1";
     states[probe].last_updated = "2020-01-01T00:00:00Z";
     await page.getByRole("button", { name: "Refresh controller data" }).click();
-    await page
-      .getByRole("navigation", { name: "Main navigation" })
-      .getByRole("button", { name: "Insights", exact: true })
-      .click();
-    await visible(page.getByRole("heading", { name: "Probe coverage", exact: true }));
+    await openSection("Insights");
+    // Insights › Zone ends with every zone's probes, now (the old probe coverage table).
+    await visible(page.getByRole("heading", { name: "Every zone’s probes, now", exact: true }));
     const cell = (zone, column) =>
       page
-        .locator(".insights-page .data-table tbody tr")
+        .locator(".insights-page .probe-cover .data-table tbody tr")
         .filter({ hasText: `Zone ${zone}` })
         .locator("td")
         .nth(column);
@@ -378,20 +493,20 @@ try {
     async () => {
       failStates = true;
       await page.getByRole("button", { name: "Refresh controller data" }).click();
-      await visible(page.getByText("Controller disconnected", { exact: true }));
-      await page
-        .getByRole("navigation", { name: "Main navigation" })
-        .getByRole("button", { name: "Overview", exact: true })
-        .click();
       await visible(
-        page
-          .locator("[data-tank-status]")
-          .getByText("Disconnected · last received", { exact: true }),
+        page.locator(".connection-banner").getByText("Can’t reach Home Assistant", { exact: true }),
       );
-      await page
-        .getByRole("navigation", { name: "Main navigation" })
-        .getByRole("button", { name: "Irrigation strategy", exact: true })
-        .click();
+      await openSection("Overview");
+      // The Overview's heading says offline, with when the last data came; the reservoir card marks
+      // its pump reading as the last known one.
+      const status = page.locator('.room-header .live-status[data-connection="offline"]');
+      await visible(status);
+      assert.match(await status.innerText(), /^Offline · last \d{1,2}:\d{2}.* \(.+ ago\)$/);
+      const pump = page.locator("[data-tank-status] [data-pump-state]");
+      await visible(pump);
+      assert.equal(await pump.innerText(), "Pump off · last known");
+      await openSection("Strategy");
+      await openCard("P1");
       assert.equal(await field("p1_target_vwc").isDisabled(), true);
       assert.equal(await page.locator(".demo-banner").count(), 0);
       await page.screenshot({
@@ -404,13 +519,12 @@ try {
     failStates = false;
     noEntities = true;
     await page.getByRole("button", { name: "Refresh controller data" }).click();
-    await page
-      .getByRole("navigation", { name: "Main navigation" })
-      .getByRole("button", { name: "Overview", exact: true })
-      .click();
+    await openSection("Overview");
     await visible(page.getByRole("heading", { level: 1, name: "Overview", exact: true }));
     await visible(page.getByRole("heading", { name: "No zones discovered", exact: true }));
-    assert.equal(await page.locator("#desktop-room").isDisabled(), true);
+    // No room is left to pick: neither the rooms column nor the room chips offer a stale one.
+    assert.equal(await page.locator("nav.rooms-column, nav.room-chips").count(), 0);
+    assert.equal(await page.locator("button.room-card, button.room-chip").count(), 0);
   });
   await check(
     "named F2 stays distinct from default and unsupported tools cannot misroute",
@@ -438,15 +552,16 @@ try {
         unit_of_measurement: "%",
       });
       await page.goto(`${base}/dashboard.html?room=room:f2_#/strategy`, { waitUntil: "networkidle" });
-      assert.equal(await page.locator("#desktop-room").inputValue(), "room:f2_");
+      assert.equal(await currentRoom(), "Named F2");
       await visible(
         page.locator('input[id="setting-number.crop_steering_f2_zone_1_p2_vwc_threshold"]'),
       );
       await page.goto(`${base}/dashboard.html?room=room:f2_#/help`, { waitUntil: "networkidle" });
-      await page.locator("#desktop-room").selectOption("room:");
-      await visible(page.getByRole("heading", { name: "Help", exact: true }));
+      await chooseRoom("Flower 2");
+      await visible(page.getByRole("heading", { level: 1, name: "Help", exact: true }));
       assert.equal(new URL(page.url()).hash, "#/help");
-      assert.equal(await page.locator("#desktop-room").inputValue(), "room:");
+      assert.equal(await currentRoom(), "Flower 2");
+      assert.equal(new URL(page.url()).searchParams.get("room"), "room:");
     },
   );
   await check("what's new: an update shows it once, and the integration is told", async () => {
@@ -484,7 +599,7 @@ try {
     await page.goto(`${base}/dashboard.html?room=missing-room#/strategy`, {
       waitUntil: "networkidle",
     });
-    assert.equal(await page.locator("#desktop-room").inputValue(), "");
+    assert.equal(await currentRoom(), "");
     assert.equal(await page.locator('input[type="number"]').count(), 0);
   });
   assert.deepEqual(errors, []);
