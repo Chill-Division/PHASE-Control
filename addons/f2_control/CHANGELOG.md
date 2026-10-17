@@ -1,4 +1,6 @@
-# Unreleased
+# 1.3.0
+
+Pair with integration 1.3.0.
 
 - The dashboard is redesigned for a phone, a tablet and a computer alike: the room's day as a clock, a card for each zone, and how a room runs as one choice.
 - Today can switch EC stacking on and set the minimum P1 shots, and a zone paused by hand in Home Assistant can be resumed from its details.

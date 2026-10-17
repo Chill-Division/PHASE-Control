@@ -10,7 +10,9 @@ and code-level detail for developers and AI agents working on the repo.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.3.0] - 2026-10-17
+
+Integration and controller **1.3.0**.
 
 - **A new look on every page**, alike on a phone, a tablet and a computer: the room's day as a
   clock, what comes next, a card for each zone, and each zone's week in Insights. Feed has a Recipes
