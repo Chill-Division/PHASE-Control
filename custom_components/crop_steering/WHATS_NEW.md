@@ -21,7 +21,7 @@ people who build the system:
 `tests/test_whats_new.py` checks the shape and the plain words, and that the newest section is the
 version being released.
 
-## Unreleased
+## 1.3.1 - 2026-10-17
 
 - A room that is Watching only has a Start steering button right where it says it isn't watering.
 - The Overview's zone cards fill the page: one zone across it, two side by side, three a row.

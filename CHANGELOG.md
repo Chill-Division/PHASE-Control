@@ -10,7 +10,9 @@ and code-level detail for developers and AI agents working on the repo.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.3.1] - 2026-10-17
+
+Integration and controller **1.3.1**.
 
 - **Watching only says how to start watering.** A room that is Watching only says so where it says
   it isn't watering, with a **Start steering…** button, on the Overview and at the top of every
