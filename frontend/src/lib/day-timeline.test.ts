@@ -293,8 +293,9 @@ describe("blocks and holds", () => {
         open: false,
       },
       {
+        // An older controller's words for Watching only, in the dashboard's.
         kind: "hold",
-        text: "room off (kill switch)",
+        text: "watering off (Watching only)",
         start: at("21:09:37.000"),
         end: at("21:10:37.000"),
         open: false,

@@ -306,15 +306,16 @@ setup change (CS-201) and a hardware hold (CS-301, CS-308, CS-309) are still rep
 
 **Likely causes**
 
-- The engine switch is off. On a new install this is expected: the reminder is that nothing will be watered until it is on.
+- The room is Watching only: its watering switch is off, and the notification says Blocked by: watering off (Watching only). On a new install this is expected: the reminder is that nothing will be watered until the room is set to Steering.
+- Home Assistant cannot read the room's watering switch (Blocked by: watering switch unavailable). The controller treats that as off.
 - The zone is switched off, or manual override is on.
 - A hold: a setup change waiting (CS-201), plumbing that disagrees (CS-202), a hardware fault (CS-301), or an external hold (dosing, a fill, a flush). An irrigation strategy's hold (CS-606) does not stop this safety shot.
 
 **Suggested fixes**
 
 - Read 'Blocked by' in the notification and deal with that.
-- If the room is off on purpose, water by hand or turn the engine on.
-- If nothing is growing, switch the room's Room Active switch off: an empty room gets no watering and no notifications.
+- If the room is Watching only on purpose, water by hand. Otherwise press Start steering… under its Not watering line on the Overview.
+- If nothing is growing, set the room to Room off in the pill on the Overview: an empty room gets no watering and no notifications.
 
 ## Pumps and valves (CS-3xx)
 

@@ -136,7 +136,12 @@ describe("controller heartbeat", () => {
           enable_flag: "input_boolean.f2_control_enabled",
           valves: { "1": VALVE, "2": "switch.zone_2_valve" },
         }),
-        entity(HEARTBEAT, "healthy", { enable_flag: "input_boolean.f2_control_enabled" }, ago(12 * 60_000)),
+        entity(
+          HEARTBEAT,
+          "healthy",
+          { enable_flag: "input_boolean.f2_control_enabled" },
+          ago(12 * 60_000),
+        ),
         { ...entity(VALVE, "on", {}, ago(opened)), last_changed: ago(opened) },
         entity("switch.zone_2_valve", "off"),
         ...extra,
@@ -329,6 +334,39 @@ describe("zone status text", () => {
     delete states[HEARTBEAT];
     expect(view(states).zones[0]).toMatchObject({ status: "Overnight dryback", stale: true });
   });
+  it("calls a zone held for the room's watering switch Watching only, with no notice of its own", () => {
+    // GT1, 2026-10-17: "Blocked: room off (kill switch)" raised a Critical "needs attention" card
+    // with only View zone on it, beside the status line that already said watering was off.
+    for (const words of ["room off (kill switch)", "watering off (Watching only)"]) {
+      const states = fixture([
+        entity("input_boolean.f2_control_enabled", "off"),
+        entity("sensor.crop_steering_zone_1_status", `Blocked: ${words}`, { reason: "P1 ramp" }),
+        entity(DECISION, `Z1 P1 ${words}`, { fired: [], blocked: [`Z1 P1 ${words}`] }),
+      ]);
+      const room = view(states);
+      expect(room.zones[0].status).toBe("Watching only");
+      expect(room.alerts).toEqual([]);
+      // The integration's sensor between the controller's posts: its decision says the same.
+      states["sensor.crop_steering_zone_1_status"] = integration(1, "Dry - Needs Water");
+      expect(view(states).zones[0].status).toBe("Watching only");
+    }
+    // A watering switch Home Assistant cannot read is treated as off: the room's own notice says so.
+    const unread = fixture([
+      entity("input_boolean.f2_control_enabled", "unavailable"),
+      entity("sensor.crop_steering_zone_1_status", "Blocked: room off (kill switch)", {
+        reason: "P1 ramp",
+      }),
+    ]);
+    expect(view(unread).zones[0].status).toBe("Watering switch unavailable");
+    expect(view(unread).alerts.map((alert) => alert.title)).toEqual([
+      "Watering switch unavailable",
+    ]);
+    // Any other hold is still the zone's, with its notice.
+    const other = fixture([
+      entity("sensor.crop_steering_zone_1_status", "Blocked: manual override", { reason: "P2" }),
+    ]);
+    expect(view(other).alerts.map((alert) => alert.title)).toEqual(["Zone 1 needs attention"]);
+  });
   it("shows the last reported status, marked stale, when the controller is not reporting", () => {
     const states = fixture([integration(1, "Dry - Needs Water")]);
     delete states[HEARTBEAT];
@@ -358,12 +396,20 @@ describe("room status line", () => {
       entity(DECISION, "Z2 P2 manual override", { fired: [], blocked: ["Z2 P2 manual override"] }),
     ]);
     expect(status(blocked)).toMatchObject({ tone: "holding", detail: "Z2 P2 manual override" });
+    // An older controller's word for Watching only, in the moment after watering is switched on.
+    const late = fixture([
+      entity(DECISION, "Z2 P2 room off (kill switch)", {
+        fired: [],
+        blocked: ["Z2 P2 room off (kill switch)"],
+      }),
+    ]);
+    expect(status(late)).toMatchObject({ detail: "Z2 P2 watering off (Watching only)" });
   });
   it.each([
     [
       "watering is switched off",
       [entity("input_boolean.f2_control_enabled", "off")],
-      /^Watering is switched off for this room \(its engine switch\), so the controller opens no valve\./,
+      /^The room is Watching only: the controller reads the probes and follows the phases, but opens no valve\./,
     ],
     [
       "the engine switch is unavailable",
@@ -415,9 +461,9 @@ describe("room status line", () => {
     expect(line).toMatchObject({ tone: "stopped", text: "Not watering" });
     expect(line.detail).toMatch(detail);
   });
-  it("links to Overview when watering is off, and an old retired switch changes nothing", () => {
+  it("starts steering when watering is off, and an old retired switch changes nothing", () => {
     const off = status(fixture([entity("input_boolean.f2_control_enabled", "off")]));
-    expect(off.action).toEqual({ label: "Switch it on in Overview", route: "overview" });
+    expect(off.action).toEqual({ label: "Start steering…", route: "overview", steering: true });
     // System Enabled and Auto Irrigation Enabled are gone; one an older integration left behind,
     // off, no longer stops watering, so the line never names it.
     const retired = [
@@ -429,7 +475,7 @@ describe("room status line", () => {
       detail: "all zones in band",
     });
     const both = status(fixture([entity("input_boolean.f2_control_enabled", "off"), ...retired]));
-    expect(both.detail).toMatch(/^Watering is switched off for this room/);
+    expect(both.detail).toMatch(/^The room is Watching only:/);
   });
   it("says there is no word from the controller when its heartbeat is missing", () => {
     const states = fixture();

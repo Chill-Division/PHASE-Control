@@ -15,7 +15,15 @@ import type {
 import { parseAutoSetpoints } from "./auto-setpoints";
 import { readWaiting } from "./waiting-for";
 import { DRYBACK_UNIT, PHASE_GROUPS, settingWords } from "./setting-words";
-import { ageText, controllerZoneLabel, readHeartbeat, RESTING } from "./controller-health";
+import {
+  ageText,
+  controllerZoneLabel,
+  holdWords,
+  readHeartbeat,
+  RESTING,
+  WATCHING_LABEL,
+  zoneLabelWords,
+} from "./controller-health";
 import { BATCH_SWITCH_KEYS } from "./feed";
 import { readProbes, readingTile } from "./probes";
 
@@ -579,11 +587,12 @@ export function buildRoom(states: States, room: Room): RoomView {
     const p = /^P[012]$/.test(phase?.state || "") ? phase!.state.toLowerCase() : null;
     // The controller posts this status with a reason; the integration's fixed-threshold sensor
     // writes the same entity without one. While the controller is live, show the controller's.
-    const label =
+    const label = zoneLabelWords(
       (live &&
         !(status && "reason" in status.attributes) &&
         controllerZoneLabel(id, phase, decision)) ||
-      (readable(status) ? status!.state : "Unavailable");
+        (readable(status) ? status!.state : "Unavailable"),
+    );
     return {
       id,
       name: typeof names?.[id] === "string" ? String(names[id]) : "Zone " + id,
@@ -651,7 +660,10 @@ export function buildRoom(states: States, room: Room): RoomView {
           ? "Blocked: hardware fault (CS-301)"
           : phase?.state === "P3" && label === "Dry - Needs Water"
             ? RESTING.P3
-            : label,
+            : // A controller before 1.3.1 says the same for a watering switch it cannot read.
+              label === WATCHING_LABEL && boolean(engineEntity) === null
+              ? "Watering switch unavailable"
+              : label,
       stale: roomActive && !live,
       fields: settings.filter((s) => s.zoneId === id),
       sensors: entities.filter(
@@ -960,8 +972,8 @@ export function roomStatus(states: States, room: Room, now = Date.now()): RoomSt
     return say(
       "stopped",
       "Not watering",
-      "Watering is switched off for this room (its engine switch), so the controller opens no valve. It still reads the probes and follows the phases. A new room starts with watering off, so nothing is watered before its hardware has been checked.",
-      { label: "Switch it on in Overview", route: "overview" },
+      "The room is Watching only: the controller reads the probes and follows the phases, but opens no valve. A new room starts this way, so nothing is watered before its hardware has been checked.",
+      { label: "Start steering…", route: "overview", steering: true },
     );
   if (engine !== "on")
     return say(
@@ -984,7 +996,7 @@ export function roomStatus(states: States, room: Room, now = Date.now()): RoomSt
       : [];
   };
   const fired = entries("fired"),
-    blocked = entries("blocked");
+    blocked = entries("blocked").map(holdWords);
   const app = resolve(states, room, "sensor", "app_status")?.state;
   if (fired.length) return say("watering", "Watering", fired.join(" · "));
   if (app === "irrigating") return say("watering", "Watering", "A shot is running.");

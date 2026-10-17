@@ -365,37 +365,57 @@ try {
     assert.equal(await target.locator("[data-auto-dryback]").innerText(), `Auto setpoints: ${note}.`);
     assert.match(await page.locator(".auto-chip").first().innerText(), /Tonight/);
   });
-  await check("status line: watering switched off says why and opens that room's Overview", async () => {
-    // Watering off is "Watching only": the room on, its engine switch off.
+  await check("Watching only says so, and starts steering where it says it", async () => {
+    // Watching only: the room on, its watering (engine) switch off. GT1, 2026-10-17: the Overview
+    // said Not watering with no way back but the mode pill, beside a Critical "needs attention"
+    // card for its zone whose only button was View zone.
     await go("overview", "room:f1_");
     await runRoom("Watching only");
-    // Another room selected, on another page: the link must still open Flower 1's Overview.
+    const row = page.locator('[data-room-status="room:f1_"]');
+    assert.match(
+      await row.innerText(),
+      /^Not watering\. The room is Watching only: the controller reads the probes and follows the phases, but opens no valve\./,
+    );
+    const start = row.getByRole("button", { name: "Start steering…", exact: true });
+    await expectVisible(start);
+    // The demo's controller holds the zones it would water, as the controller does: they are not
+    // a fault of their own, so no zone needs attention, and the count says none waters.
+    assert.equal(await page.locator("[data-needs-you]").getByText(/needs attention/).count(), 0);
+    assert.equal(
+      await page.locator('[data-zone-status="1"]').innerText(),
+      "Not watering: the room is Watching only",
+    );
+    assert.match(
+      await page.locator(".zones-note").innerText(),
+      /· none watering: the room is Watching only$/,
+    );
+    // Another room selected, on another page: a write reaches only the selected room, so its line
+    // opens Flower 1 ...
     await chooseRoom("Flower 2");
     await page.evaluate(() => (location.hash = "#/activity"));
     const line = page.locator('.status-line[data-room="room:f1_"]');
-    assert.match(
-      await line.innerText(),
-      /Not watering — Watering is switched off for this room \(its engine switch\)/,
-    );
-    await line.getByRole("link", { name: "Switch it on in Overview", exact: true }).click();
+    assert.match(await line.innerText(), /Not watering — The room is Watching only: /);
+    await line.getByRole("link", { name: "Open Flower 1", exact: true }).click();
     await expectPage("Flower 1");
     assert.match(page.url(), /room=room(%3A|:)f1_/);
     assert.equal(await selectedRoom(), "Flower 1");
-    // There, how the room runs says its watering is off, and switches it back on.
-    const mode = page.getByRole("button", { name: "How Flower 1 runs: Watching only. Change" });
-    await expectVisible(mode);
-    assert.equal(await mode.getAttribute("data-mode"), "watching");
-    await mode.click();
-    const choices = page.getByRole("radiogroup", { name: "How Flower 1 runs" });
-    const steering = choices.getByRole("radio").filter({ hasText: "Steering" });
-    const watching = choices.getByRole("radio").filter({ hasText: "Watching only" });
-    assert.equal(await watching.getAttribute("aria-checked"), "true");
-    assert.equal(await steering.isDisabled(), false, "Steering switches its watering back on");
-    await steering.click();
+    // ... whose own line, on any page, starts steering after the mode pill's review.
+    await page.evaluate(() => (location.hash = "#/activity"));
+    await line.getByRole("button", { name: "Start steering…", exact: true }).click();
     const review = page.getByRole("dialog", { name: "Steering: Flower 1" });
     assert.match(await review.innerText(), /Flower 1 watering\s*Off\s*→\s*On/);
     await review.getByRole("button", { name: "Back to editing" }).click();
     await review.waitFor({ state: "hidden" });
+    // On the Overview, the button under the line applies it, and goes.
+    await page.evaluate(() => (location.hash = "#/overview"));
+    await start.click();
+    await review.getByRole("button", { name: /Apply \d+ change/ }).click();
+    await review.waitFor({ state: "hidden" });
+    const mode = page.getByRole("button", { name: "How Flower 1 runs: Steering. Change" });
+    await expectVisible(mode);
+    assert.equal(await mode.getAttribute("data-mode"), "steering");
+    assert.equal(await start.count(), 0);
+    assert.doesNotMatch(await page.locator(".zones-note").innerText(), /Watching only/);
   });
   await check("help: the terms and the error codes, no second menu", async () => {
     await go("help");

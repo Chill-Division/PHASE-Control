@@ -7,6 +7,7 @@ import {
   CircleDot,
   CirclePause,
   Clock,
+  Play,
   SlidersHorizontal,
   TriangleAlert,
 } from "lucide-react";
@@ -17,6 +18,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 import { DayDial, phaseColor, type DialBand } from "@/components/day-dial";
 import {
   number,
@@ -180,6 +182,55 @@ export function ModeControl({ controller }: { controller: Controller }) {
   );
 }
 
+/** The way back from Watching only, where the room says it is not watering: the mode pill's
+ * Steering review, without having to find the pill. `compact`: as a status line's action. */
+export function StartSteering({
+  controller,
+  compact = false,
+}: {
+  controller: Controller;
+  compact?: boolean;
+}) {
+  const room = controller.room.room;
+  const state = roomMode(controller.states, room);
+  // The review keeps what it was opened with: its own write moves the room under it.
+  const [opened, setOpened] = useState<{
+    from: RoomMode | null;
+    items: ReturnType<typeof modeChanges>;
+  } | null>(null);
+  const items = state.mode === "watching" ? modeChanges(state, "steering", room.name) : [];
+  if (!items.length && !opened) return null;
+  const start = () => setOpened({ from: state.mode, items });
+  return (
+    <>
+      {items.length > 0 &&
+        (compact ? (
+          <button
+            type="button"
+            className="status-line-action"
+            disabled={!live(controller)}
+            onClick={start}
+          >
+            Start steering…
+          </button>
+        ) : (
+          <Button size="sm" className="start-steering" disabled={!live(controller)} onClick={start}>
+            <Play aria-hidden="true" />
+            Start steering…
+          </Button>
+        ))}
+      <ReviewDialog
+        open={opened !== null}
+        onOpenChange={(next) => !next && setOpened(null)}
+        controller={controller}
+        title={`${MODE_WORDS.steering.label}: ${room.name}`}
+        items={opened?.items ?? []}
+        note={opened ? modeNote(opened.from, "steering", room.name) : undefined}
+      />
+    </>
+  );
+}
+
 /** Which targets the room runs on: its armed Schedule, on its day, or Today's. Told apart at a
  * glance: the Schedule in indigo with a calendar, Today's in blue with sliders. */
 export function TargetsSource({
@@ -242,7 +293,7 @@ export function StatusRow({
   const water = room.metrics.find((metric) => metric.key === "water")?.value ?? null;
   const shots = room.metrics.find((metric) => metric.key === "shots")?.value ?? null;
   const perPlant = roomPerPlant(room.zones, plants);
-  // The Overview's own fix is its mode pill, in its heading.
+  // A link to another page; Watching only has its fix right here.
   const action = status.action?.route === "overview" ? undefined : status.action;
   return (
     <div className="status-row" data-tone={status.tone} data-room-status={room.room.id}>
@@ -263,6 +314,11 @@ export function StatusRow({
                 {action.label}
               </button>
             </>
+          )}
+          {status.action?.steering && (
+            <span className="status-row-fix">
+              <StartSteering controller={controller} />
+            </span>
           )}
         </span>
       </p>
