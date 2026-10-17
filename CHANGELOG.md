@@ -12,53 +12,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- **One Home Assistant button.** Home Assistant's own menu opens from **Home Assistant** at the foot
-  of the menu on the left, or from **More** on a phone; the top bar and its second house button
-  are gone.
-- **No hidden switch can stop watering.** Two on/off switches left over from older versions,
-  System Enabled and Auto Irrigation Enabled, are gone. Hidden in Home Assistant, either one, off,
-  kept a room from watering: switching watering on in PHASE Control never lasted, and only Home
-  Assistant could put it right. Now only the room's own Watering switch turns watering on and off.
-- **Old controls that did nothing are gone.** Home Assistant no longer shows a room-level
-  Irrigation Phase, a Strategy Stage, two P2 EC thresholds, two P3 EC targets or the three
-  readings worked out from them. None of them watered anything; a Strategy Stage picked in
-  Home Assistant rewrote every zone's targets, past the dashboard's review. Today, the Schedule and
-  saved strategies are where targets change.
-- **Rooms & hardware asks only for what the controller uses.** The Room lights picker is gone:
-  nothing ever read it, and day and night come from the lights-on and lights-off times (Irrigation
-  strategy → Today → the whole room). Home Assistant's own setup form no longer asks for a waste
-  valve either, which nothing ever switched. A room that recorded either loses it on its next save.
-- **The dashboard can set everything the controller reads.** EC stacking switches on and off
-  beside Auto setpoints on Today, and the P1 card has **Minimum P1 shots**. A zone paused by hand
-  in Home Assistant now says so, with until when, and its details can resume it. All three were
-  only in Home Assistant. **Most P1 shots** is now **Maximum P1 shots**, so the pair reads alike.
-- **Setting up a room asks less.** Home Assistant's setup asks the room's name, how many zones it
-  has, each zone's valve and substrate probes (moisture and EC), how the room is plumbed, and when
-  the lights come on and go off. Each zone's name, plant count, pot size and drippers are set on the
-  dashboard's Rooms & hardware. The field capacity and maximum EC it used to ask changed nothing the
-  controller steered by: every zone has its own, on Today. In **Configure**, the **Irrigation
-  parameters** screen is gone, and so are the pot size, drippers, field capacity and maximum EC on
-  **Edit zones**: what they saved never reached the controller. A save there now keeps each zone's
-  name, plant count and sizing instead of resetting them.
-- **A new look, the same controls.** Every page is redesigned, alike on a phone, a tablet and a
-  computer. The sections run down the left, or along the foot of a phone with **More** for Settings,
-  Help and the tour. With more than one room, each room has a card with a small clock of its day,
-  its mode and its status; **Settings → General → Open on** picks the room this device opens on.
-- **The Overview reads the room at a glance.** Its grow day as a clock, what comes next, a card for
-  each zone with its own small day chart and its band from trigger to peak, the reservoir, and the
-  day's events. A zone's details hold its whole grow-day chart, and what needs you comes first.
-- **How a room runs is one choice:** **Steering**, **Watching only** or **Room off**, in a pill on the
-  Overview, in place of the room and watering switches. Each lists what it changes before it applies.
-- **Schedule or Today's targets, told apart at a glance.** The Overview, Today and the Schedule say
-  which targets a room runs on: a running schedule in indigo with a calendar and its day, Today's
-  targets in blue with sliders.
-- **Today, rearranged.** The zone's day beside its phase cards. Every percentage keeps its gauge or
-  pie mark, now on a phone too, and says what it works out to: a shot's millilitres a plant and its
-  time at the drippers, the P3 dryback's level from the peak. A draft waits in a bar at the foot.
-- **Insights → Zone shows the week:** the overnight dryback against its target, when the peak came,
-  the shots a day, and each grow-day drawn small. **Feed** has a **Recipes** tab, and the tank's
-  24-hour level chart is on Feed → Reservoir. **Rooms & hardware** draws how water reaches each
-  zone. The running versions are at the top of **Help**.
+- **A new look on every page**, alike on a phone, a tablet and a computer: the room's day as a
+  clock, what comes next, a card for each zone, and each zone's week in Insights. Feed has a Recipes
+  tab, and **Settings → General → Open on** picks the room a device opens on.
+- **How a room runs is one choice:** Steering, Watching only or Room off. The Overview, Today and
+  the Schedule show whether a room follows its schedule or Today's targets, and EC stacking, Minimum
+  P1 shots and resuming a zone paused in Home Assistant are on the dashboard now too.
+- **Setting up a room asks less:** its name, zones, valves, probes, plumbing and lights hours.
+  Everything else is set on the dashboard.
+- **Only the room's own Watering switch turns watering on and off.** Two old, hidden switches that
+  could stop it are gone, and so are old controls in Home Assistant that did nothing.
+- Bug fixes and improvements.
 
 ### 🔧 Technical notes
 
