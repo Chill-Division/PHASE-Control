@@ -16,6 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   it isn't watering, with a **Start steering…** button, on the Overview and at the top of every
   page. Its zones no longer raise a Critical "needs attention" card, and the Zones heading no longer
   counts them as watering.
+- **Zone cards fill the page.** On the Overview, one zone's card takes the whole width, two share
+  it, three take a third each, and more tile beneath in rows of three. A tablet shows two a row, a
+  phone one.
+- Bug fixes and improvements.
 
 ### 🔧 Technical notes
 
@@ -37,6 +41,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `verify-dashboard.mjs` walks it: the row, no zone notice, another room's line, the review, Apply.
 - Help: CS-207's causes and fixes use the dashboard's words (`docs/error-codes.json`, rendered
   `ERROR_CODES.md`).
+- Dashboard: `.zone-cards` takes `data-columns`, its zones up to 3: one column, two or three of
+  equal width, and more zones in rows of three. It was `repeat(auto-fill, minmax(300px, 1fr))`,
+  which left a room's only zone a third of the page. `.zones-section` is a size container
+  (`zones`): narrower than 940 px, three columns take two; narrower than 620 px, one.
+  `verify-dashboard.mjs` counts the columns on a laptop, a narrow desktop, a tablet and a phone.
 
 ## [1.3.0] - 2026-10-17
 

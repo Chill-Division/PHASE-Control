@@ -24,6 +24,8 @@ version being released.
 ## Unreleased
 
 - A room that is Watching only has a Start steering button right where it says it isn't watering.
+- The Overview's zone cards fill the page: one zone across it, two side by side, three a row.
+- Bug fixes and improvements.
 
 ## 1.3.0 - 2026-10-17
 
