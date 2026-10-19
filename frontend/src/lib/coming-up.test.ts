@@ -83,6 +83,40 @@ describe("Coming up", () => {
       ["19:06", "GT1", "Maintenance shot (predicted)"],
     ]);
   });
+  it("agrees with the controller: its own trigger, and the wait it has left", () => {
+    // GT4, 2026-10-19 17:55: Coming up said "A shot now: at or under its 70% trigger" (the
+    // setting) while the zone's card said "Next: shot at 17:56 (VWC 68.1% under 69%)": the
+    // controller had moved the trigger for EC and was waiting out the time between shots.
+    const waiting = (now: number, inMin = 0) => ({
+      at: NOW,
+      conditions: [
+        { rule: "p2_topup", shot: true, to: null, op: "<", value: 69, now, in_min: inMin },
+      ],
+    });
+    const gt4 = (now: number, next: unknown, inMin = 0) =>
+      lane("GT4", {
+        target: 70,
+        zone: { name: "GT4", phase: "P2", waiting: waiting(now, inMin) },
+        next,
+        projection: { points: [], shots: [] },
+      });
+    expect(rows([gt4(68.1, { at: NOW, basis: "due" }, 1)])[0]).toEqual([
+      "17:53",
+      "GT4",
+      "A shot: VWC 68.1% is under its 69% trigger",
+    ]);
+    // Above the controller's trigger, the dashboard's estimate is timed to it, not the setting.
+    const fit = { rate: 2, from: { time: NOW, value: 72 }, at: NOW };
+    expect(rows([gt4(72, { at: at(11.5), basis: "dry-down", fit })])[0]).toEqual([
+      "19:22",
+      "GT4",
+      "A shot once it dries to 69% (estimate)",
+    ]);
+    // Under the setting but not under the controller's trigger: no shot now.
+    expect(rows([gt4(69.5, { at: NOW, basis: "due" })]).map((row) => row[2])).toEqual([
+      "Lights off",
+    ]);
+  });
   it("expects no shot from a zone that is stopped or held", () => {
     for (const quiet of [
       lane("GT1", { stopped: "the room is Watching only" }),

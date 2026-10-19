@@ -570,6 +570,43 @@ function predictedShot(shot: { phase: string; emergency: boolean }, ramp: number
           : "Dryback hold shot";
   return `${what} (predicted)`;
 }
+/** The zone's next shot as the controller has said it, in its waiting-for conditions: the trigger
+ * it compares with (which can differ from the setting: it moves P2's for EC), and the wait between
+ * shots it still has to serve. `time` is null while the reading is above that trigger. */
+export function controllerShot(
+  lane: Lane,
+  now: number,
+): { time: number | null; text: string; trigger: number } | null {
+  const waiting = lane.zone.waiting;
+  if (!waiting || lane.zone.phase !== lane.phase) return null;
+  const find = (rule: string) => waiting.conditions.find((item) => item.rule === rule);
+  const rule =
+    lane.phase === "P1"
+      ? find("p1_ramp")
+      : lane.phase === "P2"
+        ? find("p2_topup")
+        : lane.phase === "P3"
+          ? (find("p3_hold") ?? find("p3_emergency"))
+          : undefined;
+  if (!rule || typeof rule.value !== "number") return null;
+  const reading = typeof rule.now === "number" ? rule.now : null;
+  const under = reading !== null && reading < rule.value;
+  const level = number(rule.value);
+  const text = !under
+    ? ""
+    : lane.phase === "P1"
+      ? `Ramp-up shot ${lane.p1Shots + 1}`
+      : lane.phase === "P2"
+        ? `A shot: VWC ${number(reading)}% is under its ${level}% trigger`
+        : rule.rule === "p3_emergency"
+          ? `Rescue shot: VWC ${number(reading)}% is under its ${level}% rescue level`
+          : `Dryback hold shot: VWC ${number(reading)}% is under the dryback's ${level}%`;
+  return {
+    time: under ? Math.max(now, waiting.at + (rule.in_min ?? 0) * 60_000) : null,
+    text,
+    trigger: rule.value,
+  };
+}
 /** The rest of the grow-day, in order: each zone's next shot, the shots and phase changes its
  * projection expects after it (as its chart draws them), and the lights. What the zones do
  * together, at about the same time, is one line. */
@@ -586,19 +623,35 @@ export function comingUp(lanes: Lane[], day: GrowDay, now: number): Upcoming[] {
       who = lane.zone.name;
     const { next } = lane;
     let live: number | null = null;
-    if (!lane.stopped && next.at !== null) {
+    // What the controller has said comes first, so the list agrees with the zone's card; the
+    // dashboard's own estimate fills in only what it hasn't, against the trigger it uses.
+    const said = lane.stopped ? null : controllerShot(lane, now);
+    if (said?.time !== null && said?.time !== undefined) {
+      live = said.time;
+      items.push({ time: live, who, color, text: said.text, due: live <= now });
+    } else if (!lane.stopped && next.at !== null) {
+      const trigger = said?.trigger ?? lane.target;
+      const at =
+        next.basis === "dry-down" && said && next.fit
+          ? next.fit.from.time +
+            (Math.max(0, next.fit.from.value - said.trigger) / next.fit.rate) * 3_600_000
+          : next.at;
       const text =
         next.basis === "due"
-          ? `A shot now: at or under its ${number(lane.target)}% trigger`
+          ? said
+            ? null
+            : `A shot now: at or under its ${number(lane.target)}% trigger`
           : next.basis === "p0-wait"
             ? "First ramp-up shot, at the latest"
             : next.basis === "p1-interval"
-              ? `Ramp-up shot ${lane.p1Shots + 1}`
-              : next.basis === "dry-down" && lane.target !== null
-                ? `A shot once it dries to ${number(lane.target)}% (estimate)`
+              ? said
+                ? null
+                : `Ramp-up shot ${lane.p1Shots + 1}`
+              : next.basis === "dry-down" && trigger !== null && at < day.lightsOff
+                ? `A shot once it dries to ${number(trigger)}% (estimate)`
                 : null;
       if (text) {
-        live = Math.max(next.at, now);
+        live = Math.max(at, now);
         items.push({ time: live, who, color, text, due: next.basis === "due" });
       }
     }
