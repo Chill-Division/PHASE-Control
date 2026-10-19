@@ -1,6 +1,7 @@
 # Unreleased
 
 - The dashboard's Coming up lists every shot expected for the rest of the day, and its next shot matches what the controller says.
+- The Overview's clock shows the next shot in its middle, labels lights-on and lights-off, and marks the shots still to come.
 
 # 1.3.1
 
