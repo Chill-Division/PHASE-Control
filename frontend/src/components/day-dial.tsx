@@ -15,7 +15,8 @@ export interface DialZone {
   color: string;
   bands: DialBand[];
   shots: number[];
-  planned?: number[];
+  /** The shots its projection expects, in their phase. */
+  planned?: { hour: number; phase: string }[];
   /** Only the phase it is in now (another room's clock): a dot at now, in the phase's colour. */
   phase?: string | null;
 }
@@ -66,7 +67,8 @@ export function DayDial({
   lightsOn?: number;
   mini?: boolean;
   label: string;
-  center?: { time: string; note?: string };
+  /** The middle: what comes next (`value` large, a time or "Now"), what it is, and when. */
+  center?: { label?: string; value: string; note?: string; foot?: string };
 }) {
   const c = size / 2;
   const lightsW = mini ? 3 : 6;
@@ -93,17 +95,35 @@ export function DayDial({
   };
   const clampHour = (t: number) => Math.max(0, Math.min(24, t));
   const hand = pt(lightsR, now);
-  // Every six hours from lights-on, outside the lights ring: further out at the sides, where a time
-  // is wider than it is tall.
-  const hours =
+  // Lights-on (at the top) and lights-off where they fall, where the outer ring turns light or
+  // dark, and midnight unless it is close to either: outside the lights ring, as far out as the
+  // time is wide or tall in that direction.
+  const midnight = lightsOn === undefined ? null : (24 - lightsOn) % 24;
+  const marks =
     mini || lightsOn === undefined
       ? []
-      : [0, 6, 12, 18].map((h) => {
-          const [x, y] = pt(lightsR + (h % 12 ? 20 : 14), h);
-          return { text: hourText((lightsOn + h) % 24), x, y };
-        });
+      : [
+          { h: 0, text: hourText(lightsOn), lights: true },
+          ...(photoperiod > 0 && photoperiod < 24
+            ? [{ h: photoperiod, text: hourText((lightsOn + photoperiod) % 24), lights: true }]
+            : []),
+          ...(midnight !== null &&
+          Math.min(midnight, 24 - midnight) >= 1.5 &&
+          Math.abs(midnight - photoperiod) >= 1.5
+            ? [{ h: midnight, text: hourText(0), lights: false }]
+            : []),
+        ];
+  const hours = marks.map(({ h, text, lights }) => {
+    const out =
+      lightsW / 2 +
+      6 +
+      Math.abs(Math.cos(ang(h))) * text.length * 3.4 +
+      Math.abs(Math.sin(ang(h))) * 7;
+    const [x, y] = pt(lightsR + out, h);
+    return { text, x, y, lights };
+  });
   // "11:18 AM": the hour and minute large, AM or PM beside them small.
-  const parts = center && /^(.+?)\s*([AaPp]\.?\s?[Mm]\.?)$/.exec(center.time);
+  const parts = center && /^(.+?)\s*([AaPp]\.?\s?[Mm]\.?)$/.exec(center.value);
   return (
     <div
       className={`day-dial${mini ? " day-dial-mini" : ""}`}
@@ -142,11 +162,12 @@ export function DayDial({
                   className="dial-shot"
                 />
               ))}
-              {(zone.planned ?? []).map((t, i) => (
+              {(zone.planned ?? []).map((shot, i) => (
                 <path
                   key={`p${i}`}
-                  d={radial(r - ringW / 2, r + ringW / 2, clampHour(t))}
-                  className="dial-shot dial-ahead"
+                  d={radial(r - ringW / 2, r + ringW / 2, clampHour(shot.hour))}
+                  className="dial-planned"
+                  style={{ stroke: phaseColor(shot.phase) }}
                 />
               ))}
               {zone.phase !== undefined && !zone.bands.length && (
@@ -177,7 +198,12 @@ export function DayDial({
         />
       </svg>
       {hours.map((h) => (
-        <span key={h.text} className="dial-hour" style={{ left: h.x, top: h.y }}>
+        <span
+          key={h.text}
+          className="dial-hour"
+          data-lights={h.lights || undefined}
+          style={{ left: h.x, top: h.y }}
+        >
           {h.text}
         </span>
       ))}
@@ -186,11 +212,13 @@ export function DayDial({
           className="dial-center"
           style={{ width: (firstR - (count - 1) * step - ringW) * 1.6 }}
         >
+          {center.label && <small className="dial-center-label">{center.label}</small>}
           <strong>
-            {parts ? parts[1] : center.time}
+            {parts ? parts[1] : center.value}
             {parts && <small>{parts[2]}</small>}
           </strong>
           {center.note && <small>{center.note}</small>}
+          {center.foot && <small className="dial-center-foot">{center.foot}</small>}
         </span>
       )}
     </div>

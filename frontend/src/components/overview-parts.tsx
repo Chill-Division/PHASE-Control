@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState, type RefObject } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import {
   CalendarRange,
   ChevronDown,
+  ChevronUp,
   CircleAlert,
   CircleCheck,
   CircleDot,
@@ -444,9 +445,13 @@ export function dialZones(lanes: Lane[], day: GrowDay, now: number) {
         ...ahead,
       ],
       shots: lane.shots.map((shot) => hoursOf(day, shot.start)),
-      planned: (lane.projection?.shots ?? [])
-        .filter((shot) => shot.time > now)
-        .map((shot) => hoursOf(day, shot.time)),
+      // As Coming up lists them: none for a zone that is stopped or held.
+      planned:
+        lane.stopped || lane.next.basis === "held"
+          ? []
+          : (lane.projection?.shots ?? [])
+              .filter((shot) => shot.time > now)
+              .map((shot) => ({ hour: hoursOf(day, shot.time), phase: shot.phase })),
     };
   });
 }
@@ -488,6 +493,43 @@ export function TodayCard({
   const zones = day && lanes ? dialZones(lanes, day, now) : fallback;
   const before = day ? now < day.lightsOff : false;
   const until = day ? (before ? day.lightsOff : day.end) - now : 0;
+  // The middle says what comes next, Coming up's first shot, not the time (the hand and the
+  // heading show that); with none left, when the lights next change.
+  const upcoming = day && lanes ? comingUp(lanes, day, now) : [];
+  const shot = upcoming.find((item) => item.shot);
+  // Every zone whose shot comes then: all that are due, or all at that time.
+  const names = shot
+    ? [
+        ...new Set(
+          upcoming
+            .filter((item) => item.shot && (shot.due ? item.due : item.time === shot.time))
+            .flatMap((item) =>
+              item.who === "All zones" ? (lanes ?? []).map((lane) => lane.zone.name) : [item.who],
+            ),
+        ),
+      ]
+    : [];
+  const who =
+    names.length > 1 && names.length === (lanes ?? []).length
+      ? "All zones"
+      : names.length > 2
+        ? `${names.length} zones`
+        : names.join(", ");
+  const lights = `Lights ${before ? "off" : "on"} ${inTime(until)}`;
+  const center = !day
+    ? undefined
+    : shot
+      ? {
+          label: "Next shot",
+          value: shot.due ? "Now" : `${shot.estimate ? "≈ " : ""}${clock(shot.time)}`,
+          note: `${shot.due ? "due" : inTime(shot.time - now)} · ${who}`,
+          foot: lights,
+        }
+      : {
+          label: `Lights ${before ? "off" : "on"}`,
+          value: clock(before ? day.lightsOff : day.end),
+          note: inTime(until),
+        };
   return (
     <section className="card today-card" aria-labelledby="today-title" data-today>
       <div className="card-head">
@@ -508,8 +550,12 @@ export function TodayCard({
             zones={zones}
             label={`${controller.room.room.name}'s grow-day: ${zones
               .map((zone) => `${zone.name} ${zone.phase ?? "phase unknown"}`)
-              .join(", ")}; lights ${before ? "off" : "on"} ${inTime(until)}`}
-            center={{ time: clock(now), note: `Lights ${before ? "off" : "on"} ${inTime(until)}` }}
+              .join(", ")}; ${
+              shot
+                ? `next shot ${shot.due ? "now" : `${shot.estimate ? "about " : ""}${clock(shot.time)}`}, ${who}; `
+                : ""
+            }lights ${before ? "off" : "on"} ${inTime(until)}`}
+            center={center}
           />
         ) : (
           <p className="muted today-none">
@@ -520,15 +566,17 @@ export function TodayCard({
       </div>
       {day && (
         <div className="dial-legend">
-          <span className="dial-legend-row">
-            <span className="muted">Rings, outside in:</span>
-            {zones.map((zone) => (
-              <span key={zone.id}>
-                <i style={{ background: zone.color }} aria-hidden="true" />
-                {zone.name}
-              </span>
-            ))}
-          </span>
+          {zones.length > 1 && (
+            <span className="dial-legend-row">
+              <span className="muted">Rings, outside in:</span>
+              {zones.map((zone) => (
+                <span key={zone.id}>
+                  <i style={{ background: zone.color }} aria-hidden="true" />
+                  {zone.name}
+                </span>
+              ))}
+            </span>
+          )}
           <span className="dial-legend-row">
             {["P0", "P1", "P2", "P3"].map((phase) => (
               <span key={phase}>
@@ -555,6 +603,10 @@ export interface Upcoming {
   text: string;
   /** Now, rather than a time: a shot that is due. */
   due?: boolean;
+  /** A shot, not a phase change or the lights. */
+  shot?: boolean;
+  /** Its time is estimated (the projection's, or the dry-down's), not one the controller said. */
+  estimate?: boolean;
 }
 /** Shots the projection draws closer together than this, outside the ramp-up, are one top-up. */
 const TOP_UP_MS = 10 * 60_000;
@@ -609,11 +661,21 @@ export function controllerShot(
  * together, at about the same time, is one line. */
 export function comingUp(lanes: Lane[], day: GrowDay, now: number): Upcoming[] {
   const items: Upcoming[] = [];
-  const merged = new Map<string, { time: number; names: string[]; color: string; text: string }>();
-  const together = (key: string, time: number, who: string, color: string, text: string) => {
+  const merged = new Map<
+    string,
+    { time: number; names: string[]; color: string; text: string; shot: boolean }
+  >();
+  const together = (
+    key: string,
+    time: number,
+    who: string,
+    color: string,
+    text: string,
+    shot = false,
+  ) => {
     const found = merged.get(key);
     if (found) found.names.push(who);
-    else merged.set(key, { time, names: [who], color, text });
+    else merged.set(key, { time, names: [who], color, text, shot });
   };
   lanes.forEach((lane, index) => {
     const color = zoneColor(index),
@@ -625,7 +687,7 @@ export function comingUp(lanes: Lane[], day: GrowDay, now: number): Upcoming[] {
     const said = lane.stopped ? null : controllerShot(lane, now);
     if (said?.time !== null && said?.time !== undefined) {
       live = said.time;
-      items.push({ time: live, who, color, text: said.text, due: live <= now });
+      items.push({ time: live, who, color, text: said.text, due: live <= now, shot: true });
     } else if (!lane.stopped && next.at !== null) {
       const trigger = said?.trigger ?? lane.target;
       const at =
@@ -649,7 +711,15 @@ export function comingUp(lanes: Lane[], day: GrowDay, now: number): Upcoming[] {
                 : null;
       if (text) {
         live = Math.max(at, now);
-        items.push({ time: live, who, color, text, due: next.basis === "due" });
+        items.push({
+          time: live,
+          who,
+          color,
+          text,
+          due: next.basis === "due",
+          shot: true,
+          estimate: next.basis === "dry-down",
+        });
       }
     }
     // The shots the projection expects, as the zone's chart draws them: none while the zone is
@@ -667,7 +737,7 @@ export function comingUp(lanes: Lane[], day: GrowDay, now: number): Upcoming[] {
         if (!topUp) previous = shot.time;
         if (topUp || (live !== null && (order === 0 || shot.time <= live))) return;
         const text = predictedShot(shot, ramp);
-        together(`${text}@${Math.round(shot.time / 600_000)}`, shot.time, who, color, text);
+        together(`${text}@${Math.round(shot.time / 600_000)}`, shot.time, who, color, text, true);
       });
     }
     let phase = lane.phase;
@@ -696,6 +766,7 @@ export function comingUp(lanes: Lane[], day: GrowDay, now: number): Upcoming[] {
           : change.names.join(", "),
       color: change.names.length > 1 ? "var(--muted-foreground)" : change.color,
       text: change.text,
+      ...(change.shot ? { shot: true, estimate: true } : {}),
     });
   if (day.lightsOff > now)
     items.push({
@@ -721,25 +792,52 @@ export function ComingUp({
 }) {
   const [all, setAll] = useState(false);
   const shown = all ? items : items.slice(0, limit);
+  // Beside the clock (a tablet or wider), the clock card sets the pair's height and the rows that
+  // don't fit beside it wait under "more"; a row cut short is hidden whole, never half shown.
+  const list = useRef<HTMLOListElement>(null);
+  const [fits, setFits] = useState(shown.length);
+  useLayoutEffect(() => {
+    const el = list.current;
+    if (!el) return;
+    const measure = () => {
+      const rows = Array.from(el.children) as HTMLElement[];
+      const room = el.clientHeight + 1;
+      setFits(
+        el.scrollHeight <= room
+          ? rows.length
+          : rows.filter((row) => row.offsetTop + row.offsetHeight <= room).length,
+      );
+    };
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [shown.length, all]);
+  const visible = Math.min(fits, shown.length);
   const tomorrow = day && new Date(day.end).toDateString() !== new Date(now).toDateString();
   return (
-    <section className="card coming-up" aria-labelledby="coming-up-title" data-coming-up>
+    <section
+      className="card coming-up"
+      aria-labelledby="coming-up-title"
+      data-coming-up
+      data-all={all || undefined}
+    >
       <div className="card-head">
         <h2 id="coming-up-title">Coming up</h2>
-        {items.length > limit && !all ? (
-          <button type="button" className="link-button" onClick={() => setAll(true)}>
-            {items.length - limit} more today
-          </button>
-        ) : (
-          <span>The rest of the grow-day, in order</span>
-        )}
+        <span>The rest of the grow-day, in order</span>
       </div>
       {loading ? (
         <p className="muted">Working out the rest of the day from today’s readings…</p>
       ) : shown.length ? (
-        <ol className="upcoming-list">
+        <ol className="upcoming-list" id="coming-up-list" ref={list}>
           {shown.map((item, index) => (
-            <li key={index} data-first={index === 0 || undefined}>
+            <li
+              key={index}
+              data-first={index === 0 || undefined}
+              data-clipped={index >= visible || undefined}
+              aria-hidden={index >= visible || undefined}
+            >
               <span className="upcoming-when">
                 <strong>{item.due ? "Now" : clock(item.time)}</strong>
                 <small>{item.due ? "due" : inTime(item.time - now)}</small>
@@ -754,6 +852,23 @@ export function ComingUp({
         </ol>
       ) : (
         <p className="muted">Nothing more is expected before lights-on.</p>
+      )}
+      {/* Where the rows stop, the way to the rest of the day, and back. */}
+      {(all || items.length > visible) && (
+        <button
+          type="button"
+          className="upcoming-more"
+          aria-expanded={all}
+          aria-controls="coming-up-list"
+          onClick={() => setAll(!all)}
+        >
+          {all ? "Show fewer" : `Show ${items.length - visible} more`}
+          {all ? (
+            <ChevronUp size={16} aria-hidden="true" />
+          ) : (
+            <ChevronDown size={16} aria-hidden="true" />
+          )}
+        </button>
       )}
       {day && (
         <p className="upcoming-foot">
