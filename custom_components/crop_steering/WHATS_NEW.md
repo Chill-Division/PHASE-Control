@@ -25,6 +25,8 @@ version being released.
 
 - Coming up lists every shot expected for the rest of the day, not just the next one, and agrees with each zone's card.
 - The Overview's clock shows the next shot in its middle, labels lights-on and lights-off, and marks the shots still to come.
+- With one zone across the page, its card adds today's peak, the dryback from it and the last shot.
+- Bug fixes and improvements.
 
 ## 1.3.1 - 2026-10-17
 

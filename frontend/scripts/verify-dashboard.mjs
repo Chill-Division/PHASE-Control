@@ -1836,10 +1836,23 @@ try {
     assert.equal(await grid.getAttribute("data-columns"), "3");
     assert.ok((await room()) >= 940, "three zones fit a row on a laptop beside the rooms");
     assert.equal(await columns(), 3, "three zones, three a row");
+    // A card the whole width has the room for its day's own numbers; half the width does not.
+    const wide = page.locator("[data-zone-card]").first().locator("[data-wide]");
     for (const zones of [1, 2]) {
       await grid.evaluate((el, value) => (el.dataset.columns = value), String(zones));
       assert.equal(await columns(), zones, `${zones} zone(s) across the whole width`);
+      assert.equal(
+        await wide.first().isVisible(),
+        zones === 1,
+        `${zones} zone(s) across: the day's own numbers ${zones === 1 ? "shown" : "left out"}`,
+      );
     }
+    assert.deepEqual(
+      await wide.evaluateAll((all) =>
+        all.map((stat) => stat.querySelector("small").textContent.split(" · ")[0]),
+      ),
+      ["Peak today", "Dryback from it", "Last shot"],
+    );
     await grid.evaluate((el) => (el.dataset.columns = "3"));
     assert.equal(layout.sticking, 0, "a zone card's contents stick out of it");
     assert.equal(layout.subtitles, 0, "a panel on the Overview repeats its title in a subtitle");

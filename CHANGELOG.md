@@ -20,6 +20,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   lights next change, in place of the time. Lights-on and lights-off are labelled where they fall,
   and the shots expected for the rest of the day show as ticks on each zone's ring. Coming up stops
   at the clock card's height, with **Show more** for the rest.
+- **A wide zone card shows the day's numbers.** With one zone across the page, its card adds
+  today's peak and when, the dryback from it so far, and the last shot with what it gave.
+- Bug fixes and improvements.
 
 ### 🔧 Technical notes
 
@@ -47,6 +50,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   **Show fewer** (`.upcoming-more`, `aria-expanded`) at the foot of the list replaces the
   heading's "N more today". `verify-dashboard.mjs` checks the middle, the labels, the ticks against
   the predicted shots, the pair's height, and the button.
+- Dashboard: a zone card 640 px or wider (a container query on `.zone-card`) shows `zoneToday`:
+  Peak today and when (`dayDryback`'s peak since lights-on), the Dryback from it (relative, as the
+  controller counts it), and the Last shot with what it gave at the configured flow (`lane.water`,
+  per plant when Water today is). `verify-dashboard.mjs` checks them at one zone across and two.
 
 ## [1.3.1] - 2026-10-17
 

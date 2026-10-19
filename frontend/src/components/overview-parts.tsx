@@ -31,7 +31,7 @@ import {
 import { nextText, type Lane } from "@/components/day-timeline";
 import { ageText } from "@/lib/controller-health";
 import type { DrybackTrend } from "@/lib/dryback";
-import type { GrowDay } from "@/lib/day-timeline";
+import { dayDryback, type GrowDay } from "@/lib/day-timeline";
 import { roomStatus } from "@/lib/model";
 import { scheduleDays } from "@/components/targets-banner";
 import { MODE_WORDS, modeChanges, roomMode, zoneColor, type RoomMode } from "@/lib/room-mode";
@@ -911,6 +911,29 @@ function zoneFoot(
     next || (zone.status === "Unavailable" ? "Controller status unavailable" : zone.status);
   return { tone: "next", text: text.charAt(0).toUpperCase() + text.slice(1) };
 }
+/** A zone's day in its own numbers: the peak (and when), how far it has dried back from it, the
+ * last shot and what it gave at the configured flow. */
+function zoneToday(lane: Lane, day: GrowDay, vwc: number | null, now: number) {
+  const dried = dayDryback(lane.points, day.start, vwc);
+  const top = dried
+    ? lane.points.find((point) => point.time >= day.start && point.value === dried.peak)
+    : undefined;
+  const last = lane.shots.at(-1) ?? null;
+  const given = last ? lane.water((last.end - last.start) / 1000) : null;
+  return {
+    peak: dried?.peak ?? null,
+    // The reading now, when nothing earlier today was higher.
+    peakAt: dried ? (top?.time ?? now) : null,
+    dryback: dried?.dryback ?? null,
+    last: last?.start ?? null,
+    given:
+      given === null
+        ? null
+        : lane.view === "plant"
+          ? `${plantText(given)} a plant`
+          : `${number(given)} L`,
+  };
+}
 /** A zone at a glance: its phase, moisture and how it moves, EC, water against its limit with
  * its shots, and its own day as a small chart, shaded with its band from trigger to peak. */
 export function ZoneCard({
@@ -952,6 +975,8 @@ export function ZoneCard({
   const rate = trend?.rate ?? null;
   const shots = zone.shots.value;
   const phase = /^P[0-3]$/.test(zone.phase) ? zone.phase : null;
+  // Shown where the card has the room: one or two zones across the page.
+  const today = lane && day ? zoneToday(lane, day, zone.vwc.value, now) : null;
   return (
     <article className="zone-card" data-zone-card={zone.id} data-foot={foot.tone}>
       <div className="zone-card-head">
@@ -991,6 +1016,22 @@ export function ZoneCard({
                   : ` · ${rate > 0 ? "drying" : "wetting"} ${number(Math.abs(rate), Math.abs(rate) < 1 ? 2 : 1)} pts/h`}
           </small>
         </span>
+        {today && (
+          <>
+            <span className="zone-stat" data-wide="peak">
+              <small>Peak today{today.peakAt === null ? "" : ` · ${clock(today.peakAt)}`}</small>
+              <strong>{today.peak === null ? "–" : `${number(today.peak)}%`}</strong>
+            </span>
+            <span className="zone-stat" data-wide="dryback">
+              <small>Dryback from it</small>
+              <strong>{today.dryback === null ? "–" : `${number(today.dryback)}%`}</strong>
+            </span>
+            <span className="zone-stat" data-wide="last-shot">
+              <small>Last shot{today.last === null ? "" : ` · ${clock(today.last)}`}</small>
+              <strong>{today.last === null ? "None yet" : (today.given ?? "–")}</strong>
+            </span>
+          </>
+        )}
         <span className="zone-stat">
           <small>EC</small>
           <strong>{zone.ec.value === null ? "–" : number(zone.ec.value)}</strong>
