@@ -1,3 +1,7 @@
+# Unreleased
+
+- The dashboard's Coming up lists every shot expected for the rest of the day, and its next shot matches what the controller says.
+
 # 1.3.1
 
 Pair with integration 1.3.1.
