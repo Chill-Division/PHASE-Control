@@ -556,15 +556,36 @@ export interface Upcoming {
   /** Now, rather than a time: a shot that is due. */
   due?: boolean;
 }
-/** The rest of the grow-day, in order: each zone's next shot, the phase changes its projection
- * expects, and the lights. A change the zones make together is one line. */
+/** Shots the projection draws closer together than this, outside the ramp-up, are one top-up. */
+const TOP_UP_MS = 10 * 60_000;
+/** What a shot the projection expects is, by its phase. */
+function predictedShot(shot: { phase: string; emergency: boolean }, ramp: number): string {
+  const what =
+    shot.phase === "P1"
+      ? `Ramp-up shot ${ramp}`
+      : shot.phase === "P2"
+        ? "Maintenance shot"
+        : shot.emergency
+          ? "Rescue shot"
+          : "Dryback hold shot";
+  return `${what} (predicted)`;
+}
+/** The rest of the grow-day, in order: each zone's next shot, the shots and phase changes its
+ * projection expects after it (as its chart draws them), and the lights. What the zones do
+ * together, at about the same time, is one line. */
 export function comingUp(lanes: Lane[], day: GrowDay, now: number): Upcoming[] {
   const items: Upcoming[] = [];
   const merged = new Map<string, { time: number; names: string[]; color: string; text: string }>();
+  const together = (key: string, time: number, who: string, color: string, text: string) => {
+    const found = merged.get(key);
+    if (found) found.names.push(who);
+    else merged.set(key, { time, names: [who], color, text });
+  };
   lanes.forEach((lane, index) => {
     const color = zoneColor(index),
       who = lane.zone.name;
     const { next } = lane;
+    let live: number | null = null;
     if (!lane.stopped && next.at !== null) {
       const text =
         next.basis === "due"
@@ -576,8 +597,28 @@ export function comingUp(lanes: Lane[], day: GrowDay, now: number): Upcoming[] {
               : next.basis === "dry-down" && lane.target !== null
                 ? `A shot once it dries to ${number(lane.target)}% (estimate)`
                 : null;
-      if (text)
-        items.push({ time: Math.max(next.at, now), who, color, text, due: next.basis === "due" });
+      if (text) {
+        live = Math.max(next.at, now);
+        items.push({ time: live, who, color, text, due: next.basis === "due" });
+      }
+    }
+    // The shots the projection expects, as the zone's chart draws them: none while the zone is
+    // stopped or held. A next shot timed from today's readings stands for the projection's first,
+    // and a top-up it draws as shots minutes apart (the controller waits between them) is one.
+    if (!lane.stopped && next.basis !== "held") {
+      const ahead = (lane.projection?.shots ?? []).filter(
+        (shot) => shot.time > now && shot.time < day.end,
+      );
+      let ramp = lane.p1Shots,
+        previous: number | null = live;
+      ahead.forEach((shot, order) => {
+        const topUp = shot.phase !== "P1" && previous !== null && shot.time - previous < TOP_UP_MS;
+        if (shot.phase === "P1") ramp += 1;
+        if (!topUp) previous = shot.time;
+        if (topUp || (live !== null && (order === 0 || shot.time <= live))) return;
+        const text = predictedShot(shot, ramp);
+        together(`${text}@${Math.round(shot.time / 600_000)}`, shot.time, who, color, text);
+      });
     }
     let phase = lane.phase;
     for (const point of lane.projection?.points ?? []) {
@@ -585,18 +626,14 @@ export function comingUp(lanes: Lane[], day: GrowDay, now: number): Upcoming[] {
         phase = point.phase;
         continue;
       }
-      if (phase && point.phase !== phase) {
-        const key = `${point.phase}@${Math.round(point.time / 600_000)}`;
-        const found = merged.get(key);
-        if (found) found.names.push(who);
-        else
-          merged.set(key, {
-            time: point.time,
-            names: [who],
-            color,
-            text: `${INTO[point.phase] ?? `Into ${point.phase}`} (predicted)`,
-          });
-      }
+      if (phase && point.phase !== phase)
+        together(
+          `${point.phase}@${Math.round(point.time / 600_000)}`,
+          point.time,
+          who,
+          color,
+          `${INTO[point.phase] ?? `Into ${point.phase}`} (predicted)`,
+        );
       phase = point.phase;
     }
   });
