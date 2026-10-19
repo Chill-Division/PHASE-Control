@@ -462,6 +462,7 @@
   }
 }
 .zone-card {
+  container: zone-card / inline-size;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -470,6 +471,18 @@
   flex-direction: column;
   gap: 12px;
   min-width: 0;
+}
+/* A wide card (one or two zones across the page) has the room for the day's own numbers. */
+.zone-stat[data-wide] {
+  display: none;
+}
+@container zone-card (min-width: 640px) {
+  .zone-card-stats {
+    gap: 32px;
+  }
+  .zone-stat[data-wide] {
+    display: flex;
+  }
 }
 .zone-card[data-foot="critical"] {
   border-color: var(--tone-critical-line);
