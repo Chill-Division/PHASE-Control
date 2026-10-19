@@ -21,7 +21,7 @@ people who build the system:
 `tests/test_whats_new.py` checks the shape and the plain words, and that the newest section is the
 version being released.
 
-## Unreleased
+## 1.4.0 - 2026-10-19
 
 - Coming up lists every shot expected for the rest of the day, not just the next one, and agrees with each zone's card.
 - The Overview's clock shows the next shot in its middle, labels lights-on and lights-off, and marks the shots still to come.

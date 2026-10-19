@@ -10,7 +10,9 @@ and code-level detail for developers and AI agents working on the repo.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.4.0] - 2026-10-19
+
+Integration and controller **1.4.0**.
 
 - **Coming up lists the shots ahead.** Every shot the zone's chart expects for the rest of the
   grow-day is listed, marked predicted, and zones firing together share a line. The next shot
