@@ -10,6 +10,26 @@ and code-level detail for developers and AI agents working on the repo.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+- **Coming up lists the shots ahead.** Every shot the zone's chart expects for the rest of the
+  grow-day is listed, marked predicted, and zones firing together share a line. The next shot
+  follows what the controller itself has said (its own trigger, and the wait it has left), so it
+  matches the zone's card.
+
+### 🔧 Technical notes
+
+- Dashboard: `comingUp` lists the projection's shots (`lane.projection.shots`) after each zone's
+  next shot, until the next lights-on: Ramp-up shot N, Maintenance shot, Dryback hold shot or Rescue
+  shot, each (predicted); none for a zone that is stopped or held. A next shot timed from the
+  readings stands for the projection's first; the projection's shots of one top-up (closer than 10
+  minutes, outside P1) are one line; zones at about the same time are one line.
+- Dashboard: `controllerShot` reads the controller's waiting-for conditions (`p2_topup`,
+  `p1_ramp`, `p3_hold`, `p3_emergency`): the trigger it compares with, which it moves for EC, and
+  the wait it has left. The dashboard's own estimate fills in only what the controller hasn't said,
+  timed to that trigger, and no longer says a shot is due that the controller says is not.
+  `coming-up.test.ts` covers both.
+
 ## [1.3.1] - 2026-10-17
 
 Integration and controller **1.3.1**.

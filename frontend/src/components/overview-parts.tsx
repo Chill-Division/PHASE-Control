@@ -556,28 +556,119 @@ export interface Upcoming {
   /** Now, rather than a time: a shot that is due. */
   due?: boolean;
 }
-/** The rest of the grow-day, in order: each zone's next shot, the phase changes its projection
- * expects, and the lights. A change the zones make together is one line. */
+/** Shots the projection draws closer together than this, outside the ramp-up, are one top-up. */
+const TOP_UP_MS = 10 * 60_000;
+/** What a shot the projection expects is, by its phase. */
+function predictedShot(shot: { phase: string; emergency: boolean }, ramp: number): string {
+  const what =
+    shot.phase === "P1"
+      ? `Ramp-up shot ${ramp}`
+      : shot.phase === "P2"
+        ? "Maintenance shot"
+        : shot.emergency
+          ? "Rescue shot"
+          : "Dryback hold shot";
+  return `${what} (predicted)`;
+}
+/** The zone's next shot as the controller has said it, in its waiting-for conditions: the trigger
+ * it compares with (which can differ from the setting: it moves P2's for EC), and the wait between
+ * shots it still has to serve. `time` is null while the reading is above that trigger. */
+export function controllerShot(
+  lane: Lane,
+  now: number,
+): { time: number | null; text: string; trigger: number } | null {
+  const waiting = lane.zone.waiting;
+  if (!waiting || lane.zone.phase !== lane.phase) return null;
+  const find = (rule: string) => waiting.conditions.find((item) => item.rule === rule);
+  const rule =
+    lane.phase === "P1"
+      ? find("p1_ramp")
+      : lane.phase === "P2"
+        ? find("p2_topup")
+        : lane.phase === "P3"
+          ? (find("p3_hold") ?? find("p3_emergency"))
+          : undefined;
+  if (!rule || typeof rule.value !== "number") return null;
+  const reading = typeof rule.now === "number" ? rule.now : null;
+  const under = reading !== null && reading < rule.value;
+  const time = under ? Math.max(now, waiting.at + (rule.in_min ?? 0) * 60_000) : null;
+  const level = number(rule.value);
+  const text = !under
+    ? ""
+    : lane.phase === "P1"
+      ? `Ramp-up shot ${lane.p1Shots + 1}`
+      : lane.phase === "P2"
+        ? `A shot${time !== null && time <= now ? " now" : ""}: VWC ${number(reading)}% is under its ${level}% trigger`
+        : rule.rule === "p3_emergency"
+          ? `Rescue shot: VWC ${number(reading)}% is under its ${level}% rescue level`
+          : `Dryback hold shot: VWC ${number(reading)}% is under the dryback's ${level}%`;
+  return { time, text, trigger: rule.value };
+}
+/** The rest of the grow-day, in order: each zone's next shot, the shots and phase changes its
+ * projection expects after it (as its chart draws them), and the lights. What the zones do
+ * together, at about the same time, is one line. */
 export function comingUp(lanes: Lane[], day: GrowDay, now: number): Upcoming[] {
   const items: Upcoming[] = [];
   const merged = new Map<string, { time: number; names: string[]; color: string; text: string }>();
+  const together = (key: string, time: number, who: string, color: string, text: string) => {
+    const found = merged.get(key);
+    if (found) found.names.push(who);
+    else merged.set(key, { time, names: [who], color, text });
+  };
   lanes.forEach((lane, index) => {
     const color = zoneColor(index),
       who = lane.zone.name;
     const { next } = lane;
-    if (!lane.stopped && next.at !== null) {
+    let live: number | null = null;
+    // What the controller has said comes first, so the list agrees with the zone's card; the
+    // dashboard's own estimate fills in only what it hasn't, against the trigger it uses.
+    const said = lane.stopped ? null : controllerShot(lane, now);
+    if (said?.time !== null && said?.time !== undefined) {
+      live = said.time;
+      items.push({ time: live, who, color, text: said.text, due: live <= now });
+    } else if (!lane.stopped && next.at !== null) {
+      const trigger = said?.trigger ?? lane.target;
+      const at =
+        next.basis === "dry-down" && said && next.fit
+          ? next.fit.from.time +
+            (Math.max(0, next.fit.from.value - said.trigger) / next.fit.rate) * 3_600_000
+          : next.at;
       const text =
         next.basis === "due"
-          ? `A shot now: at or under its ${number(lane.target)}% trigger`
+          ? said
+            ? null
+            : `A shot now: at or under its ${number(lane.target)}% trigger`
           : next.basis === "p0-wait"
             ? "First ramp-up shot, at the latest"
             : next.basis === "p1-interval"
-              ? `Ramp-up shot ${lane.p1Shots + 1}`
-              : next.basis === "dry-down" && lane.target !== null
-                ? `A shot once it dries to ${number(lane.target)}% (estimate)`
+              ? said
+                ? null
+                : `Ramp-up shot ${lane.p1Shots + 1}`
+              : next.basis === "dry-down" && trigger !== null && at < day.lightsOff
+                ? `A shot once it dries to ${number(trigger)}% (estimate)`
                 : null;
-      if (text)
-        items.push({ time: Math.max(next.at, now), who, color, text, due: next.basis === "due" });
+      if (text) {
+        live = Math.max(at, now);
+        items.push({ time: live, who, color, text, due: next.basis === "due" });
+      }
+    }
+    // The shots the projection expects, as the zone's chart draws them: none while the zone is
+    // stopped or held. A next shot timed from today's readings stands for the projection's first,
+    // and a top-up it draws as shots minutes apart (the controller waits between them) is one.
+    if (!lane.stopped && next.basis !== "held") {
+      const ahead = (lane.projection?.shots ?? []).filter(
+        (shot) => shot.time > now && shot.time < day.end,
+      );
+      let ramp = lane.p1Shots,
+        previous: number | null = live;
+      ahead.forEach((shot, order) => {
+        const topUp = shot.phase !== "P1" && previous !== null && shot.time - previous < TOP_UP_MS;
+        if (shot.phase === "P1") ramp += 1;
+        if (!topUp) previous = shot.time;
+        if (topUp || (live !== null && (order === 0 || shot.time <= live))) return;
+        const text = predictedShot(shot, ramp);
+        together(`${text}@${Math.round(shot.time / 600_000)}`, shot.time, who, color, text);
+      });
     }
     let phase = lane.phase;
     for (const point of lane.projection?.points ?? []) {
@@ -585,18 +676,14 @@ export function comingUp(lanes: Lane[], day: GrowDay, now: number): Upcoming[] {
         phase = point.phase;
         continue;
       }
-      if (phase && point.phase !== phase) {
-        const key = `${point.phase}@${Math.round(point.time / 600_000)}`;
-        const found = merged.get(key);
-        if (found) found.names.push(who);
-        else
-          merged.set(key, {
-            time: point.time,
-            names: [who],
-            color,
-            text: `${INTO[point.phase] ?? `Into ${point.phase}`} (predicted)`,
-          });
-      }
+      if (phase && point.phase !== phase)
+        together(
+          `${point.phase}@${Math.round(point.time / 600_000)}`,
+          point.time,
+          who,
+          color,
+          `${INTO[point.phase] ?? `Into ${point.phase}`} (predicted)`,
+        );
       phase = point.phase;
     }
   });
