@@ -591,21 +591,18 @@ export function controllerShot(
   if (!rule || typeof rule.value !== "number") return null;
   const reading = typeof rule.now === "number" ? rule.now : null;
   const under = reading !== null && reading < rule.value;
+  const time = under ? Math.max(now, waiting.at + (rule.in_min ?? 0) * 60_000) : null;
   const level = number(rule.value);
   const text = !under
     ? ""
     : lane.phase === "P1"
       ? `Ramp-up shot ${lane.p1Shots + 1}`
       : lane.phase === "P2"
-        ? `A shot: VWC ${number(reading)}% is under its ${level}% trigger`
+        ? `A shot${time !== null && time <= now ? " now" : ""}: VWC ${number(reading)}% is under its ${level}% trigger`
         : rule.rule === "p3_emergency"
           ? `Rescue shot: VWC ${number(reading)}% is under its ${level}% rescue level`
           : `Dryback hold shot: VWC ${number(reading)}% is under the dryback's ${level}%`;
-  return {
-    time: under ? Math.max(now, waiting.at + (rule.in_min ?? 0) * 60_000) : null,
-    text,
-    trigger: rule.value,
-  };
+  return { time, text, trigger: rule.value };
 }
 /** The rest of the grow-day, in order: each zone's next shot, the shots and phase changes its
  * projection expects after it (as its chart draws them), and the lights. What the zones do
