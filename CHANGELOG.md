@@ -16,6 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   grow-day is listed, marked predicted, and zones firing together share a line. The next shot
   follows what the controller itself has said (its own trigger, and the wait it has left), so it
   matches the zone's card.
+- **The clock says what comes next.** Its middle shows the next shot and which zones, and when the
+  lights next change, in place of the time. Lights-on and lights-off are labelled where they fall,
+  and the shots expected for the rest of the day show as ticks on each zone's ring. Coming up stops
+  at the clock card's height, with **Show more** for the rest.
 
 ### 🔧 Technical notes
 
@@ -29,6 +33,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the wait it has left. The dashboard's own estimate fills in only what the controller hasn't said,
   timed to that trigger, and no longer says a shot is due that the controller says is not.
   `coming-up.test.ts` covers both.
+- Dashboard: the Today card's `DayDial` middle (`center`: label, value, note, foot) is Coming up's
+  first shot (`Upcoming.shot`; `estimate` marks a predicted or dry-down time, written ≈), the
+  zones due with it, and the lights' next change; with no shot left, the lights. Its labels are
+  lights-on, lights-off (`data-lights`) and midnight unless it is within 1.5 h of either, each as
+  far out as its text is wide in that direction. `DialZone.planned` carries each expected shot's
+  phase and is drawn in its colour (`.dial-planned`): the `dial-shot dial-ahead` notch it replaces
+  was the card's colour on a band faded to 0.32. None for a stopped or held zone. The legend's
+  "Rings, outside in" line is left out for one zone.
+- Dashboard: side by side (768 px and wider), `.coming-up` has `contain: size` until it is opened,
+  so the Today card (`align-self: start`) sets the pair's height; `ComingUp` measures the rows that
+  fit (a `ResizeObserver`) and hides the rest whole (`data-clipped`). **Show N more** /
+  **Show fewer** (`.upcoming-more`, `aria-expanded`) at the foot of the list replaces the
+  heading's "N more today". `verify-dashboard.mjs` checks the middle, the labels, the ticks against
+  the predicted shots, the pair's height, and the button.
 
 ## [1.3.1] - 2026-10-17
 

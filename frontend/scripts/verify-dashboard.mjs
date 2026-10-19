@@ -478,6 +478,55 @@ try {
     assert.equal(await page.locator(".wd-daily").count(), 0, "no water table on the Overview");
     assert.equal(await page.getByText("Controller scheduling", { exact: true }).count(), 0);
   });
+  await check("overview: the clock says what comes next, and Coming up stops at its height", async () => {
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await go("overview");
+    const today = page.locator("[data-today]");
+    const coming = page.locator("[data-coming-up]");
+    await expectVisible(today.getByRole("img", { name: /grow-day/ }));
+    // The middle says the next shot, or when the lights next change: not the time (the hand and
+    // the heading say that).
+    assert.match(
+      await today.locator(".dial-center-label").innerText(),
+      /^(Next shot|Lights on|Lights off)$/,
+    );
+    // Lights-on at the top and lights-off where the ring turns dark, not four quarters.
+    assert.equal(await today.locator(".dial-hour[data-lights]").count(), 2);
+    assert.ok((await today.locator(".dial-hour").count()) <= 3, "lights on, off and midnight");
+    // Side by side, Coming up is as tall as the clock's card, whatever it has to list.
+    const height = (card) => card.evaluate((el) => el.getBoundingClientRect().height);
+    assert.ok(Math.abs((await height(coming)) - (await height(today))) < 2, "the pair's height");
+    const rows = coming.locator(".upcoming-list > li:not([data-clipped])");
+    const more = coming.locator(".upcoming-more");
+    if (await more.count()) {
+      const shown = await rows.count();
+      assert.match(await more.innerText(), /^Show \d+ more$/);
+      await more.click();
+      assert.equal(await coming.getAttribute("data-all"), "true");
+      assert.ok((await rows.count()) > shown, "Show more lists the rest of the day");
+      assert.equal(await more.innerText(), "Show fewer");
+      assert.ok((await height(coming)) > (await height(today)), "opened, it grows");
+    }
+    // The shots the projection expects are the dial's ticks too.
+    const predicted = await coming
+      .locator(".upcoming-text")
+      .filter({ hasText: /shot \(predicted\)$/ })
+      .count();
+    const ticks = await today.locator(".dial-planned").count();
+    assert.ok(
+      ticks >= predicted && (predicted === 0 || ticks > 0),
+      `${ticks} ticks for ${predicted} predicted shots`,
+    );
+    if (await coming.getAttribute("data-all")) {
+      await more.click();
+      assert.equal(await coming.getAttribute("data-all"), null);
+      assert.ok(Math.abs((await height(coming)) - (await height(today))) < 2, "closed again");
+    }
+    // A phone stacks them: three rows, and the rest behind the same button.
+    await page.setViewportSize({ width: 390, height: 844 });
+    assert.ok((await rows.count()) <= 3);
+    await page.setViewportSize({ width: 1440, height: 1000 });
+  });
   await check("stock tanks: refill, set a level and add a tank; a batch is the recipe's", async () => {
     await go("stock");
     const card = (id) => page.locator(`[data-stock-tank="${id}"]`);

@@ -29,6 +29,10 @@
   stroke: var(--surface);
   stroke-width: 1.5;
 }
+/* An expected shot: a tick in its phase's own colour across the faded rest of the day. */
+.dial-planned {
+  stroke-width: 2;
+}
 .day-dial-mini .dial-shot {
   stroke-width: 0.8;
 }
@@ -53,6 +57,11 @@
   color: var(--muted-foreground);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+}
+/* Lights-on and lights-off: the day's two edges, darker than midnight. */
+.dial-hour[data-lights] {
+  color: var(--foreground);
+  font-weight: 600;
 }
 .dial-center {
   position: absolute;
@@ -85,4 +94,11 @@
   line-height: 1.35;
   color: var(--muted-foreground);
   text-wrap: balance;
+}
+.dial-center .dial-center-label {
+  font-weight: 600;
+  color: var(--tone-paused-ink);
+}
+.dial-center .dial-center-foot {
+  margin-top: 4px;
 }

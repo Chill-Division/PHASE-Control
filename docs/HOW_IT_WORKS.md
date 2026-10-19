@@ -243,7 +243,8 @@ even when the day's water limit is spent.
 ![The Overview: the grow day on its clock, and each zone's day](../img/operator-dashboard.png)
 
 The Overview draws the room's grow day as a clock (**Today**): lights-on at the top, one ring a zone,
-its phases in their colours, a notch for each shot, the rest of the day faded as projected. Open a
+its phases in their colours, a notch for each shot, the rest of the day faded as projected with a
+tick for each shot expected, and in the middle the next shot and when the lights next change. Open a
 zone (its name or its small chart) for its own chart, **<zone> today**, which runs from lights-on to
 the next lights-on.
 
