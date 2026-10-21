@@ -11,6 +11,7 @@ import {
   autoStatusText,
   type AutoSetpointStatus,
 } from "@/lib/auto-setpoints";
+import { setupWait } from "@/lib/model";
 import type { Controller } from "@/lib/types";
 import "./room-controls.css";
 
@@ -77,6 +78,9 @@ export function WateringPower({ controller }: { controller: Controller }) {
   const { engine, room } = controller.room;
   if (!engine.entityId) return null;
   const on = engine.enabled;
+  // Back on only once the controller has taken on a saved setup change: switched on before, it
+  // holds the room until watering is cycled off again.
+  const wait = on ? null : setupWait(controller.states, room);
   return (
     <>
       <div className="room-power" role="group" aria-label={`${room.name} watering`}>
@@ -87,12 +91,17 @@ export function WateringPower({ controller }: { controller: Controller }) {
         <Button
           variant="outline"
           size="sm"
-          disabled={!writable(controller, engine.entityId)}
+          disabled={!writable(controller, engine.entityId) || !!wait}
           onClick={() => setReview(true)}
         >
           <Droplets size={15} />
           {on ? "Switch watering off…" : "Switch watering on…"}
         </Button>
+        {wait && (
+          <small className="muted" data-waits>
+            Waits for the controller to take on the saved setup change: {wait}.
+          </small>
+        )}
       </div>
       <ReviewDialog
         open={review}

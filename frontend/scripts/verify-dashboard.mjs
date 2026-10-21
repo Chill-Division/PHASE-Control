@@ -883,6 +883,48 @@ try {
     await asks.waitFor({ state: "detached" });
     await page.goto("about:blank"); // the next check starts from a fresh demo
   });
+  await check("a saved setup change: watering waits for the controller, then comes back", async () => {
+    // GT4, 2026-10-19: switched back on before the controller took the change on, the room was
+    // held until watering was cycled off again, while the pill said Steering.
+    await go("setup"); // Flower 2, Steering
+    await page.getByRole("button", { name: "Map Zone 1 valve", exact: true }).click();
+    await page
+      .getByRole("textbox", { name: "Search Zone 1 valve entities" })
+      .fill("switch.demo_spare_2");
+    await page.locator(".mapping-result").filter({ hasText: "switch.demo_spare_2" }).click();
+    const asks = page.locator("[data-switching]");
+    await asks.getByRole("button", { name: /^Switch watering off/ }).click();
+    await page.getByRole("button", { name: /^Apply \d+ change/ }).click();
+    await asks.waitFor({ state: "detached" });
+    await page.getByRole("button", { name: "Review configuration", exact: true }).click();
+    await page.getByRole("button", { name: "Save configuration", exact: true }).click();
+    await page.getByRole("dialog").waitFor({ state: "hidden" });
+    await expectVisible(page.getByText("Controller acknowledgement pending", { exact: true }));
+    // Until the controller has taken it on, watering waits, and the Overview says why.
+    await page.evaluate(() => (location.hash = "#/overview"));
+    const row = page.locator('[data-room-status="room:"]');
+    assert.match(await row.innerText(), /while the controller takes on a saved setup change/);
+    const waiting = row.getByRole("button", { name: "Waiting for the controller…" });
+    assert.equal(await waiting.isDisabled(), true);
+    await page.locator(".mode-pill").click();
+    const steering = page
+      .getByRole("radiogroup", { name: "How Flower 2 runs" })
+      .getByRole("radio")
+      .filter({ hasText: "Steering" });
+    assert.equal(await steering.isDisabled(), true);
+    assert.match(await steering.innerText(), /Waits for the controller to take on the saved/);
+    await page.keyboard.press("Escape");
+    // The controller's next pass takes it on, watering being off (the demo's comes 5 s after the
+    // save: DEMO_PASS_MS). Steering can start again.
+    await page.waitForTimeout(5_000);
+    await page.getByRole("button", { name: "Refresh controller data" }).first().click();
+    const start = row.getByRole("button", { name: "Start steering…", exact: true });
+    await expectVisible(start);
+    await start.click();
+    await page.getByRole("button", { name: /^Apply \d+ change/ }).click();
+    await expectVisible(page.getByRole("button", { name: "How Flower 2 runs: Steering. Change" }));
+    await page.goto("about:blank"); // the next check starts from a fresh demo
+  });
   await check("overview: every zone and room metric has its mini visual", async () => {
     await go("overview");
     // Each zone's card draws its own day once today's readings arrive: its moisture so far against
@@ -1771,7 +1813,7 @@ try {
     // Watering is on, and nothing asks for it off until a switch is mapped differently (a name or
     // a sensor saves with watering on: "rooms & hardware: a name saves with watering on").
     assert.deepEqual(await pillTones(".workspace-card .pill:has(.pill-dot)"), [
-      ["Controller acknowledgement pending", "warn"],
+      ["Mapping acknowledged", "on"],
       ["Room descriptor discovered", "on"],
     ]);
   });

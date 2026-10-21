@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { buildRoom, discoverRooms, leadingNotices, roomStatus } from "./model";
+import { buildRoom, discoverRooms, leadingNotices, roomStatus, setupWait } from "./model";
+import { roomMode } from "./room-mode";
 import { ageText, ageTone, parseControllerTime, readHeartbeat } from "./controller-health";
 import { createDemo, demoBeat } from "./demo";
 import type { EntityState, Notice, States } from "./types";
@@ -514,6 +515,76 @@ describe("room status line", () => {
       /^A setup change is waiting for every pump and valve in the room to read off/,
     );
     expect(running.action).toBeUndefined();
+  });
+  it("waits for the controller to take on a saved setup change before Steering", () => {
+    // GT4, 2026-10-19: switched back on before the controller took the change on, the room was
+    // held until watering was cycled off again.
+    const room = (states: States) => discoverRooms(states)[0];
+    const behind = (have: unknown, want: unknown, extra: EntityState[] = []) =>
+      fixture([
+        entity("sensor.crop_steering_engine_config", "ready", {
+          prefix: "",
+          slug: "",
+          num_zones: 2,
+          enable_flag: "input_boolean.f2_control_enabled",
+          setup_revision: want,
+        }),
+        entity(HEARTBEAT, "healthy", { setup_revision: have }),
+        ...extra,
+      ]);
+    expect(setupWait(behind(2, 3), room(behind(2, 3)), NOW)).toBe("within a minute");
+    expect(setupWait(behind(3, 3), room(behind(3, 3)), NOW)).toBeNull();
+    // An older controller (or none reporting a revision) is not waited on.
+    expect(setupWait(behind(undefined, 3), room(behind(undefined, 3)), NOW)).toBeNull();
+    const off = behind(2, 3, [entity("input_boolean.f2_control_enabled", "off")]);
+    expect(status(off).detail).toMatch(
+      /^The room is Watching only while the controller takes on a saved setup change/,
+    );
+    expect(roomMode(off, room(off))).toMatchObject({
+      mode: "watching",
+      waitingSetup: "within a minute",
+    });
+    // Held for a pump still running, it takes the change on once that reads off: no minute promised.
+    const pumping = behind(2, 3);
+    pumping[HEARTBEAT].attributes.setup_pending =
+      "Setup change waiting (taken on once every pump and valve reads off)";
+    expect(setupWait(pumping, room(pumping), NOW)).toBe(
+      "once every pump and valve in the room reads off",
+    );
+    // A controller that stopped reporting is not waited on: nothing could water then anyway.
+    const silent = behind(2, 3);
+    silent[HEARTBEAT] = { ...silent[HEARTBEAT], last_updated: ago(3_600_000) };
+    expect(setupWait(silent, room(silent), NOW)).toBeNull();
+  });
+  it("has the demo's controller take on a saved change as the controller does", () => {
+    const base = createDemo(NOW);
+    const desc = "sensor.crop_steering_engine_config";
+    const flag = "input_boolean.f2_control_enabled";
+    const saved = (switches: boolean, watering: string, looksAt = NOW): States => ({
+      ...base,
+      [desc]: {
+        ...base[desc],
+        attributes: {
+          ...base[desc].attributes,
+          setup_revision: 2,
+          demo_switches: switches,
+          demo_looks_at: looksAt,
+        },
+      },
+      [flag]: { ...base[flag], state: watering },
+    });
+    const beat = (states: States) =>
+      demoBeat(states, NOW)["sensor.crop_steering_ai_heartbeat"].attributes;
+    // Saved a moment ago: its next pass has not come yet, however often the dashboard refreshes.
+    expect(beat(saved(true, "off", NOW + 1_000))).toMatchObject({ setup_revision: 1 });
+    expect(beat(saved(true, "off", NOW + 1_000)).setup_pending).toBeUndefined();
+    expect(beat(saved(false, "on")).setup_revision).toBe(2); // a name, a sensor: at once
+    expect(beat(saved(true, "on"))).toMatchObject({
+      setup_revision: 1,
+      setup_pending: "Setup change waiting (taken on while watering is off)",
+    });
+    expect(beat(saved(true, "off")).setup_revision).toBe(2);
+    expect(beat(saved(true, "off")).setup_pending).toBeUndefined();
   });
   it("calls a zone held for a waiting setup change so, with no notice of its own", () => {
     for (const words of [
