@@ -21,6 +21,10 @@ people who build the system:
 `tests/test_whats_new.py` checks the shape and the plain words, and that the newest section is the
 version being released.
 
+## Unreleased
+
+- Mapping a sensor or renaming no longer needs watering off, and a change that does is picked up within a minute, not five.
+
 ## 1.4.0 - 2026-10-19
 
 - Coming up lists every shot expected for the rest of the day, not just the next one, and agrees with each zone's card.
