@@ -101,11 +101,16 @@ async def test_a_rename_is_in_the_rooms_activity_with_who_saved_it(
 
 
 async def test_a_refused_change_records_nothing(hass, hass_admin_user, room, caplog):
+    hass.states.async_set("switch.gt1_second_valve", "off")
     await hass.services.async_call(
         "switch", "turn_on", {"entity_id": ENGINE}, blocking=True
     )
+    # A new valve, with watering on (a rename alone saves with watering on).
+    change = _saved_as(room, "Tent")
+    change["zones"] = [dict(zone) for zone in change["zones"]]
+    change["zones"][0]["valve"] = "switch.gt1_second_valve"
     with pytest.raises(HomeAssistantError, match="must read OFF"):
-        await _call(hass, hass_admin_user, "setup_save", _saved_as(room, "Growroom 2"))
+        await _call(hass, hass_admin_user, "setup_save", change)
     assert await _activity(hass) == []
     assert not [m for m in caplog.messages if "setup saved" in m]
 
