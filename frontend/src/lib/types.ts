@@ -138,9 +138,10 @@ export interface RoomStatus {
   detail: string;
   /** When the controller last reported (epoch ms); null when it has not. */
   reportedAt: number | null;
-  /** Where to fix it, when that is a page of this dashboard: a link after the detail. `steering`:
-   * the room is Watching only, and the fix is the review that sets it back to Steering. */
-  action?: { label: string; route: string; steering?: true };
+  /** Where to fix it, when that is a page of this dashboard: a link after the detail. `mode`: the
+   * fix is how the room runs, set through the mode pill's review (Steering for a room Watching
+   * only, Watching only for a setup change waiting for watering off). */
+  action?: { label: string; route: string; mode?: "steering" | "watching" };
 }
 export interface Change {
   entityId: string;

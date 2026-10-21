@@ -858,6 +858,31 @@ try {
     // the next check starts from a fresh one.
     await page.goto("about:blank");
   });
+  await check("rooms & hardware: a name saves with watering on, a switch asks for it off", async () => {
+    // GT4, 2026-10-19: mapping the tank's distance sensor meant watering off and on again, and
+    // "must read OFF … it is ON" then stayed on the page beside "Watering off".
+    await go("setup"); // Flower 2, Steering
+    const asks = page.locator("[data-switching]");
+    await page.getByLabel("Room name").fill("Flower 2 renamed");
+    assert.equal(await asks.count(), 0, "a name asks for nothing off");
+    await page.getByRole("button", { name: "Review configuration", exact: true }).click();
+    await page.getByRole("button", { name: "Save configuration", exact: true }).click();
+    await page.getByRole("dialog").waitFor({ state: "hidden" });
+    assert.equal(await page.getByLabel("Room name").inputValue(), "Flower 2 renamed");
+    // A valve is a switch: watering has to be off first, and the page says which switch.
+    await page.getByRole("button", { name: "Map Zone 1 valve", exact: true }).click();
+    await page
+      .getByRole("textbox", { name: "Search Zone 1 valve entities" })
+      .fill("switch.demo_spare_2");
+    await page.locator(".mapping-result").filter({ hasText: "switch.demo_spare_2" }).click();
+    await expectVisible(asks);
+    assert.match(await asks.innerText(), /^Watering is on\.$/m); // not "must read OFF … then submit again"
+    // Switched off from there, the line goes at once.
+    await asks.getByRole("button", { name: /^Switch watering off/ }).click();
+    await page.getByRole("button", { name: /^Apply \d+ change/ }).click();
+    await asks.waitFor({ state: "detached" });
+    await page.goto("about:blank"); // the next check starts from a fresh demo
+  });
   await check("overview: every zone and room metric has its mini visual", async () => {
     await go("overview");
     // Each zone's card draws its own day once today's readings arrive: its moisture so far against
@@ -1743,11 +1768,11 @@ try {
     assert.ok(mappings.some((m) => m.mapped) && mappings.some((m) => !m.mapped));
     for (const { mapped, pill } of mappings)
       assert.deepEqual(pill, mapped ? ["Mapped", "on"] : ["Not mapped", "neutral"]);
-    // Watering is on, so mapping changes wait, with the switch to turn it off right there.
+    // Watering is on, and nothing asks for it off until a switch is mapped differently (a name or
+    // a sensor saves with watering on: "rooms & hardware: a name saves with watering on").
     assert.deepEqual(await pillTones(".workspace-card .pill:has(.pill-dot)"), [
       ["Controller acknowledgement pending", "warn"],
       ["Room descriptor discovered", "on"],
-      ["Watering on", "on"],
     ]);
   });
   await check("settings: the vitals notification's predictions can be left out and put back", async () => {

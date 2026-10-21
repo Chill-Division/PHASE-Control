@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { ageText, ageTone } from "@/lib/controller-health";
-import { StartSteering } from "@/components/overview-parts";
+import { ModeButton } from "@/components/overview-parts";
 import { roomStatus } from "@/lib/model";
 import type { Controller } from "@/lib/types";
 import "./status-line.css";
@@ -47,8 +47,8 @@ export function StatusLines({
               {status.action && (
                 <>
                   {" "}
-                  {status.action.steering && room.id === controller.roomId ? (
-                    <StartSteering controller={controller} compact />
+                  {status.action.mode && room.id === controller.roomId ? (
+                    <ModeButton controller={controller} mode={status.action.mode} compact />
                   ) : (
                     /* Opens the page for THIS line's room, which need not be the selected one:
                      * a write reaches only the selected room, so Watching only elsewhere opens it. */
@@ -57,7 +57,7 @@ export function StatusLines({
                       href={`#/${status.action.route}`}
                       onClick={() => controller.changeRoom(room.id)}
                     >
-                      {status.action.steering ? `Open ${room.name}` : status.action.label}
+                      {status.action.mode ? `Open ${room.name}` : status.action.label}
                     </a>
                   )}
                 </>

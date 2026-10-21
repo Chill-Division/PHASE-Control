@@ -1,5 +1,5 @@
 import { DOSER_KEYS } from "./feed";
-import { PLUMBING_LABELS, isPlumbingLayout } from "./plumbing";
+import { PLUMBING_LABELS, inferPlumbing, isPlumbingLayout } from "./plumbing";
 
 /** What each mapping is called in a saved setup change: the integration's HARDWARE_WORDS
  * (setup_api.py), which its logbook entry uses. */
@@ -79,4 +79,36 @@ export function setupChanges(old: ChangedRoom, now: ChangedRoom): string[] {
     }
   }
   return out;
+}
+
+/** A room with the switches it maps. */
+export type SwitchedRoom = ChangedRoom & {
+  zones?: { id: number; valve?: string; active?: boolean }[];
+};
+const SWITCH_KEYS = [
+  "pump_switch",
+  "main_line_switch",
+  "fresh_water_switch",
+  "recirc_switch",
+  ...DOSER_KEYS,
+];
+/** The switches a room maps (the pump, the main line, the reservoir's, each zone's valve), its
+ * plumbing (never declared, the layout those switches imply), the zones in use and whether it is
+ * active: the integration's switch_map (setup_api.py) and the controller's _switch_map. */
+function switchMap(room: SwitchedRoom): string {
+  const hardware = (room.hardware ?? {}) as Record<string, unknown>;
+  return JSON.stringify({
+    active: room.active !== false,
+    plumbing: room.plumbing || inferPlumbing(hardware),
+    switches: SWITCH_KEYS.map((key) => String(hardware[key] ?? "")),
+    zones: [...(room.zones ?? [])]
+      .sort((a, b) => a.id - b.id)
+      .map((zone) => [zone.id, zone.valve ?? "", zone.active !== false]),
+  });
+}
+/** Whether saving `now` over `old` maps a switch differently. Only then does it need watering off
+ * to save, and the controller watering off to take it on: a sensor, a name or a size changes with
+ * watering on (GT4, 2026-10-19: mapping the tank's distance sensor held the room). */
+export function changesSwitches(old: SwitchedRoom, now: SwitchedRoom): boolean {
+  return switchMap(old) !== switchMap(now);
 }

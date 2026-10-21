@@ -170,21 +170,21 @@ setup change (CS-201) and a hardware hold (CS-301, CS-308, CS-309) are still rep
 
 *Critical · Notification*
 
-**What it means.** A changed setup was saved for the room (in Settings → Rooms & hardware or Configure), or the controller is taking the room's setup on again after a restart. It only takes a setup on while every pump and valve it would drive is OFF, and, for a changed setup, the engine switch too. The notification lists the ones that are still on.
+**What it means.** A changed setup was saved for the room (in Settings → Rooms & hardware or Configure), or the controller is taking the room's setup on again after a restart. It checks every minute, and takes a setup on only while every pump, valve and doser it would drive reads off and, for a change that maps a switch differently, the room's watering switch too. A change that switches nothing differently, such as the tank's sensor or a name, needs no watering off. The notification lists what is still on.
 
 **Watering meanwhile.** Nothing in the room is watered until the controller has taken on the new setup.
 
 **Likely causes**
 
-- The setup was saved while the engine switch was on.
-- A pump or valve was left on, or reads 'unavailable'.
+- Watering was switched back on before the controller took the change on.
+- A pump, valve or doser was left on, or reads 'unavailable'.
 - The controller app restarted while a pump was running (tank circulation, for example) or a switch still read 'unavailable'.
 
 **Suggested fixes**
 
-- Turn off everything the notification lists.
-- Wait for the notification to clear, up to 5 minutes.
-- Turn the engine switch back on.
+- Switch watering off (Watching only) and turn off anything else the notification lists.
+- Wait for the notification to clear: the controller takes the change on within a minute.
+- Switch watering back on (Start steering on the Overview).
 
 <a id="cs-202"></a>
 

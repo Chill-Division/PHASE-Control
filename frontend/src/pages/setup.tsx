@@ -39,7 +39,8 @@ import {
 } from "@/lib/plumbing";
 import { errorText } from "@/lib/utils";
 import { BATCH_SWITCH_KEYS, DOSER_KEYS } from "@/lib/feed";
-import { setupChanges } from "@/lib/setup-changes";
+import { changesSwitches, setupChanges } from "@/lib/setup-changes";
+import { engineFlag } from "@/lib/room-mode";
 import type { SetupCandidate, SetupDocument, SetupRoom, SetupZone } from "@/lib/operator-types";
 import { PlumbingDiagram } from "@/components/plumbing-diagram";
 
@@ -358,6 +359,36 @@ export function Setup({
           plumbing: asksPlumbing && plumbing ? plumbing : original.plumbing,
         })
       : [];
+  // Only a change that maps a switch differently needs watering off to save; a sensor, a name or a
+  // size saves with watering on.
+  const switching =
+    !!draft &&
+    !!original &&
+    !isNew &&
+    changesSwitches(original, {
+      ...draft,
+      plumbing: asksPlumbing && plumbing ? plumbing : original.plumbing,
+    });
+  // Home Assistant's check as it answered when the room was read, kept to what still reads on now
+  // and in plain words: switching watering off clears it here at once (GT4, 2026-10-19: "must read
+  // OFF … it is ON: turn it off, then submit again" stayed beside "Watering off"). What reads
+  // neither on nor off keeps the integration's words, which say what to check.
+  const blockers = (draft?.safety.blockers ?? []).flatMap((text) => {
+    const entity = /^(\S+) must read OFF/.exec(text)?.[1];
+    const state = entity ? controller.states[entity] : undefined;
+    if (!entity || !state) return [text];
+    if (state.state === "off") return [];
+    if (state.state !== "on") return [text];
+    const room = controller.rooms.find((item) => engineFlag(controller.states, item) === entity);
+    const name = state.attributes.friendly_name;
+    return [
+      room
+        ? room.prefix === draft?.prefix
+          ? "Watering is on."
+          : `Watering is on in ${room.name}, which shares this room's hardware.`
+        : `${typeof name === "string" && name ? `${name} (${entity})` : entity} is on.`,
+    ];
+  });
   // The room as it will be saved: what a new room's review shows, and an existing room's on request.
   const wholeRoom = (
     <>
@@ -594,15 +625,16 @@ export function Setup({
                     </Pill>
                   </div>
                 </div>
-                {!isNew && !draft.safety.ready && (
-                  <div className="workspace-message">
-                    {draft.safety.blockers.map((b) => (
+                {!isNew && switching && blockers.length > 0 && (
+                  <div className="workspace-message" data-switching>
+                    <p>
+                      This change maps a switch differently, so it saves only with watering off and
+                      every switch it touches off:
+                    </p>
+                    {blockers.map((b) => (
                       <p key={b}>{b}</p>
                     ))}
-                    <p>
-                      Mapping writes are checked again on the server. Switch watering off and verify
-                      the mapped hardware is off before saving.
-                    </p>
+                    <p className="muted">A sensor, a name or a size can change with watering on.</p>
                     <WateringPower controller={controller} />
                   </div>
                 )}
