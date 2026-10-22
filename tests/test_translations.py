@@ -146,6 +146,28 @@ def test_the_plumbing_question_says_what_it_commits_you_to_and_the_pump_tooltip_
         assert "NEVER run a pump" not in text["data_description"]["pump_switch"]
 
 
+def test_every_zone_ec_field_asks_for_pore_water_ec_and_not_bulk_ec():
+    """Owner, 2026-10-22: a probe can give a raw conductivity, a bulk EC and an estimated pwEC, and
+    they differ a lot. The EC targets are pore-water EC (the Athena Handbook's Substrate EC), and
+    the controller compares the feed's EC with the reading; a bulk EC reads lower, so it would
+    shrink every shot and never dilute. The field says which to pick, in setup and in Configure.
+    """
+    strings = _strings()
+    for flow, step in (("config", "zones"), ("options", "edit_zones_map")):
+        text = strings[flow]["step"][step]
+        fields = [key for key in text["data"] if re.fullmatch(r"zone_\d+_ec", key)]
+        assert "zone_1_ec" in fields
+        for key in fields:
+            assert text["data"][key].endswith(
+                ", pore-water (pwEC)"
+            ), f"{flow}.{step}.{key}"
+            tooltip = text["data_description"][key]
+            assert "Pick pore-water EC (pwEC)" in tooltip, f"{flow}.{step}.{key}"
+            assert (
+                "Not bulk EC or a raw conductivity" in tooltip
+            ), f"{flow}.{step}.{key}"
+
+
 def test_every_plumbing_layout_has_a_plain_english_choice_and_nothing_else_does():
     from custom_components.crop_steering.plumbing import LABELS, PLUMBING_LAYOUTS
 
