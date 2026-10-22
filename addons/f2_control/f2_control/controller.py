@@ -447,6 +447,13 @@ def with_plumbing(hw, descriptor):
 # ---------------------------------------------------------------- nutrient batches
 # A room's reservoir, refilled and dosed by this controller: the integration's feed.py says how
 # much, Rooms & hardware maps the switches, and the descriptor carries them only when mapped.
+# Why a room is held while a saved setup change waits for the controller to take it on: in the zone
+# status ("Blocked: …", 80 characters), the heartbeat's setup_pending and CS-207's "Blocked by". It
+# said "Setup changed; disarm current and requested engine flags and verify hardware OFF" before 1.4.1.
+SETUP_WAITING = "Setup change waiting (taken on while watering is off)"
+# The same when only hardware still running holds it: watering is off, the change switches nothing
+# differently, or a restart is taking on again the setup it had.
+SETUP_RUNNING = "Setup change waiting (taken on once every pump and valve reads off)"
 RESERVOIR_KEYS = (
     "reservoir_distance_sensor",
     "fresh_water_switch",
@@ -1200,6 +1207,53 @@ class Controller:
             log(f"room '{room.slug}' discovered live — joined fail-safe OFF")
         self._apply_setup_descriptors()
 
+    def _check_setups(self):
+        """Between the re-scans, every pass: a room whose own descriptor carries a newer setup
+        revision than the one in force is taken through the gate now, so a saved change waits a
+        pass for watering to be off, not the five minutes to the next re-scan (GT4, 2026-10-19:
+        watering switched back on within the five minutes held the room until it was cycled off
+        again)."""
+        newer = {}
+        for room in self.rooms:
+            _state, attrs, _ = ha_get(f"sensor.crop_steering_{room.prefix}engine_config")
+            revision = (attrs or {}).get("setup_revision", 0)
+            if type(revision) is int and revision > getattr(room, "setup_revision", 0):
+                newer[room.prefix] = attrs
+        if newer:
+            self._apply_setup_descriptors(newer)
+
+    @staticmethod
+    def _switch_map(fingerprint):
+        """A setup's fingerprint without what the controller only reads (the reservoir's distance
+        sensor, an older version's feed sensors): what it puts in charge of the hardware. None
+        when there is none to compare."""
+        try:
+            saved = json.loads(fingerprint)
+        except (TypeError, ValueError):
+            return None
+        if not isinstance(saved, dict):
+            return None
+        for key in ("feed_ec_sensor", "feed_ph_sensor"):
+            saved.pop(key, None)
+        # A layout never declared is what the switches imply (the integration's switch_map does the
+        # same): declaring that very layout is not a change.
+        if not saved.get("plumbing"):
+            needs = (bool(saved.get("pump")), bool(saved.get("mainline")))
+            saved["plumbing"] = next(
+                name for name, layout in PLUMBING_LAYOUTS.items() if layout == needs
+            )
+        reservoir = dict(saved.pop("reservoir", None) or {})
+        reservoir.pop("reservoir_distance_sensor", None)
+        if reservoir:
+            saved["reservoir"] = reservoir
+        return saved
+
+    def _switches_alike(self, adopted, fingerprint):
+        """Whether a new setup switches exactly what the one in force does: then it puts nothing new
+        in charge of the hardware, and is taken on without the engine switch cycled off."""
+        before = self._switch_map(adopted)
+        return before is not None and before == self._switch_map(fingerprint)
+
     @staticmethod
     def _setup_fingerprint(attrs, room):
         """What adopting this descriptor would put in force. Saved with the adopted revision so a
@@ -1284,7 +1338,7 @@ class Controller:
         room._setup_fingerprint_adopted = None  # the saved block keeps describing the OLD room
         return True
 
-    def _apply_setup_descriptors(self):
+    def _apply_setup_descriptors(self, descriptors=None):
         """Adopt explicit versioned setup changes only after both maps are safe OFF.
 
         Missing legacy revision leaves add-on overrides untouched. Tombstones do
@@ -1294,17 +1348,25 @@ class Controller:
         same pair after a restart is RESUMED with the kill switch left as it is (hardware must
         still read OFF). Without this, a host reboot left every zone of a live room blocked behind
         a disarm cycle nobody knew was needed, and two hours of the P1 ramp were lost.
+
+        A change that switches nothing differently (a sensor, a name) is taken on with the engine
+        switch on: it puts nothing new in charge of the hardware (GT4, 2026-10-19: mapping the
+        reservoir's distance sensor held the room until watering was cycled off again).
+
+        `descriptors` maps a room's prefix to its descriptor; without it, every published one is
+        read (the re-scan).
         """
-        descriptors = {}
-        for entity in ha_get_all():
-            eid = entity.get("entity_id", "")
-            attrs = entity.get("attributes") or {}
-            if (
-                eid.startswith("sensor.crop_steering_")
-                and eid.endswith("engine_config")
-                and "prefix" in attrs
-            ):
-                descriptors[attrs["prefix"]] = attrs
+        if descriptors is None:
+            descriptors = {}
+            for entity in ha_get_all():
+                eid = entity.get("entity_id", "")
+                attrs = entity.get("attributes") or {}
+                if (
+                    eid.startswith("sensor.crop_steering_")
+                    and eid.endswith("engine_config")
+                    and "prefix" in attrs
+                ):
+                    descriptors[attrs["prefix"]] = attrs
         for room in self.rooms:
             attrs = descriptors.get(room.prefix)
             if not attrs:
@@ -1318,9 +1380,12 @@ class Controller:
                 room, "setup_revision", 0
             ):
                 continue
-            room._setup_pending = "Setup changed; disarm current and requested engine flags and verify hardware OFF"
+            room._setup_pending = SETUP_WAITING
             try:
                 fingerprint = self._setup_fingerprint(attrs, room)
+                switch_free = self._switches_alike(
+                    getattr(room, "_setup_fingerprint_adopted", None), fingerprint
+                )
                 resuming = (
                     getattr(room, "setup_revision", 0) == 0
                     and not another_room  # a different room is gated, however alike it looks
@@ -1368,8 +1433,15 @@ class Controller:
                     )  # absent legacy helper on a fresh setup
                 armed = sorted(flag for flag in flags if ha_get(flag)[0] != "off")
                 running = sorted(e for e in hardware if ha_get(e)[0] != "off")
-                if running or (armed and not resuming):
+                # Watering on holds a change that switches something differently (a restart's
+                # unchanged setup excepted); anything else waits only for hardware still running.
+                for_watering = bool(armed) and not resuming and not switch_free
+                if running or for_watering:
+                    room._setup_pending = SETUP_WAITING if for_watering else SETUP_RUNNING
                     if active:  # an archived room is meant to stay dry: no noise about it
+                        loop = float(getattr(self, "loop_seconds", 60))
+                        within = "a minute" if loop <= 60 else f"{int(loop)} seconds"
+                        waiting = armed + running if for_watering else running
                         self._alert(
                             f"setup_{room.slug}",
                             "CS-201",
@@ -1377,13 +1449,14 @@ class Controller:
                             (f"This room's setup (revision {revision}) is being taken on again after a "
                              "restart" if resuming else
                              f"A changed setup (revision {revision}) was saved")
-                            + ", and nothing in this room is watered until the controller takes it "
-                            "on. It only does that while these are "
-                            f"OFF: {', '.join(running if resuming else armed + running)}. Turn them "
-                            "off and wait for this notice to "
-                            f"clear (up to {int(getattr(self, 'rediscover_seconds', 300))} seconds)"
-                            + (": it then carries on as before." if resuming
-                               else ", then turn the engine switch back on."),
+                            + ", and nothing in this room is watered until the controller takes it on. "
+                            "It does that only while these read off: "
+                            f"{', '.join(waiting)}. "
+                            + (f"Once they do, it takes the setup on within {within}, this notice "
+                               "clears, and the room carries on as before." if not for_watering
+                               else "Switch watering off" + (" and turn the rest off" if running else "")
+                               + f": within {within} the controller takes the change on and this "
+                               "notice clears. Then switch watering back on."),
                             room=room,
                         )
                     continue
@@ -1420,7 +1493,10 @@ class Controller:
                 log(
                     f"room '{room.slug}' setup revision {revision} "
                     + ("resumed after restart (unchanged since it was adopted; hardware verified OFF)"
-                       if resuming and armed else "adopted with verified OFF hardware")
+                       if resuming and armed
+                       else "adopted with watering on: it switches nothing differently"
+                       if switch_free and armed
+                       else "adopted with verified OFF hardware")
                 )
             except (TypeError, ValueError, KeyError) as error:
                 room._setup_pending = f"Invalid setup descriptor: {error}"
@@ -4345,6 +4421,11 @@ class Controller:
                 self._rediscover(now)
             except Exception as e:
                 log("rediscover error", e)
+        else:
+            try:
+                self._check_setups()
+            except Exception as e:
+                log("setup check error", e)
         all_pub = {}
         for room in self.rooms:
             self._refresh_lights(room)

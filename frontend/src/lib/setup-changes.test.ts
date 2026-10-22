@@ -1,6 +1,12 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { HARDWARE_WORDS, ZONE_WORDS, setupChanges, type ChangedRoom } from "./setup-changes";
+import {
+  HARDWARE_WORDS,
+  ZONE_WORDS,
+  changesSwitches,
+  setupChanges,
+  type ChangedRoom,
+} from "./setup-changes";
 
 type Patch = Omit<ChangedRoom, "zones"> & { zones?: Record<string, Record<string, unknown>> };
 /** The cases the integration's setup_changes is held to (tests/test_setup_changes.py). */
@@ -59,5 +65,41 @@ describe("a room's saved changes, in words", () => {
       Object.fromEntries(Object.entries(HARDWARE_WORDS).filter(([key]) => !dosers.includes(key))),
     ).toEqual(table("HARDWARE_WORDS"));
     expect(ZONE_WORDS).toEqual(table("ZONE_WORDS"));
+  });
+});
+
+describe("changesSwitches", () => {
+  const room = {
+    room_name: "GT4",
+    active: true,
+    hardware: { pump_switch: "", main_line_switch: "", reservoir_distance_sensor: "" },
+    zones: [{ id: 1, name: "GT4", active: true, valve: "switch.gt4" }],
+  };
+  it("lets a sensor, a name or a size change with watering on", () => {
+    // GT4, 2026-10-19: mapping the tank's distance sensor meant watering off and on again.
+    expect(
+      changesSwitches(room, {
+        ...room,
+        room_name: "Tent 4",
+        hardware: { ...room.hardware, reservoir_distance_sensor: "sensor.gt4_tank" },
+        zones: [{ ...room.zones[0], name: "Bench", plant_count: 6 } as never],
+      }),
+    ).toBe(false);
+    // Declaring the plumbing the switches already imply is no change either.
+    expect(changesSwitches(room, { ...room, plumbing: "valves_only" })).toBe(false);
+  });
+  it.each([
+    ["a valve", { zones: [{ id: 1, name: "GT4", active: true, valve: "switch.other" }] }],
+    ["a zone archived", { zones: [{ id: 1, name: "GT4", active: false, valve: "switch.gt4" }] }],
+    [
+      "a zone added",
+      { zones: [...room.zones, { id: 2, name: "B", active: true, valve: "switch.b" }] },
+    ],
+    ["the pump", { hardware: { ...room.hardware, pump_switch: "switch.pump" } }],
+    ["a doser", { hardware: { ...room.hardware, doser_1_switch: "switch.d1" } }],
+    ["another plumbing", { plumbing: "pump_valves" }],
+    ["the room archived", { active: false }],
+  ])("needs watering off for %s", (_, change) => {
+    expect(changesSwitches(room, { ...room, ...change })).toBe(true);
   });
 });

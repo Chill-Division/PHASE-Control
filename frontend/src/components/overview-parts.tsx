@@ -8,6 +8,7 @@ import {
   CircleDot,
   CirclePause,
   Clock,
+  Pause,
   Play,
   SlidersHorizontal,
   TriangleAlert,
@@ -183,13 +184,16 @@ export function ModeControl({ controller }: { controller: Controller }) {
   );
 }
 
-/** The way back from Watching only, where the room says it is not watering: the mode pill's
- * Steering review, without having to find the pill. `compact`: as a status line's action. */
-export function StartSteering({
+/** How the room runs, set from where the room says it is not watering: Steering for a room
+ * Watching only, Watching only for a setup change that waits for watering off. The mode pill's
+ * review, without having to find the pill. `compact`: as a status line's action. */
+export function ModeButton({
   controller,
+  mode,
   compact = false,
 }: {
   controller: Controller;
+  mode: "steering" | "watching";
   compact?: boolean;
 }) {
   const room = controller.room.room;
@@ -199,8 +203,11 @@ export function StartSteering({
     from: RoomMode | null;
     items: ReturnType<typeof modeChanges>;
   } | null>(null);
-  const items = state.mode === "watching" ? modeChanges(state, "steering", room.name) : [];
+  const from = mode === "steering" ? "watching" : "steering";
+  const items = state.mode === from ? modeChanges(state, mode, room.name) : [];
   if (!items.length && !opened) return null;
+  const label = mode === "steering" ? "Start steering…" : "Switch watering off…";
+  const Icon = mode === "steering" ? Play : Pause;
   const start = () => setOpened({ from: state.mode, items });
   return (
     <>
@@ -212,21 +219,27 @@ export function StartSteering({
             disabled={!live(controller)}
             onClick={start}
           >
-            Start steering…
+            {label}
           </button>
         ) : (
-          <Button size="sm" className="start-steering" disabled={!live(controller)} onClick={start}>
-            <Play aria-hidden="true" />
-            Start steering…
+          <Button
+            size="sm"
+            className="start-steering"
+            data-mode={mode}
+            disabled={!live(controller)}
+            onClick={start}
+          >
+            <Icon aria-hidden="true" />
+            {label}
           </Button>
         ))}
       <ReviewDialog
         open={opened !== null}
         onOpenChange={(next) => !next && setOpened(null)}
         controller={controller}
-        title={`${MODE_WORDS.steering.label}: ${room.name}`}
+        title={`${MODE_WORDS[mode].label}: ${room.name}`}
         items={opened?.items ?? []}
-        note={opened ? modeNote(opened.from, "steering", room.name) : undefined}
+        note={opened ? modeNote(opened.from, mode, room.name) : undefined}
       />
     </>
   );
@@ -294,7 +307,7 @@ export function StatusRow({
   const water = room.metrics.find((metric) => metric.key === "water")?.value ?? null;
   const shots = room.metrics.find((metric) => metric.key === "shots")?.value ?? null;
   const perPlant = roomPerPlant(room.zones, plants);
-  // A link to another page; Watching only has its fix right here.
+  // A link to another page; how the room runs has its fix right here.
   const action = status.action?.route === "overview" ? undefined : status.action;
   return (
     <div className="status-row" data-tone={status.tone} data-room-status={room.room.id}>
@@ -316,9 +329,9 @@ export function StatusRow({
               </button>
             </>
           )}
-          {status.action?.steering && (
+          {status.action?.mode && (
             <span className="status-row-fix">
-              <StartSteering controller={controller} />
+              <ModeButton controller={controller} mode={status.action.mode} />
             </span>
           )}
         </span>

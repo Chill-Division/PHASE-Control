@@ -78,7 +78,7 @@ def test_a_restart_resumes_an_unchanged_setup_with_the_kill_switch_left_on():
 def test_a_newer_revision_after_a_restart_still_needs_the_disarm_cycle():
     c, fake = _adopted_then_restarted(kill="on", revision=5)
     room = c.rooms[0]
-    assert room._setup_pending and "Setup changed" in c._blocked(room, 1)
+    assert room._setup_pending and "Setup change waiting" in c._blocked(room, 1)
     fake.set_state(KILL, "off")
     c._apply_setup_descriptors()
     assert room.setup_revision == 5 and room._setup_pending is None
@@ -99,7 +99,7 @@ def test_resume_waits_for_running_hardware_and_then_heals_without_touching_the_k
     first, _ = _start(_states(kill="off"))
     states["switch.p"] = ("on", {})  # someone is circulating the tank by hand as the controller restarts
     c, fake = _start(states, state_path=first._state_path)
-    assert c.rooms[0]._setup_pending
+    assert c.rooms[0]._setup_pending == controller.SETUP_RUNNING  # not watering off: the pump
     fake.set_state("switch.p", "off")
     c._apply_setup_descriptors()  # the next rediscover pass
     assert c.rooms[0]._setup_pending is None and c.rooms[0].setup_revision == 4
@@ -109,7 +109,9 @@ def test_a_pending_setup_is_announced_with_the_entities_in_the_way_and_what_to_d
     c, fake = _start(_states(kill="on"))
     alerts = _setup_alerts(fake)
     assert len(alerts) == 1
-    assert KILL in alerts[0]["message"] and "OFF" in alerts[0]["message"]
+    message = alerts[0]["message"]
+    assert KILL in message and "only while these read off" in message
+    assert "Switch watering off: within a minute the controller takes the change on" in message
     assert any(dom == "notify" for dom, _svc, _d in fake.calls)  # a total irrigation block reaches the phone
     c._apply_setup_descriptors()
     assert len(_setup_alerts(fake)) == 1  # debounced, not one per rediscover pass
@@ -120,7 +122,7 @@ def test_a_blocked_zone_says_why_even_when_no_shot_is_due(capsys):
     room = c.rooms[0]
     room.state[1]["phase"] = "P3"
     c._act_zone(room, 1, None, None, (False, 0.0, ""), c._blocked(room, 1), False, controller.datetime.now())
-    assert "Setup changed" in capsys.readouterr().out  # the overnight hold line used to be blank
+    assert "Setup change waiting" in capsys.readouterr().out  # the overnight hold line used to be blank
 
 
 @pytest.mark.parametrize("saved", [{"revision": "4", "fingerprint": "x"}, "garbage", {"revision": 4}])

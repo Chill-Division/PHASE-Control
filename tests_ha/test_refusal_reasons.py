@@ -53,21 +53,43 @@ def _renamed(room, name):
     }
 
 
-async def test_a_rename_refused_while_watering_says_why_and_changes_nothing(hass, call):
+def _revalved(room, valve):
+    """What Rooms & hardware sends to give zone 1 another valve."""
+    zones = [dict(zone) for zone in room["zones"]]
+    zones[0]["valve"] = valve
+    return {**_renamed(room, room["room_name"]), "zones": zones}
+
+
+async def test_a_valve_change_refused_while_watering_says_why_and_changes_nothing(
+    hass, call
+):
+    hass.states.async_set("switch.gt1_second_valve", "off")
     room = await _room(call)
     await hass.services.async_call(
         "switch", "turn_on", {"entity_id": ENGINE}, blocking=True
     )
-    answer = await call("setup_save", _renamed(room, "Growroom 2"))
+    answer = await call("setup_save", _revalved(room, "switch.gt1_second_valve"))
     assert answer["success"] is False
     assert answer["error"]["message"] == (
         f"{ENGINE} must read OFF before changing setup (it is ON: turn it off, then submit again)"
     )
     after = await _room(call)
-    assert (after["room_name"], after["revision"]) == (
-        room["room_name"],
+    assert (after["zones"][0]["valve"], after["revision"]) == (
+        room["zones"][0]["valve"],
         room["revision"],
     )
+
+
+async def test_a_rename_is_saved_with_watering_on(hass, call):
+    """It changes nothing the controller switches (GT4, 2026-10-19: mapping the tank's sensor
+    meant watering off and on again, and the room was held for it)."""
+    room = await _room(call)
+    await hass.services.async_call(
+        "switch", "turn_on", {"entity_id": ENGINE}, blocking=True
+    )
+    answer = await call("setup_save", _renamed(room, "Growroom 2"))
+    assert answer["success"] is True
+    assert answer["result"]["response"]["revision"] == room["revision"] + 1
 
 
 async def test_with_watering_off_the_rename_is_saved_and_answered(hass, call):

@@ -10,6 +10,38 @@ and code-level detail for developers and AI agents working on the repo.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+- **A setup change no longer strands a room.** The controller takes a saved change on within a
+  minute, not five, and one that changes no switch (a sensor such as the tank's, a name, a size)
+  saves and is taken on with watering on. Rooms & hardware asks for watering off only when a switch
+  is remapped, in plain words, and stops asking once watering is off. When a change does wait, the
+  Overview says so in plain words, with **Switch watering off…** beside it.
+
+### 🔧 Technical notes
+
+- Controller: `_check_setups`, every pass, reads each room's own descriptor and takes a newer
+  revision through the gate; the five-minute re-scan (`rediscover_seconds`) still finds new rooms.
+  `_switches_alike` compares fingerprints without the reservoir's distance sensor and the feed
+  sensors of before 2.26.0, an undeclared plumbing read as the layout its pump and main line imply:
+  a change that switches nothing differently is adopted with the engine switch on, though running
+  hardware still holds it. `SETUP_WAITING` and `SETUP_RUNNING` replace "Setup changed; disarm
+  current and requested engine flags and verify hardware OFF" in the zone status, the heartbeat's
+  `setup_pending` and CS-207's "Blocked by"; CS-201's notification says what to do in those words.
+  `test_setup_change_taken_on.py`.
+- Integration: `setup_api.switch_map` (the switches, the plumbing, an undeclared one as inferred,
+  the zones in use and `active`); `save_setup` checks `safety_blockers` only when it changes, so a
+  rename, a probe, the reservoir's distance sensor or a size saves with watering on.
+  `tests_ha/test_setup_change_with_watering_on.py` saves a rename with watering on and the real
+  controller takes it on in a pass; a remapped valve is refused while watering is on, and taken on
+  one pass after watering goes off.
+- Dashboard: `changesSwitches` (`lib/setup-changes.ts`) mirrors `switch_map`. Rooms & hardware asks
+  for watering off (`data-switching`) only for a change that maps a switch differently, listing what
+  still reads on in plain words ("Watering is on."). `roomStatus` words a waiting setup change
+  plainly, with `ModeButton` (**Switch watering off…**, the mode pill's Watching only review) while
+  watering is on; a zone held for it reads **Setup change waiting** and raises no zone notice of its
+  own. The demo refuses a save as the integration does. CS-201's help says the same.
+
 ## [1.4.0] - 2026-10-19
 
 Integration and controller **1.4.0**.

@@ -215,6 +215,110 @@ def test_shared_hardware_cannot_conflict_with_a_zone_role(role):
     assert not hass.config_entries.updates
 
 
+def switch_free():
+    """The room as it is, renamed, its zones named, a probe and the tank's sensor mapped: nothing
+    the controller switches is different."""
+    return {
+        "entry_id": "one",
+        "expected_revision": 0,
+        "room_name": "GT4",
+        "active": True,
+        "zones": [
+            {
+                "id": 1,
+                "name": "Bench",
+                "active": True,
+                "valve": "switch.v1",
+                "vwc_sensors": ["sensor.vwc"],
+                "ec_sensors": ["sensor.ec"],
+                "plant_count": 4,
+            },
+            {
+                "id": 2,
+                "name": "Rear",
+                "active": True,
+                "valve": "switch.v2",
+                "vwc_sensors": [],
+                "ec_sensors": [],
+                "plant_count": 8,
+            },
+        ],
+        "hardware": {"pump_switch": "switch.p", "main_line_switch": "switch.m"},
+    }
+
+
+def test_a_change_that_switches_nothing_differently_saves_with_watering_on():
+    """GT4, 2026-10-19: mapping the tank's distance sensor meant watering off to save, and the
+    controller then held the room because watering went straight back on."""
+    hass, entry, states = rig()
+    states["switch.crop_steering_veg_engine_enabled"].state = "on"
+    # A shot under way: the controller waits for it, the save need not.
+    states["switch.p"].state = "on"
+    result = asyncio.run(api.save_setup(hass, switch_free()))
+    assert result["revision"] == 1 and entry.data["room_name"] == "GT4"
+    assert entry.data["zones"]["1"]["vwc_sensors"] == ["sensor.vwc"]
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        lambda p: p["zones"][0].update(valve="switch.v3"),  # a valve
+        lambda p: p["zones"][0].update(active=False),  # a zone out of use
+        lambda p: p["hardware"].update(pump_switch=""),  # the pump
+        # another plumbing: the pump without its main line
+        lambda p: (
+            p.update(plumbing="pump_valves"),
+            p["hardware"].update(main_line_switch=""),
+        ),
+    ],
+)
+def test_a_change_that_switches_something_differently_still_needs_watering_off(change):
+    hass, _, states = rig()
+    states["switch.crop_steering_veg_engine_enabled"].state = "on"
+    data = switch_free()
+    change(data)
+    with pytest.raises(ValueError, match="engine_enabled must read OFF"):
+        asyncio.run(api.save_setup(hass, data))
+    assert not hass.config_entries.updates
+
+
+def test_declaring_the_plumbing_the_switches_imply_is_not_a_switch_change():
+    hass, entry, states = rig()
+    states["switch.crop_steering_veg_engine_enabled"].state = "on"
+    data = switch_free()
+    # What switch.p and switch.m already imply.
+    data["plumbing"] = "pump_mainline_valves"
+    asyncio.run(api.save_setup(hass, data))
+    assert entry.data["plumbing"] == "pump_mainline_valves"
+
+
+def test_the_switch_map_ignores_sensors_names_and_sizes():
+    before = {
+        "num_zones": 1,
+        "hardware": {"pump_switch": "switch.p"},
+        "zones": {"1": {"zone_switch": "switch.v1", "name": "A", "vwc_sensors": []}},
+    }
+    after = {
+        "num_zones": 1,
+        "room_name": "GT4",
+        "hardware": {
+            "pump_switch": "switch.p",
+            "reservoir_distance_sensor": "sensor.d",
+        },
+        "zones": {
+            1: {
+                "zone_switch": "switch.v1",
+                "name": "B",
+                "plant_count": 6,
+                "vwc_sensors": ["sensor.vwc"],
+            }
+        },
+    }
+    assert api.switch_map(before) == api.switch_map(after)
+    after["hardware"]["fresh_water_switch"] = "switch.fresh"
+    assert api.switch_map(before) != api.switch_map(after)
+
+
 def test_shared_room_must_be_disarmed_even_when_owner_is_off():
     hass, _, states = rig()
     hass.config_entries.entries.append(

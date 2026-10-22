@@ -955,25 +955,44 @@ export function roomStatus(states: States, room: Room, now = Date.now()): RoomSt
       `Data ${ageText(now - beat.at!)} old`,
       "The controller stopped reporting. Check the controller app and its log.",
     );
-  const pending = note("setup_pending");
-  if (pending)
-    return say(
-      "stopped",
-      "Not watering",
-      pending.startsWith("Setup changed")
-        ? `${pending}. Switch watering off, wait up to 5 minutes for the controller to adopt the setup, then switch it back on.`
-        : `${pending}. Correct the room in Settings → Rooms & hardware.`,
-    );
   // The room's engine switch (the "watering" switch here): off, or unreadable, stops every shot.
   const flag = beat.attributes.enable_flag ?? descriptor(states, room)?.attributes.enable_flag;
   const flagId = typeof flag === "string" && /^(switch|input_boolean)\./.test(flag) ? flag : null;
   const engine = flagId ? states[flagId]?.state : undefined;
+  const pending = note("setup_pending");
+  if (pending)
+    // A saved setup change the controller has not taken on: "Setup change waiting (…)", or
+    // "Setup changed; disarm …" from a controller before 1.4.1.
+    return /^Setup change/.test(pending)
+      ? /every pump and valve/.test(pending)
+        ? say(
+            "stopped",
+            "Not watering",
+            "A setup change is waiting for every pump and valve in the room to read off. Once they do, the controller takes it on within a minute, and the room carries on as before.",
+          )
+        : engine === "on"
+          ? say(
+              "stopped",
+              "Not watering",
+              "A setup change is waiting for the controller, which takes it on only while watering is off. Switch watering off: within a minute it takes the change on, and watering can go back on.",
+              { label: "Switch watering off…", route: "overview", mode: "watching" },
+            )
+          : say(
+              "stopped",
+              "Not watering",
+              "A setup change is waiting for the controller. Watering is off, so it takes the change on within a minute; then watering can go back on.",
+            )
+      : say(
+          "stopped",
+          "Not watering",
+          `${pending}. Correct the room in Settings → Rooms & hardware.`,
+        );
   if (engine === "off")
     return say(
       "stopped",
       "Not watering",
       "The room is Watching only: the controller reads the probes and follows the phases, but opens no valve. A new room starts this way, so nothing is watered before its hardware has been checked.",
-      { label: "Start steering…", route: "overview", steering: true },
+      { label: "Start steering…", route: "overview", mode: "steering" },
     );
   if (engine !== "on")
     return say(

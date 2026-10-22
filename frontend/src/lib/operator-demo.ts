@@ -18,6 +18,7 @@ import { inferPlumbing, plumbingErrors } from "./plumbing";
 import { DEMO_WHATS_NEW } from "./whats-new-demo";
 import { compareVersions } from "./whats-new";
 import { RESERVOIR_KEYS } from "./feed";
+import { changesSwitches, type SwitchedRoom } from "./setup-changes";
 
 const clone = <T>(value: T): T => structuredClone(value);
 export class OperatorDemo {
@@ -87,10 +88,15 @@ export class OperatorDemo {
       room.plumbing_inferred = inferPlumbing(room.hardware);
       const descriptor = states["sensor.crop_steering_" + room.prefix + "engine_config"];
       const flag = String(descriptor?.attributes.enable_flag || "");
+      // As the integration's safety_blockers words it (setup_api._off_blocker).
       room.safety = {
         ready: states[flag]?.state === "off",
         blockers:
-          states[flag]?.state === "off" ? [] : ["Switch watering off before changing mappings."],
+          states[flag]?.state === "off"
+            ? []
+            : [
+                `${flag} must read OFF before changing setup (it is ON: turn it off, then submit again)`,
+              ],
       };
     }
     const candidates = Object.values(states).map((e) => ({
@@ -371,7 +377,14 @@ export class OperatorDemo {
         const room = this.rooms!.find((r) => r.entry_id === data.entry_id);
         if (action !== "setup_create" && (!room || room.revision !== data.expected_revision))
           throw new Error("Room changed. Reload setup.");
-        if (room && !room.safety.ready) throw new Error(room.safety.blockers.join(" "));
+        // As the integration's save_setup: only archiving, or a change that maps a switch
+        // differently, needs watering off; a sensor, a name or a size saves with it on.
+        if (
+          room &&
+          !room.safety.ready &&
+          (action !== "setup_save" || changesSwitches(room, data as unknown as SwitchedRoom))
+        )
+          throw new Error(room.safety.blockers.join(" "));
         if (action === "setup_remove") {
           if (data.confirm_name !== room!.room_name) throw new Error("Enter the exact room name.");
           room!.active = false;

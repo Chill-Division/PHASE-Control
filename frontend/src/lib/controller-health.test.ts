@@ -424,7 +424,7 @@ describe("room status line", () => {
             "Setup changed; disarm current and requested engine flags and verify hardware OFF",
         }),
       ],
-      /^Setup changed; disarm .* verify hardware OFF\. Switch watering off, wait up to 5 minutes .* then switch it back on\.$/,
+      /^A setup change is waiting for the controller, which takes it on only while watering is off\. Switch watering off: within a minute it takes the change on, and watering can go back on\.$/,
     ],
     [
       "the setup is invalid",
@@ -463,7 +463,7 @@ describe("room status line", () => {
   });
   it("starts steering when watering is off, and an old retired switch changes nothing", () => {
     const off = status(fixture([entity("input_boolean.f2_control_enabled", "off")]));
-    expect(off.action).toEqual({ label: "Start steering…", route: "overview", steering: true });
+    expect(off.action).toEqual({ label: "Start steering…", route: "overview", mode: "steering" });
     // System Enabled and Auto Irrigation Enabled are gone; one an older integration left behind,
     // off, no longer stops watering, so the line never names it.
     const retired = [
@@ -476,6 +476,61 @@ describe("room status line", () => {
     });
     const both = status(fixture([entity("input_boolean.f2_control_enabled", "off"), ...retired]));
     expect(both.detail).toMatch(/^The room is Watching only:/);
+  });
+  it("says a setup change waits for watering off in plain words, with the way to it", () => {
+    // GT4, 2026-10-19: "Setup changed; disarm current and requested engine flags and verify
+    // hardware OFF", while the pill said Steering and nothing offered to switch watering off.
+    for (const words of [
+      "Setup changed; disarm current and requested engine flags and verify hardware OFF",
+      "Setup change waiting (taken on while watering is off)",
+    ]) {
+      const on = status(fixture([entity(HEARTBEAT, "healthy", { setup_pending: words })]));
+      expect(on).toMatchObject({ tone: "stopped", text: "Not watering" });
+      expect(on.action).toEqual({
+        label: "Switch watering off…",
+        route: "overview",
+        mode: "watching",
+      });
+      const off = status(
+        fixture([
+          entity(HEARTBEAT, "healthy", { setup_pending: words }),
+          entity("input_boolean.f2_control_enabled", "off"),
+        ]),
+      );
+      expect(off.detail).toMatch(
+        /^A setup change is waiting for the controller\. Watering is off, so it takes the change on within a minute/,
+      );
+      expect(off.action).toBeUndefined();
+    }
+    // Held only by hardware still running: watering is off, or the change switches nothing.
+    const running = status(
+      fixture([
+        entity(HEARTBEAT, "healthy", {
+          setup_pending: "Setup change waiting (taken on once every pump and valve reads off)",
+        }),
+      ]),
+    );
+    expect(running.detail).toMatch(
+      /^A setup change is waiting for every pump and valve in the room to read off/,
+    );
+    expect(running.action).toBeUndefined();
+  });
+  it("calls a zone held for a waiting setup change so, with no notice of its own", () => {
+    for (const words of [
+      "Setup changed; disarm current and requested engine flags and verify hardware OFF",
+      "Setup change waiting (taken on while watering is off)",
+    ]) {
+      const room = view(
+        fixture([
+          entity(HEARTBEAT, "healthy", { setup_pending: words }),
+          entity("sensor.crop_steering_zone_1_status", `Blocked: ${words}`.slice(0, 80), {
+            reason: "P2",
+          }),
+        ]),
+      );
+      expect(room.zones[0].status).toBe("Setup change waiting");
+      expect(room.alerts.filter((alert) => alert.zoneId === 1)).toEqual([]);
+    }
   });
   it("says there is no word from the controller when its heartbeat is missing", () => {
     const states = fixture();

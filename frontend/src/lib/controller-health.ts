@@ -80,6 +80,8 @@ export const WATCHING_HOLD = "watering off (Watching only)";
 export const holdWords = (text: string) => text.replace(/room off \(kill switch\)/g, WATCHING_HOLD);
 /** A zone's status while the controller holds it for the room's watering switch. */
 export const WATCHING_LABEL = "Watching only";
+/** A zone's status while the room's saved setup change waits for the controller. */
+export const SETUP_LABEL = "Setup change waiting";
 /** A zone's status label in the dashboard's words. The controller labels a held zone "Blocked:"
  * and its hold; held for the room's watering switch, that is the room's Watching only (its status
  * line says so, with the way back to Steering), not a fault of the zone's. */
@@ -89,6 +91,8 @@ export function zoneLabelWords(label: string): string {
   const words = holdWords(held);
   if (words === WATCHING_HOLD) return WATCHING_LABEL;
   if (words === "watering switch unavailable") return "Watering switch unavailable";
+  // A saved setup change the controller has not taken on: the room's line says so, and how on.
+  if (/^Setup change/.test(words)) return SETUP_LABEL;
   return label;
 }
 /** The controller's own zone label (`zone_status_label` in crop_steering_engine/core.py), rebuilt

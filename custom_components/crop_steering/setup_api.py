@@ -98,6 +98,35 @@ def engine_flag(hass, data):
     )
 
 
+def switch_map(data):
+    """What a setup puts in charge of the hardware: every switch it maps (the pump, the main line,
+    the reservoir's, each zone's valve), the plumbing that says which exist, the zones in use and
+    whether the room is active. A change that leaves it as it was (a sensor, a name, a size) changes
+    nothing the controller switches: it needs no watering off to save, and the controller takes it
+    on with watering on (the controller's _switches_alike)."""
+    hw = data.get("hardware") or {}
+    zones = data.get("zones") or {}
+    return {
+        "active": data.get("active", True) is not False,
+        "num_zones": int(data.get("num_zones", 1) or 1),
+        # Never declared, it is what the switches imply: declaring that is not a change.
+        "plumbing": data.get("plumbing") or infer_plumbing(hw),
+        "enable_flag": data.get("enable_flag") or "",
+        "switches": {
+            key: hw.get(key) or ""
+            for key in ("pump_switch", "main_line_switch", *BATCH_SWITCHES)
+        },
+        "valves": {
+            str(zone): [
+                cfg.get("zone_switch") or "",
+                cfg.get("active", True) is not False,
+            ]
+            for zone, cfg in zones.items()
+            if isinstance(cfg, dict)
+        },
+    }
+
+
 def safety_blockers(hass, entry=None, proposed=None):
     """Require affected engines and union of old/new plumbing definitively OFF."""
     old = effective(entry) if entry else {}
@@ -586,7 +615,14 @@ def _update(hass, entry, data):
 async def save_setup(hass, payload):
     entry = _selected(hass, payload)
     data = prepare_setup(hass, payload, effective(entry), entry.entry_id)
-    blockers = safety_blockers(hass, entry, data)
+    # A change that switches nothing differently (a sensor, a name, a size) asks for nothing to be
+    # off (GT4, 2026-10-19: mapping the tank's distance sensor meant watering off and on again);
+    # any other waits for the room's watering and every switch it touches to read off.
+    if switch_map(data) == switch_map(effective(entry)):
+        plan = _plan_blocker(hass, entry, data)
+        blockers = [plan] if plan else []
+    else:
+        blockers = safety_blockers(hass, entry, data)
     if blockers:
         raise ValueError("; ".join(blockers))
     _update(hass, entry, data)
