@@ -21,7 +21,7 @@ people who build the system:
 `tests/test_whats_new.py` checks the shape and the plain words, and that the newest section is the
 version being released.
 
-## Unreleased
+## 1.5.0 - 2026-10-22
 
 - Rooms where one valve waters every zone can now be set up: the zones keep their own readings and share every shot, phase and target.
 - Mapping a sensor or renaming no longer needs watering off; a change that does is picked up within a minute, and watering waits for it.

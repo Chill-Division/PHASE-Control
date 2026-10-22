@@ -1,4 +1,6 @@
-# Unreleased
+# 1.5.0
+
+Pair with integration 1.5.0.
 
 - A room whose one valve waters every zone gets one shot, decided on all its zones' readings and counted on each. Two zones on one valve under any other plumbing are held, not watered once for each zone.
 - A saved setup change is taken on within a minute, one that changes no switch (a sensor, a name) with watering on, and the dashboard keeps watering off until it has been.
