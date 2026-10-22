@@ -23,6 +23,7 @@ import {
 } from "@/lib/stock";
 import type { Controller } from "@/lib/types";
 import { errorText } from "@/lib/utils";
+import { useBalancedRows } from "@/lib/use-balanced-rows";
 import "./stock.css";
 
 const when = (iso: string | null) =>
@@ -340,6 +341,7 @@ export function StockTanks({
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState<StockTankDraft[] | null>(null);
+  const grid = useBalancedRows<HTMLDivElement>(doc?.tanks.length ?? 0);
   useEffect(() => {
     let current = true;
     setDoc(null);
@@ -431,7 +433,7 @@ export function StockTanks({
         />
       )}
       {doc && !!doc.tanks.length && (
-        <div className="stock-grid">
+        <div className="stock-grid" ref={grid.ref} style={grid.style}>
           {doc.tanks.map((tank) => (
             <TankCard
               key={tank.id}

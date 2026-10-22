@@ -1,6 +1,7 @@
 import { CircleCheck, Info, TriangleAlert } from "lucide-react";
 import { number, time as clock } from "@/components/dashboard";
 import type { Finding, WeekDay } from "@/lib/zone-week";
+import { useBalancedRows } from "@/lib/use-balanced-rows";
 import "./zone-week.css";
 
 const TONE_ICON = { good: CircleCheck, warn: TriangleAlert, info: Info } as const;
@@ -69,6 +70,7 @@ export function ZoneWeek({
     peakTarget !== null && triggerTarget !== null && peakTarget > triggerTarget
       ? { top: y(peakTarget), bottom: y(triggerTarget) }
       : null;
+  const grid = useBalancedRows<HTMLOListElement>(days.length);
   return (
     <section className="zone-week" aria-labelledby="zone-week-title">
       <div className="zone-week-head">
@@ -76,7 +78,7 @@ export function ZoneWeek({
         <span>Lights-on to lights-on · shaded: the band from trigger to peak</span>
       </div>
       {days.length ? (
-        <ol className="zone-week-days">
+        <ol className="zone-week-days" ref={grid.ref} style={grid.style}>
           {days.map((day) => {
             const length = (day.day.end - day.day.start) / 3_600_000;
             const x = (hour: number) => (hour / length) * W;

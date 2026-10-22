@@ -46,6 +46,7 @@ import { fieldCapacitySuggestion, referenceLines, suggestedDraft } from "@/lib/s
 import { syncPlanZones } from "@/lib/sync-plan-zones";
 import type { Controller } from "@/lib/types";
 import { errorText } from "@/lib/utils";
+import { useBalancedRows } from "@/lib/use-balanced-rows";
 import { zonePlants } from "@/lib/water-view";
 import type {
   GrowPlan,
@@ -170,6 +171,7 @@ export function GrowPlanner({
     };
   }, [controller.roomId, controller.connection, Boolean(document), dirty]);
   const zonePlan = plan?.zones.find((z) => z.zone_id === zoneId);
+  const blocks = useBalancedRows<HTMLDivElement>(zonePlan?.schedule.length ?? 0);
   const currentBlock = blockForDay(zonePlan, day);
   const profile =
     plan?.profiles.find((p) => p.id === currentBlock?.profile_id) || plan?.profiles[0];
@@ -978,7 +980,7 @@ export function GrowPlanner({
                     Add week
                   </Button>
                 </div>
-                <div className="schedule-blocks">
+                <div className="schedule-blocks" ref={blocks.ref} style={blocks.style}>
                   {zonePlan?.schedule.map((block, i) => (
                     <button
                       key={i}

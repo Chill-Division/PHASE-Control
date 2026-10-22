@@ -25,6 +25,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   setup change waiting, a strategy hold, no word from the controller) reads **Steering · on hold**
   in amber, in the pill and the rooms column, not a plain Steering. Its clock and Coming up expect
   no shot from it, and the Zones heading says none is watering.
+- **Cards fill the width, in even rows.** The Insights week, the dosers, the Schedule's weeks and
+  the stock tanks fill the whole width on a wide screen, and where they wrap the rows come out even:
+  four stock tanks beside the rooms list go two and two, not three and one. Phones are as they were.
 
 ### 🔧 Technical notes
 
@@ -62,6 +65,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   watering: the room is on hold". `comingUp` no longer lists the controller's own next shot for a
   held zone (`next.basis` "held"), as the clock's ticks already did not: the controller publishes
   what a zone waits for even while a hold keeps it from acting. `verify-live` stages a held room.
+- Dashboard: `useBalancedRows` (`lib/use-balanced-rows.ts`) gives a grid of cards the columns that
+  make every row the full width and the rows as even as they can be, from its measured width and the
+  card's least width (`--card-min` in its CSS); until it is measured, `auto-fit` lays it out. It
+  replaces `repeat(auto-fill, …)`, which kept empty columns, on `.zone-week-days`, `.res-dosers`,
+  `.schedule-blocks` and `.stock-grid`. A `verify-dashboard` check holds the four to one full row at
+  1920 px and four stock tanks to two and two beside the rooms list.
 
 ## [1.4.0] - 2026-10-19
 

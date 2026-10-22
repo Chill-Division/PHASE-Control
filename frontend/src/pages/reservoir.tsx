@@ -85,6 +85,7 @@ import {
 import { descriptor } from "@/lib/model";
 import type { Controller } from "@/lib/types";
 import { errorText } from "@/lib/utils";
+import { useBalancedRows } from "@/lib/use-balanced-rows";
 import { TankStatus } from "@/components/tank-status";
 import "./reservoir.css";
 
@@ -525,8 +526,9 @@ function DoserFlows({
   onChange: (next: FeedDraft) => void;
 }) {
   const id = useId();
+  const grid = useBalancedRows<HTMLUListElement>(mapped.length);
   return (
-    <ul className="res-dosers">
+    <ul className="res-dosers" ref={grid.ref} style={grid.style}>
       {mapped.map((doser) => {
         const label = stage?.doses[String(doser)]?.label;
         return (
