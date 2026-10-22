@@ -1,3 +1,7 @@
+# Unreleased
+
+- Rooms & hardware says which EC reading to map, pore-water EC (pwEC), and lists those first.
+
 # 1.5.0
 
 Pair with integration 1.5.0.

@@ -10,6 +10,26 @@ and code-level detail for developers and AI agents working on the repo.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+- **Setup says which EC reading to map.** A probe can give a raw conductivity, a bulk EC and a
+  pore-water EC (pwEC), and they differ a lot. The EC targets are pwEC, the Athena Handbook's
+  Substrate EC, so the setup wizard and Rooms & hardware now ask for it, and Rooms & hardware lists
+  pwEC readings first. A bulk EC reads lower than the water at the roots, and lower still as the
+  substrate dries: mapped as EC, it made the controller give smaller shots and never dilute.
+
+### 🔧 Technical notes
+
+- Integration: every zone's EC field (`zone_N_ec`, in the wizard's `zones` step and Configure's
+  `edit_zones_map`) is labelled "Zone N EC probe(s), pore-water (pwEC)", and its tooltip asks for
+  pwEC, an estimated one being fine, and not bulk EC or a raw conductivity, leaving EC unmapped if
+  that is all a probe gives. `test_every_zone_ec_field_asks_for_pore_water_ec_and_not_bulk_ec`.
+- Dashboard: `MappingPicker` takes a `hint` (a line under its label, which describes its Map button)
+  and `choosing` (the same in full, in the picker). Rooms & hardware ranks EC candidates by name:
+  pwEC or "pore" first, then any other EC, then "bulk" and "conductivity". The demo's probe gives a
+  bulk EC and a raw conductivity beside its estimated pwEC; verify-workspace checks the line and
+  the order.
+
 ## [1.5.0] - 2026-10-22
 
 Integration and controller **1.5.0**.

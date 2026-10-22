@@ -21,6 +21,10 @@ people who build the system:
 `tests/test_whats_new.py` checks the shape and the plain words, and that the newest section is the
 version being released.
 
+## Unreleased
+
+- Setup now says which EC reading to pick for each zone, pore-water EC (pwEC), and lists those first.
+
 ## 1.5.0 - 2026-10-22
 
 - Rooms where one valve waters every zone can now be set up: the zones keep their own readings and share every shot, phase and target.
