@@ -50,18 +50,18 @@ async def test_configure_edits_zones_plumbing_and_lights_and_says_where_the_rest
     assert _numbers(hass) == before  # it only says where; nothing is written
 
 
-async def test_the_zones_form_asks_only_valves_probes_plumbing_and_lights(hass):
+async def test_configure_asks_the_count_and_plumbing_then_valves_probes_switches_and_lights(hass):
+    """The plumbing is asked with the zone count (owner, 2026-10-22), so the zones' screen asks for
+    the switches that plumbing has and no others: a tent on one plug, its valve and nothing else."""
     entry = await _install(hass)
     flow = await _open(hass, entry, "edit_zones")
+    assert [str(marker) for marker in flow["data_schema"].schema] == ["num_zones", "plumbing"]
     flow = await hass.config_entries.options.async_configure(flow["flow_id"], {"num_zones": 1})
     asked = [str(marker) for marker in flow["data_schema"].schema]
     assert asked == [
         "zone_1_switch",
         "zone_1_vwc",
         "zone_1_ec",
-        "plumbing",
-        "pump_switch",
-        "main_line_switch",
         "lights_on_hour",
         "lights_off_hour",
     ]
@@ -148,17 +148,17 @@ async def test_an_upgraded_rooms_untouched_save_moves_nothing(hass, name):
 
 
 # ------------------------------------------------------------------ removing a mapping
-async def _save_map(hass, entry, zones=1, **hardware):
+async def _save_map(hass, entry, zones=1, plumbing=None, **hardware):
     flow = await _open(hass, entry, "edit_zones")
     flow = await hass.config_entries.options.async_configure(
-        flow["flow_id"], {"num_zones": zones}
+        flow["flow_id"], {"num_zones": zones, **({"plumbing": plumbing} if plumbing else {})}
     )
     assert flow["step_id"] == "edit_zones_map"
     # What the frontend sends: every field at the value it is showing, plus the change.
     answers = {**_shown(flow), **_suggested(flow), **hardware}
     for key, value in hardware.items():
-        if value is None:  # the operator CLEARED this field: the frontend omits the key
-            answers.pop(key)
+        if value is None:  # the operator CLEARED this field (or it is not asked): no key
+            answers.pop(key, None)
     done = await hass.config_entries.options.async_configure(flow["flow_id"], answers)
     assert done["type"] is FlowResultType.CREATE_ENTRY, done.get("errors")
     await hass.async_block_till_done()

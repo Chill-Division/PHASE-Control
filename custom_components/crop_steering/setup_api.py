@@ -12,6 +12,7 @@ from .admin import async_require_admin
 from .const import DOMAIN, MAX_ZONES, PRODUCT_NAME
 from .plumbing import (
     LABELS as PLUMBING_LABELS,
+    ONE_VALVE_LAYOUTS,
     PLUMBING_LAYOUTS,
     infer as infer_plumbing,
     problems as plumbing_problems,
@@ -260,8 +261,10 @@ def _entity(hass, eid, domains, kind=None):
     return eid
 
 
-def prepare_setup(hass, payload, old=None, entry_id=None):
-    """Normalize a complete edit while retaining old fields and immutable IDs."""
+def prepare_setup(hass, payload, old=None, entry_id=None, check_plumbing=True):
+    """Normalize a complete edit while retaining old fields and immutable IDs. `check_plumbing`
+    False leaves the switches unmatched to the layout: the setup wizard asks for them after it.
+    """
     old = old or {}
     result = deepcopy(old)
     result["room_name"] = _name(
@@ -289,6 +292,12 @@ def prepare_setup(hass, payload, old=None, entry_id=None):
         )
     if sorted(ids) != list(range(1, max(ids) + 1)):
         raise ValueError("New zone IDs must append in sequential order")
+    # The plumbing layout is DECLARED, never inferred here. Absent from the payload (an older
+    # dashboard, the env file, a room from before this existed) keeps whatever the room already
+    # had, which may be nothing: that room is then driven as it always was. Once declared it can
+    # be changed but not withdrawn. Read first: a room with one valve for every zone maps it on each.
+    layout = payload.get("plumbing") or old.get("plumbing") or None
+    one_valve = isinstance(layout, str) and layout in ONE_VALVE_LAYOUTS
     zones, allocated = {}, {}
     foreign_shared = set()
     for other in hass.config_entries.async_entries(DOMAIN):
@@ -326,7 +335,9 @@ def prepare_setup(hass, payload, old=None, entry_id=None):
                 raise ValueError(
                     f"Valve {valve} conflicts with another room's shared hardware role"
                 )
-            if valve in allocated:
+            if valve in allocated and not (
+                one_valve and allocated[valve] == (entry_id or "new room")
+            ):
                 raise ValueError(
                     f"Valve {valve} is already allocated to an active zone"
                 )
@@ -414,15 +425,17 @@ def prepare_setup(hass, payload, old=None, entry_id=None):
         raise ValueError(
             "A doser or reservoir solenoid cannot also be the pump, mainline or a zone valve"
         )
-    # The plumbing layout is DECLARED, never inferred here. Absent from the payload (an older
-    # dashboard, the env file, a room from before this existed) keeps whatever the room already
-    # had, which may be nothing: that room is then driven as it always was. Once declared it can
-    # be changed but not withdrawn.
-    layout = payload.get("plumbing") or old.get("plumbing") or None
+    if one_valve and active:
+        used = {z["zone_switch"] for z in zones.values() if z.get("active", True)}
+        if len(used) > 1:
+            raise ValueError(
+                "With one valve for all the zones, every zone uses that one valve: "
+                + ", ".join(sorted(used))
+            )
     if layout is not None:
         if not isinstance(layout, str) or layout not in PLUMBING_LAYOUTS:
             raise ValueError(plumbing_problems(str(layout), hw)[0])
-        found = plumbing_problems(layout, hw) if active else []
+        found = plumbing_problems(layout, hw) if active and check_plumbing else []
         if found:
             raise ValueError(". ".join(found))
         result["plumbing"] = layout

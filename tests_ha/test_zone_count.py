@@ -64,14 +64,16 @@ async def test_wizard_first_then_the_app_any_zone_count_up_to_the_limit(hass, co
     flow = hass.config_entries.flow
     result = await flow.async_init("crop_steering", context={"source": config_entries.SOURCE_USER})
     result = await flow.async_configure(result["flow_id"], {"name": "Room"})
-    result = await flow.async_configure(result["flow_id"], {"num_zones": zones})
+    result = await flow.async_configure(
+        result["flow_id"], {"num_zones": zones, "plumbing": "valves_only"}
+    )
     answers = {}
     for z in range(1, zones + 1):
         answers[f"zone_{z}_switch"] = f"switch.valve_{z}"
     answers["zone_1_vwc"] = ["sensor.vwc"]
     result = await flow.async_configure(result["flow_id"], answers)
     assert result["step_id"] == "hardware", result.get("errors")
-    result = await flow.async_configure(result["flow_id"], {"plumbing": "valves_only"})
+    result = await flow.async_configure(result["flow_id"], {})
     assert result["type"] is FlowResultType.CREATE_ENTRY
     await hass.async_block_till_done()
 

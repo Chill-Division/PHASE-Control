@@ -117,6 +117,28 @@ describe("Coming up", () => {
       "Lights off",
     ]);
   });
+  it("says a one-valve room's shots once, for all its zones", () => {
+    // Owner, 2026-10-22: one valve waters every zone at once, so the first zone's lane is the room's.
+    const other = lane("GT2", {
+      projection: {
+        points: [],
+        shots: [13.1, 15.2].map((hour) => ({
+          time: at(hour),
+          phase: "P2",
+          size: 4,
+          emergency: false,
+        })),
+      },
+    });
+    const zones = (shared: boolean) =>
+      comingUp([lane("GT1"), other], DAY, NOW, shared).filter((item) => item.who !== "Room");
+    expect(zones(false).some((item) => item.who === "GT2")).toBe(true); // each zone its own
+    expect(zones(true).map((item) => [item.time, item.who, item.text])).toEqual(
+      comingUp([lane("GT1")], DAY, NOW)
+        .filter((item) => item.who !== "Room")
+        .map((item) => [item.time, "All zones", item.text]),
+    );
+  });
   it("expects no shot from a zone that is stopped or held", () => {
     // Held, the controller still says what it waits for (here a P2 top-up under its trigger).
     const waiting = {

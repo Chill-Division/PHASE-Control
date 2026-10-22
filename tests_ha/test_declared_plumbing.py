@@ -8,9 +8,10 @@ installs (tests_ha/fixtures/): a room that never declared a layout must come thr
 
 import pytest
 from conftest import fixture, switch_calls
+from homeassistant import config_entries
 from homeassistant.data_entry_flow import FlowResultType, InvalidData
 from test_configure import _open, _save_map, _shown
-from test_real_flow import VALVE, ZONES, _kept, _seed, _to_zones_step
+from test_real_flow import DOMAIN, VALVE, ZONES, _seed
 from test_setup_entry import _install
 from test_upgrade_in_place import DESCRIPTOR, _upgrade
 
@@ -22,13 +23,15 @@ ARMED = (
 PUMP = "switch.tent_pump"
 
 
-async def _at_hardware_step(hass):
+async def _at_count_step(hass):
+    """The wizard at its second screen, the zone count and the plumbing."""
     _seed(hass)
     hass.states.async_set(PUMP, "off")
-    flow_id = await _to_zones_step(hass)
-    result = await hass.config_entries.flow.async_configure(flow_id, dict(ZONES))
-    assert result["step_id"] == "hardware", result.get("errors")
-    return flow_id, result
+    flow = hass.config_entries.flow
+    result = await flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
+    result = await flow.async_configure(result["flow_id"], {"name": "Tent"})
+    assert result["step_id"] == "manual_zones"
+    return result["flow_id"], result
 
 
 def _arm(fake):
@@ -38,23 +41,31 @@ def _arm(fake):
 
 # ------------------------------------------------------------------ the wizard asks
 async def test_the_wizard_will_not_go_on_until_the_plumbing_question_is_answered(hass):
-    flow_id, form = await _at_hardware_step(hass)
-    (question,) = [m for m in form["data_schema"].schema if str(m) == "plumbing"]
-    assert list(form["data_schema"].schema)[0] is question  # asked before the switches it governs
+    flow_id, form = await _at_count_step(hass)
+    # Asked with the zone count, before the zones and the switches it governs (owner, 2026-10-22).
+    assert [str(m) for m in form["data_schema"].schema] == ["num_zones", "plumbing"]
     with pytest.raises(InvalidData):  # required, and nothing is filled in for a newcomer
-        await hass.config_entries.flow.async_configure(flow_id, {})
-    with pytest.raises(InvalidData):  # and only the four layouts are an answer
-        await hass.config_entries.flow.async_configure(flow_id, {"plumbing": "siphon"})
+        await hass.config_entries.flow.async_configure(flow_id, {"num_zones": 1})
+    with pytest.raises(InvalidData):  # and only the five layouts are an answer
+        await hass.config_entries.flow.async_configure(
+            flow_id, {"num_zones": 1, "plumbing": "siphon"}
+        )
 
 
-async def test_saying_the_room_has_a_pump_without_choosing_one_is_caught_on_that_step(hass):
-    flow_id, _form = await _at_hardware_step(hass)
-    answer = {"plumbing": "pump_valves"}
-    result = await hass.config_entries.flow.async_configure(flow_id, dict(answer))
+async def test_saying_the_room_has_a_pump_without_choosing_one_is_caught_where_it_is_asked(hass):
+    flow_id, _form = await _at_count_step(hass)
+    await hass.config_entries.flow.async_configure(
+        flow_id, {"num_zones": 1, "plumbing": "pump_valves"}
+    )
+    result = await hass.config_entries.flow.async_configure(flow_id, dict(ZONES))
+    assert result["step_id"] == "hardware"
+    # The pump, as the plumbing has one, and no main line, as it has none.
+    assert [str(m) for m in result["data_schema"].schema] == [
+        "pump_switch", "lights_on_hour", "lights_off_hour"]  # fmt: skip
+    result = await hass.config_entries.flow.async_configure(flow_id, {})
     assert result["type"] is FlowResultType.FORM and result["step_id"] == "hardware"  # not an abort
     assert "no pump switch is chosen" in result["description_placeholders"]["error"]
-    assert _kept(result)["plumbing"] == "pump_valves"  # the answer is still in the form
-    result = await hass.config_entries.flow.async_configure(flow_id, {**answer, "pump_switch": PUMP})
+    result = await hass.config_entries.flow.async_configure(flow_id, {"pump_switch": PUMP})
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["data"]["plumbing"] == "pump_valves"
 
@@ -139,7 +150,6 @@ async def test_a_2_17_pumped_room_is_still_driven_pump_mainline_valve(hass, cont
 async def test_configure_offers_an_old_room_the_layout_its_switches_imply_and_saving_declares_it(hass):
     entry, _seed_data = await _upgrade(hass, "entry_2_18_one_switch_tent.json")
     flow = await _open(hass, entry, "edit_zones")
-    flow = await hass.config_entries.options.async_configure(flow["flow_id"], {"num_zones": 1})
     assert _shown(flow)["plumbing"] == "valves_only"  # a prefill, shown to the operator, not a stored guess
     assert "plumbing" not in entry.data
 
@@ -153,8 +163,10 @@ async def test_configure_offers_an_old_room_the_layout_its_switches_imply_and_sa
 async def test_a_pumped_2_17_room_is_offered_pump_and_main_line(hass):
     entry, _seed_data = await _upgrade(hass, "entry_2_17_wizard.json")
     flow = await _open(hass, entry, "edit_zones")
+    assert _shown(flow)["plumbing"] == "pump_mainline_valves"
     flow = await hass.config_entries.options.async_configure(
         flow["flow_id"], {"num_zones": int(entry.data["num_zones"])}
     )
-    assert _shown(flow)["plumbing"] == "pump_mainline_valves"
+    asked = [str(marker) for marker in flow["data_schema"].schema]
+    assert "pump_switch" in asked and "main_line_switch" in asked
     assert fixture("entry_2_17_wizard.json")["data"].get("plumbing") is None

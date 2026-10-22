@@ -192,7 +192,7 @@ setup change (CS-201) and a hardware hold (CS-301, CS-308, CS-309) are still rep
 
 *Critical · Notification*
 
-**What it means.** The room was set up as having a pump (or a main-line valve) and none is mapped, or the other way round. Rather than open a valve with no pump behind it, and count a shot that delivered nothing, the controller holds.
+**What it means.** The room was set up as having a pump (or a main-line valve) and none is mapped, or the other way round; or its zones' valves don't fit its plumbing: two zones on one valve where each should have its own, or zones on different valves where one valve waters them all. Rather than open a valve with no pump behind it, count a shot that delivered nothing, or water zones once for each zone on one valve, the controller holds.
 
 **Watering meanwhile.** Nothing in the room is watered until they agree.
 
@@ -200,11 +200,14 @@ setup change (CS-201) and a hardware hold (CS-301, CS-308, CS-309) are still rep
 
 - The pump or main-line switch was cleared from the room's setup, or its device was removed.
 - The plumbing chosen in setup isn't the room's real plumbing.
+- Two zones are mapped to one valve, but the room's plumbing gives each zone a valve of its own.
+- The plumbing says one valve waters every zone, but the zones are mapped to different valves.
 - The integration is newer than the controller app and uses a plumbing layout the app doesn't know yet.
 
 **Suggested fixes**
 
 - In PHASE Control → Settings → Rooms & hardware, map the missing switch, or change the plumbing to what the room really has. The detail in the notification says which.
+- Zones that one valve waters together: set the plumbing to a pump, then one valve for all the zones, and map that valve once. Otherwise give each zone its own valve.
 - If it names a layout the controller doesn't know, update the controller app.
 - The hold clears by itself once the corrected setup is taken on (see CS-201).
 

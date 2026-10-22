@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Empty, ReviewDialog, number, type ReviewItem } from "@/components/dashboard";
 import { TargetsBanner } from "@/components/targets-banner";
 import { zoneColor } from "@/lib/room-mode";
+import { oneValveRoom } from "@/lib/model";
 import { duration } from "@/lib/day-timeline";
 import { estimatePercent, waterParameters } from "@/lib/water-delivery";
 import { plantText } from "@/lib/water-view";
@@ -107,6 +108,14 @@ export function Strategy({
   useEffect(() => {
     if (selectedZone !== undefined) setZoneId(String(selectedZone));
   }, [selectedZone]);
+  // One valve for every zone (owner, 2026-10-22): one set of targets, the first zone's, written to
+  // every zone. The zone on show is always the first.
+  const shared = oneValveRoom(controller.states, controller.room.room);
+  const lead = controller.room.zones[0];
+  useEffect(() => {
+    if (shared && lead && zoneId !== "room" && zoneId !== String(lead.id))
+      setZoneId(String(lead.id));
+  }, [shared, lead?.id, zoneId]);
   const planEngaged = controller.room.strategy.engaged;
   // The controller can require the schedule before its sensor says so: that is a running one.
   const reported = scheduleStatus(controller.room.strategy.status);
@@ -207,7 +216,7 @@ export function Strategy({
           : "A draft setting is no longer available. Discard it before continuing.";
     })
     .filter(Boolean);
-  const items: ReviewItem[] = Object.entries(drafts).flatMap<ReviewItem>(([id, draft]) => {
+  const own: ReviewItem[] = Object.entries(drafts).flatMap<ReviewItem>(([id, draft]) => {
     const setting = allSettings.find((s) => s.entityId === id);
     const choice = controller.room.choices.find((c) => c.entityId === id);
     if (choice && choice.options.includes(draft.value))
@@ -230,6 +239,30 @@ export function Strategy({
           },
         ];
   });
+  // In a one-valve room a change to the first zone's target is every zone's, each listed.
+  const items: ReviewItem[] = !shared
+    ? own
+    : own.flatMap((item) => {
+        const zone = /zone_(\d+)_/.exec(item.change.entityId)?.[1];
+        if (!zone) return [item];
+        const what = item.label.slice(item.label.indexOf(" · ") + 3);
+        return controller.room.zones.flatMap((each) => {
+          const entityId = item.change.entityId.replace(`zone_${zone}_`, `zone_${each.id}_`);
+          const setting = allSettings.find((s) => s.entityId === entityId);
+          const choice = controller.room.choices.find((c) => c.entityId === entityId);
+          if (!setting && !choice) return [];
+          return [
+            {
+              ...item,
+              change: { ...item.change, entityId },
+              label: `${each.name} · ${what}`,
+              before: setting
+                ? `${number(setting.value)} ${setting.unit}`
+                : choice!.value || "Unavailable",
+            },
+          ];
+        });
+      });
   function edit(setting: Setting, value: string) {
     setSaved(false);
     setDrafts((current) => {
@@ -364,9 +397,15 @@ export function Strategy({
           )}
         </div>
       )}
+      {shared && (
+        <p className="muted small" data-one-valve>
+          One valve waters every zone, so they share one set of targets: a change here is made on
+          every zone.
+        </p>
+      )}
       <div className="strategy-toolbar">
         <div className="target-chips" role="group" aria-label="Targets of">
-          {controller.room.zones.map((z, index) => {
+          {(shared ? controller.room.zones.slice(0, 1) : controller.room.zones).map((z, index) => {
             const count = Object.values(drafts).filter((d) => d.zone === z.name).length;
             return (
               <button
@@ -380,7 +419,7 @@ export function Strategy({
                 }}
               >
                 <i style={{ background: zoneColor(index) }} aria-hidden="true" />
-                {z.name}
+                {shared ? "Every zone" : z.name}
                 {count > 0 && (
                   <b className="chip-count" aria-label={`${count} unsaved`}>
                     {count}
@@ -439,7 +478,10 @@ export function Strategy({
           choices.map((choice) => (
             <div className="steering-choice" key={choice.entityId}>
               <Label htmlFor={`choice-${choice.entityId}`}>
-                {choice.label}
+                {/* One valve for every zone: the first zone's mode is every zone's. */}
+                {shared
+                  ? choice.label.replace(/^.+? steering mode$/, "Every zone's steering mode")
+                  : choice.label}
                 {drafts[choice.entityId] && <span className="draft-dot" />}
               </Label>
               <select

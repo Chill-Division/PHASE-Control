@@ -57,6 +57,7 @@ import { useRecentHistory } from "@/lib/use-recent-moisture";
 import { coreWaterValue, dailyWater, waterParameters } from "@/lib/water-delivery";
 import { stateText } from "@/lib/units";
 import { waitingText } from "@/lib/waiting-for";
+import { oneValveRoom } from "@/lib/model";
 import {
   mlPerPlant,
   plantAmount,
@@ -1156,9 +1157,11 @@ function ProbeReview({
   onClose: () => void;
 }) {
   const [, label, unit] = PROBE_READINGS.find(([m]) => m === metric)!;
-  const choice = zone.probes[metric]!;
-  const value = (method: string) => {
-    const reading = choice.combined[method];
+  // One valve for every zone: their readings are made one the way the first zone reads its probes,
+  // so every zone reads them the same way.
+  const shared = oneValveRoom(controller.states, controller.room.room);
+  const value = (each: Zone, method: string) => {
+    const reading = each.probes[metric]!.combined[method];
     return reading === null || reading === undefined
       ? method
       : `${method} (${number(reading, 2)}${unit})`;
@@ -1171,18 +1174,25 @@ function ProbeReview({
       }}
       controller={controller}
       title={`Read ${zone.name}\u2019s ${label.toLowerCase()} as ${option.toLowerCase()}?`}
-      items={[
-        {
-          change: { entityId: choice.entityId!, value: option },
-          label: `${zone.name} ${label.toLowerCase()} from probes`,
-          before: value(choice.method),
-          after: value(option),
-        },
-      ]}
+      items={(shared ? controller.room.zones : [zone])
+        .filter(
+          (each) =>
+            each.probes[metric]?.entityId &&
+            (each === zone || each.probes[metric]!.method !== option),
+        )
+        .map((each) => ({
+          change: { entityId: each.probes[metric]!.entityId!, value: option },
+          label: `${each.name} ${label.toLowerCase()} from probes`,
+          before: value(each, each.probes[metric]!.method),
+          after: value(each, option),
+        }))}
       note={
-        metric === "vwc"
+        (shared
+          ? "One valve waters every zone, so every zone reads its probes this way, and the room's reading is made one the same way. "
+          : "") +
+        (metric === "vwc"
           ? "The zone's moisture changes at once, and the controller steers on it from its next check: a lower reading can bring the next shot sooner, a higher one later."
-          : "The zone's EC changes at once, and the controller steers on it from its next check."
+          : "The zone's EC changes at once, and the controller steers on it from its next check.")
       }
     />
   );
@@ -1201,31 +1211,28 @@ function ZoneSchedulingReview({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
+  // One valve for every zone: they pause and resume together (owner, 2026-10-22).
+  const shared = oneValveRoom(controller.states, controller.room.room);
+  const target = !zone.enabled;
   return (
     <ReviewDialog
       open={open}
       onOpenChange={onOpenChange}
       controller={controller}
       title="Review zone scheduling"
-      items={
-        zone.enabledEntity
-          ? [
-              {
-                change: {
-                  entityId: zone.enabledEntity,
-                  value: !zone.enabled,
-                },
-                label: `${zone.name} scheduling`,
-                before: zone.enabled ? "Enabled" : "Paused",
-                after: zone.enabled ? "Paused" : "Enabled",
-              },
-            ]
-          : []
-      }
+      items={(shared ? controller.room.zones : [zone])
+        .filter((each) => each.enabledEntity && (each === zone || each.enabled !== target))
+        .map((each) => ({
+          change: { entityId: each.enabledEntity!, value: target },
+          label: `${each.name} scheduling`,
+          before: each.enabled ? "Enabled" : "Paused",
+          after: target ? "Enabled" : "Paused",
+        }))}
       note={
-        zone.enabled
+        (shared ? "One valve waters every zone, so they pause and resume together. " : "") +
+        (zone.enabled
           ? "Paused, the zone gets no water, not even a rescue shot, and a shot already running in it stops within a few seconds."
-          : "The controller waters the zone again from its next check."
+          : "The controller waters the zone again from its next check.")
       }
     />
   );
@@ -1258,26 +1265,22 @@ function ZoneOverrideReview({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
+  // One valve for every zone: a zone paused by hand holds them all, so all of them resume.
+  const shared = oneValveRoom(controller.states, controller.room.room);
   return (
     <ReviewDialog
       open={open}
       onOpenChange={onOpenChange}
       controller={controller}
       title="Resume the zone?"
-      items={
-        zone.overrideEntity
-          ? [
-              {
-                change: { entityId: zone.overrideEntity, value: false },
-                label: `${zone.name} paused by hand`,
-                before: zone.overrideUntil
-                  ? `Until ${time(zone.overrideUntil)}`
-                  : "Until switched off",
-                after: "Resumed",
-              },
-            ]
-          : []
-      }
+      items={(shared ? controller.room.zones : [zone])
+        .filter((each) => each.overrideEntity && (each === zone || each.override === true))
+        .map((each) => ({
+          change: { entityId: each.overrideEntity!, value: false },
+          label: `${each.name} paused by hand`,
+          before: each.overrideUntil ? `Until ${time(each.overrideUntil)}` : "Until switched off",
+          after: "Resumed",
+        }))}
       note="Its manual override ends now, and the controller waters the zone by its targets again from its next check."
     />
   );
@@ -1297,6 +1300,8 @@ function ZonePhaseReview({
   onClose: () => void;
 }) {
   if (!zone.setPhaseEntity) return null;
+  // One valve for every zone: a phase picked on any of them is the room's (the controller's own).
+  const shared = oneValveRoom(controller.states, controller.room.room);
   return (
     <ReviewDialog
       open={phase !== null}
@@ -1304,20 +1309,23 @@ function ZonePhaseReview({
         if (!open) onClose();
       }}
       controller={controller}
-      title={`Move ${zone.name} to ${phase}?`}
+      title={shared ? `Move every zone to ${phase}?` : `Move ${zone.name} to ${phase}?`}
       items={
         phase
           ? [
               {
                 change: { entityId: zone.setPhaseEntity, value: phase },
-                label: `${zone.name} phase`,
+                label: shared ? "Every zone's phase" : `${zone.name} phase`,
                 before: zone.phase,
                 after: phase,
               },
             ]
           : []
       }
-      note="The controller moves the zone at its next check, within a minute. Today's water and shot counts stay; a zone moved to P1 ramps from its first shot again."
+      note={
+        (shared ? "One valve waters every zone, so they share one phase and move together. " : "") +
+        "The controller moves the zone at its next check, within a minute. Today's water and shot counts stay; a zone moved to P1 ramps from its first shot again."
+      }
     />
   );
 }

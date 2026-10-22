@@ -1,5 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { buildRoom, discoverRooms, leadingNotices, roomStatus, setupWait } from "./model";
+import {
+  buildRoom,
+  discoverRooms,
+  leadingNotices,
+  oneValveRoom,
+  roomStatus,
+  setupWait,
+} from "./model";
 import { onHold, roomMode } from "./room-mode";
 import { ageText, ageTone, parseControllerTime, readHeartbeat } from "./controller-health";
 import { createDemo, demoBeat } from "./demo";
@@ -125,6 +132,48 @@ describe("controller heartbeat", () => {
     expect(stale.alerts[0].severity).toBe("critical");
     expect(stale.alerts[0].detail).toMatch(/last reported 11 min ago/);
     expect(stale.zones.every((zone) => zone.stale)).toBe(true);
+  });
+  describe("one valve for every zone", () => {
+    // Owner, 2026-10-22: the main pump and one fertigation valve water all the zones at once.
+    const VALVE = "switch.fertigation";
+    const room = (extra: EntityState[] = []) =>
+      fixture([
+        entity("sensor.crop_steering_engine_config", "ready", {
+          prefix: "",
+          slug: "",
+          num_zones: 2,
+          enable_flag: "input_boolean.f2_control_enabled",
+          plumbing: "pump_one_valve",
+          valves: { "1": VALVE, "2": VALVE },
+        }),
+        ...[1, 2].map((zone) =>
+          entity(`sensor.crop_steering_zone_${zone}_irrigation_count_app`, "4"),
+        ),
+        ...extra,
+      ]);
+    it("counts the room's shots once, not once a zone", () => {
+      const states = room();
+      expect(oneValveRoom(states, discoverRooms(states)[0])).toBe(true);
+      expect(view(states).metrics.find((metric) => metric.key === "shots")?.value).toBe(4);
+    });
+    it("says the room's one decision once, not once a zone", () => {
+      const fired = ["Z1 P2 P2 top-up (demo)", "Z2 P2 P2 top-up (demo)"];
+      const states = room([entity(DECISION, fired[0], { fired, blocked: [] })]);
+      expect(status(states)).toMatchObject({ tone: "watering", detail: fired[0] });
+    });
+    it("says its one valve is open, not one zone's", () => {
+      const states = room([
+        entity(
+          HEARTBEAT,
+          "healthy",
+          { enable_flag: "input_boolean.f2_control_enabled" },
+          ago(12 * 60_000),
+        ),
+        { ...entity(VALVE, "on", {}, ago(3 * 60_000)), last_changed: ago(3 * 60_000) },
+      ]);
+      expect(view(states).alerts[0].detail).toMatch(/^The valve for every zone is open: /);
+      expect(status(states).detail).toMatch(/^The valve for every zone is open\./);
+    });
   });
   describe("while a quiet controller has a zone valve open", () => {
     const VALVE = "switch.zone_1_valve";

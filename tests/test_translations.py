@@ -67,10 +67,16 @@ def test_every_field_on_the_mapping_forms_has_a_label_and_a_tooltip(flow_module)
     strings = _strings()
     fm = flow_module
     forms = {
-        ("config", "zones"): fm._zone_schema(24),
+        ("config", "manual_zones"): fm._count_schema(1),
+        ("config", "zones"): {
+            **fm._zone_schema(24),
+            **fm._zone_schema(24, plumbing="pump_one_valve"),
+        },
         ("config", "hardware"): fm._hardware_schema(),
+        ("options", "edit_zones"): fm._count_schema(1),
         ("options", "edit_zones_map"): {
             **fm._zone_schema(24),
+            **fm._zone_schema(24, plumbing="pump_one_valve"),
             **fm._hardware_schema(),
         },
     }
@@ -125,16 +131,17 @@ def test_the_plumbing_question_says_what_it_commits_you_to_and_the_pump_tooltip_
     answering has to be told, where they answer, that the switches must then match and that a
     mismatch stops watering rather than running the valve with no pump."""
     strings = _strings()
-    for flow, step in (("config", "hardware"), ("options", "edit_zones_map")):
+    # Asked with the zone count, before the zones and the switches it governs (owner, 2026-10-22).
+    for flow, step in (("config", "manual_zones"), ("options", "edit_zones")):
         text = strings[flow]["step"][step]
-        assert (
-            list(text["data"])[0] == "plumbing"
-        )  # asked before the switches it governs
+        assert list(text["data"]) == ["num_zones", "plumbing"]
         question = text["data_description"]["plumbing"]
         assert "refuses to save" in question and "refuses to water" in question
+    for flow, step in (("config", "hardware"), ("options", "edit_zones_map")):
+        text = strings[flow]["step"][step]
+        assert "plumbing" not in text["data"]
         for key in ("pump_switch", "main_line_switch"):
-            tooltip = text["data_description"][key]
-            assert "plumbing above" in tooltip and "EMPTY when it does not" in tooltip
+            assert "for the plumbing you chose" in text["data_description"][key]
         # 2.18.1 told the truth about inference; with a declared layout that text would now be false
         assert "NEVER run a pump" not in text["data_description"]["pump_switch"]
 

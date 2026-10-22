@@ -56,9 +56,9 @@ async def test_fresh_install_a_room_left_at_the_wizards_name_is_not_named(
     flow = hass.config_entries.flow
     result = await flow.async_init("crop_steering", context={"source": config_entries.SOURCE_USER})
     result = await flow.async_configure(result["flow_id"], {})  # the name as offered
-    result = await flow.async_configure(result["flow_id"], {"num_zones": 1})
+    result = await flow.async_configure(result["flow_id"], {"num_zones": 1, "plumbing": infer({})})
     result = await flow.async_configure(result["flow_id"], dict(ZONES))
-    result = await flow.async_configure(result["flow_id"], {"plumbing": infer({})})
+    result = await flow.async_configure(result["flow_id"], {})
     assert result["type"] is FlowResultType.CREATE_ENTRY, result
     await hass.async_block_till_done()
     await _save_zones(hass, hass_admin_user, zone_1={"name": "GT1"})

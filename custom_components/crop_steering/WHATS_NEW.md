@@ -23,9 +23,10 @@ version being released.
 
 ## Unreleased
 
-- Mapping a sensor or renaming no longer needs watering off, and a change that does is picked up within a minute, not five.
-- After a setup change, watering waits until the controller has picked it up, so switching back on too soon can't hold the room.
+- Rooms where one valve waters every zone can now be set up: the zones keep their own readings and share every shot, phase and target.
+- Mapping a sensor or renaming no longer needs watering off; a change that does is picked up within a minute, and watering waits for it.
 - A room switched to Steering that isn't watering now says Steering · on hold, in amber, instead of plain Steering.
+- Bug fixes and improvements.
 
 ## 1.4.0 - 2026-10-19
 

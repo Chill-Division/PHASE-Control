@@ -1,9 +1,9 @@
 # Unreleased
 
-- The controller takes a saved setup change on within a minute, and one that changes no switch (a sensor, a name) with watering on.
-- The dashboard keeps watering off after a saved setup change until the controller has taken it on.
-- A room switched to Steering that isn't watering says Steering · on hold.
-- The dashboard's cards fill the width, in even rows.
+- A room whose one valve waters every zone gets one shot, decided on all its zones' readings and counted on each. Two zones on one valve under any other plumbing are held, not watered once for each zone.
+- A saved setup change is taken on within a minute, one that changes no switch (a sensor, a name) with watering on, and the dashboard keeps watering off until it has been.
+- The dashboard says Steering · on hold when a room switched to Steering isn't watering.
+- Bug fixes and improvements.
 
 # 1.4.0
 

@@ -50,11 +50,14 @@ const clock = (iso: string | null | undefined) => {
 export function RoomTests({
   controller,
   zones,
+  shared = false,
   why,
 }: {
   controller: Controller;
   /** The room's active zones, as saved. */
   zones: TestZone[];
+  /** One valve waters every zone (as saved): a test shot waters them all, asked for on the first. */
+  shared?: boolean;
   /** Why no test can run now, or null. */
   why: string | null;
 }) {
@@ -65,8 +68,14 @@ export function RoomTests({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const zone = zones.find((z) => z.id === zoneId) ?? zones[0];
-  const litres = zone ? testShotLitres(zone) : null;
+  const zone = (shared ? undefined : zones.find((z) => z.id === zoneId)) ?? zones[0];
+  // One valve for every zone: the shot waters them all, each its own drippers' worth.
+  const watered = shared ? zones : zone ? [zone] : [];
+  const each = watered.map(testShotLitres);
+  const litres =
+    each.length && each.every((l) => l !== null) ? each.reduce((a, b) => a! + b!, 0) : null;
+  const plants = watered.reduce((sum, z) => sum + z.plants, 0);
+  const named = shared ? "every zone" : zone?.name;
   const ref = useRef<HTMLElement>(null);
   useEffect(() => {
     // Feed → Reservoir's "Refill by hand" opens this page at its tests.
@@ -138,7 +147,7 @@ export function RoomTests({
           zone: zone.id,
         });
         setNotice(
-          `Test shot for ${zone.name} asked for${clock(result.requested)}. The controller app runs it at its next pass, within a minute; Insights → Activity says how it went.`,
+          `Test shot for ${named} asked for${clock(result.requested)}. The controller app runs it at its next pass, within a minute; Insights → Activity says how it went.`,
         );
       } else if (ask === "refill") {
         const force = forceable && anyway;
@@ -177,25 +186,28 @@ export function RoomTests({
         <div className="room-test">
           <h3>Test shot</h3>
           <p className="muted small">
-            Waters one zone for {TEST_SHOT_S} seconds: the pump, the mainline and the zone's valve,
-            in the order a shot opens them.
+            {shared
+              ? `Waters every zone for ${TEST_SHOT_S} seconds: the pump, then the valve for every zone, in the order a shot opens them.`
+              : `Waters one zone for ${TEST_SHOT_S} seconds: the pump, the mainline and the zone's valve, in the order a shot opens them.`}
           </p>
           <div className="room-test-controls">
-            <div>
-              <Label htmlFor="room-test-zone">Zone</Label>
-              <select
-                id="room-test-zone"
-                value={zone?.id ?? ""}
-                disabled={!!why || busy || !zones.length}
-                onChange={(event) => setZoneId(Number(event.target.value))}
-              >
-                {zones.map((z) => (
-                  <option key={z.id} value={z.id}>
-                    {z.name}
-                  </option>
-                ))}
-              </select>
-            </div>
+            {!shared && (
+              <div>
+                <Label htmlFor="room-test-zone">Zone</Label>
+                <select
+                  id="room-test-zone"
+                  value={zone?.id ?? ""}
+                  disabled={!!why || busy || !zones.length}
+                  onChange={(event) => setZoneId(Number(event.target.value))}
+                >
+                  {zones.map((z) => (
+                    <option key={z.id} value={z.id}>
+                      {z.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
             <Button
               disabled={!!why || busy || !zone}
               onClick={() => {
@@ -230,7 +242,7 @@ export function RoomTests({
           <DialogContent>
             <DialogHeader>
               <DialogTitle>
-                Water {zone.name} for {TEST_SHOT_S} seconds now?
+                Water {named} for {TEST_SHOT_S} seconds now?
               </DialogTitle>
               <DialogDescription>
                 The controller app runs it at its next pass, within a minute. It is held, and
@@ -241,7 +253,7 @@ export function RoomTests({
             <p>
               {litres === null
                 ? "This zone's plants, drippers and dripper flow are not all set, so the controller cannot size it."
-                : `About ${number(litres, 2)} L across ${zone.plants} plants, ${number((litres * 1000) / zone.plants, 0)} mL each.`}{" "}
+                : `About ${number(litres, 2)} L across ${plants} plants, ${number((litres * 1000) / plants, 0)} mL each.`}{" "}
               Its water counts toward the zone's day, but it is not one of the day's shots, and Auto
               setpoints learns nothing from it.
             </p>

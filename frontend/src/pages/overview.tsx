@@ -17,7 +17,7 @@ import {
   ZoneCard,
 } from "@/components/overview-parts";
 import type { Controller, Notice } from "@/lib/types";
-import { leadingNotices, roomStatus } from "@/lib/model";
+import { leadingNotices, oneValveRoom, roomStatus } from "@/lib/model";
 import { onHold, roomMode } from "@/lib/room-mode";
 import { useDrybackTrends } from "@/lib/use-recent-moisture";
 import { coreWaterValue, waterParameters } from "@/lib/water-delivery";
@@ -106,7 +106,11 @@ export function Overview({
                   held={status.tone === "stopped" ? status.text : null}
                 />
                 <ComingUp
-                  items={lanes && day ? comingUp(lanes.lanes, day, now) : []}
+                  items={
+                    lanes && day
+                      ? comingUp(lanes.lanes, day, now, oneValveRoom(controller.states, room.room))
+                      : []
+                  }
                   day={day}
                   now={now}
                   limit={phone ? 3 : 6}

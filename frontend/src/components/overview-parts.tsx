@@ -33,7 +33,7 @@ import { nextText, type Lane } from "@/components/day-timeline";
 import { ageText } from "@/lib/controller-health";
 import type { DrybackTrend } from "@/lib/dryback";
 import { dayDryback, type GrowDay } from "@/lib/day-timeline";
-import { roomStatus } from "@/lib/model";
+import { oneValveRoom, roomStatus } from "@/lib/model";
 import { scheduleDays } from "@/components/targets-banner";
 import {
   MODE_WORDS,
@@ -451,11 +451,13 @@ export function NeedsYou({
 }
 
 // ------------------------------------------------------------------ the clock
-/** Each zone's grow-day for the clock: its phases so far, the rest as projected, its shots. */
-export function dialZones(lanes: Lane[], day: GrowDay, now: number) {
+/** Each zone's grow-day for the clock: its phases so far, the rest as projected, its shots. In a
+ * one-valve room (`shared`) the first zone's projection is every zone's: one shot waters them all. */
+export function dialZones(lanes: Lane[], day: GrowDay, now: number, shared = false) {
   return lanes.map((lane, index) => {
     const ahead: DialBand[] = [];
-    for (const point of lane.projection?.points ?? []) {
+    const room = shared ? lanes[0] : lane;
+    for (const point of room.projection?.points ?? []) {
       if (point.time < now) continue;
       const hour = hoursOf(day, point.time),
         last = ahead.at(-1);
@@ -482,9 +484,9 @@ export function dialZones(lanes: Lane[], day: GrowDay, now: number) {
       shots: lane.shots.map((shot) => hoursOf(day, shot.start)),
       // As Coming up lists them: none for a zone that is stopped or held.
       planned:
-        lane.stopped || lane.next.basis === "held"
+        room.stopped || room.next.basis === "held"
           ? []
-          : (lane.projection?.shots ?? [])
+          : (room.projection?.shots ?? [])
               .filter((shot) => shot.time > now)
               .map((shot) => ({ hour: hoursOf(day, shot.time), phase: shot.phase })),
     };
@@ -525,12 +527,13 @@ export function TodayCard({
     bands: [],
     shots: [],
   }));
-  const zones = day && lanes ? dialZones(lanes, day, now) : fallback;
+  const shared = oneValveRoom(controller.states, controller.room.room);
+  const zones = day && lanes ? dialZones(lanes, day, now, shared) : fallback;
   const before = day ? now < day.lightsOff : false;
   const until = day ? (before ? day.lightsOff : day.end) - now : 0;
   // The middle says what comes next, Coming up's first shot, not the time (the hand and the
   // heading show that); with none left, when the lights next change.
-  const upcoming = day && lanes ? comingUp(lanes, day, now) : [];
+  const upcoming = day && lanes ? comingUp(lanes, day, now, shared) : [];
   const shot = upcoming.find((item) => item.shot);
   // Every zone whose shot comes then: all that are due, or all at that time.
   const names = shot
@@ -694,7 +697,13 @@ export function controllerShot(
 /** The rest of the grow-day, in order: each zone's next shot, the shots and phase changes its
  * projection expects after it (as its chart draws them), and the lights. What the zones do
  * together, at about the same time, is one line. */
-export function comingUp(lanes: Lane[], day: GrowDay, now: number): Upcoming[] {
+export function comingUp(lanes: Lane[], day: GrowDay, now: number, shared = false): Upcoming[] {
+  // One valve for every zone (`shared`): the first zone's lane is the room's, and its shots and
+  // phase changes are every zone's.
+  const rows =
+    shared && lanes.length > 1
+      ? [{ ...lanes[0], zone: { ...lanes[0].zone, name: "All zones" } }]
+      : lanes;
   const items: Upcoming[] = [];
   const merged = new Map<
     string,
@@ -712,7 +721,7 @@ export function comingUp(lanes: Lane[], day: GrowDay, now: number): Upcoming[] {
     if (found) found.names.push(who);
     else merged.set(key, { time, names: [who], color, text, shot });
   };
-  lanes.forEach((lane, index) => {
+  rows.forEach((lane, index) => {
     const color = zoneColor(index),
       who = lane.zone.name;
     const { next } = lane;
@@ -797,7 +806,7 @@ export function comingUp(lanes: Lane[], day: GrowDay, now: number): Upcoming[] {
     items.push({
       time: change.time,
       who:
-        change.names.length === lanes.length && lanes.length > 1
+        change.names.length === rows.length && rows.length > 1
           ? "All zones"
           : change.names.join(", "),
       color: change.names.length > 1 ? "var(--muted-foreground)" : change.color,

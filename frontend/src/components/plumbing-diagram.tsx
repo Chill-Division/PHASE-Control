@@ -2,8 +2,11 @@ import { ArrowRight, CircleCheck, CircleDashed, Droplets, Gauge, GitFork } from 
 import { number } from "@/components/dashboard";
 import { zoneColor } from "@/lib/room-mode";
 import type { SetupRoom } from "@/lib/operator-types";
-import { plumbingUses } from "@/lib/plumbing";
+import { oneValve, plumbingUses } from "@/lib/plumbing";
 import "./plumbing-diagram.css";
+
+/** The one valve a room's plumbing may have for all its zones, as its mapping is labelled. */
+export const SHARED_VALVE = "Valve for every zone";
 
 /** Jump to a mapping on the page by its label, as its button names it ("Map Room pump"). */
 function focusMapping(label: string) {
@@ -15,21 +18,30 @@ function focusMapping(label: string) {
 }
 
 /** How water reaches each zone, as the room is set up in the draft: the pump and the main line its
- * plumbing has, then each zone's valve with its probes and sizing. A part not mapped yet says so;
- * each opens its mapping below. */
+ * plumbing has, then each zone's valve with its probes and sizing, or the one valve that waters
+ * them all. A part not mapped yet says so; each opens its mapping below. */
 export function PlumbingDiagram({ draft, plumbing }: { draft: SetupRoom; plumbing: string }) {
+  const zones = draft.zones.filter((zone) => zone.active);
+  const shared = oneValve(plumbing);
   const chain = (
     [
       ["pump_switch", "Room pump", "Pump", "Runs first, whenever a zone waters", Gauge],
       ["main_line_switch", "Mainline valve", "Main line", "Opens before a zone valve", GitFork],
+      ...(shared
+        ? ([["valve", SHARED_VALVE, "Valve", "Waters every zone at once", GitFork]] as const)
+        : []),
     ] as const
-  ).filter(([key]) => plumbingUses(plumbing, key));
-  const zones = draft.zones.filter((zone) => zone.active);
+  ).filter(([key]) => key === "valve" || plumbingUses(plumbing, key));
+  const valves = new Set(zones.map((zone) => zone.valve));
+  const hardware: Record<string, unknown> = {
+    ...draft.hardware,
+    valve: valves.size === 1 ? [...valves][0] : "",
+  };
   const text = (value: unknown) => (typeof value === "string" && value ? value : null);
   return (
     <div className="plumbing-diagram" role="group" aria-label="How water reaches each zone">
       {chain.map(([key, label, name, note, Icon]) => {
-        const entity = text(draft.hardware[key]);
+        const entity = text(hardware[key]);
         return (
           <div className="plumbing-step" key={key}>
             <button
@@ -73,13 +85,13 @@ export function PlumbingDiagram({ draft, plumbing }: { draft: SetupRoom; plumbin
               type="button"
               key={zone.id}
               className="plumbing-zone"
-              data-mapped={!!zone.valve}
-              onClick={() => focusMapping(`${zone.name} valve`)}
+              data-mapped={shared || !!zone.valve}
+              onClick={() => focusMapping(`${zone.name} ${shared ? "VWC probes" : "valve"}`)}
             >
               <i style={{ background: zoneColor(index) }} aria-hidden="true" />
               <span className="plumbing-zone-text">
                 <strong>{zone.name || `Zone ${zone.id}`}</strong>
-                <code>{zone.valve || "Valve not mapped"}</code>
+                {!shared && <code>{zone.valve || "Valve not mapped"}</code>}
               </span>
               <span className="plumbing-zone-side">
                 <span>

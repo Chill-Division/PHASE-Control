@@ -25,6 +25,7 @@ import {
   zoneLabelWords,
 } from "./controller-health";
 import { BATCH_SWITCH_KEYS } from "./feed";
+import { oneValve } from "./plumbing";
 import { readProbes, readingTile } from "./probes";
 
 const ROOT = "crop_steering_";
@@ -415,6 +416,16 @@ export function leadingNotices(alerts: Notice[], limit = 3): Notice[] {
  * a controller that does not report during one goes quiet until it ends. Only a valve that opened
  * no longer ago than the room's maximum shot length counts: a valve open longer is not a shot, and
  * a controller that stopped mid-shot must never read as watering. */
+/** One valve waters every zone of the room at once (owner, 2026-10-22: a pump and a fertigation
+ * valve for three zones): its zones share one phase, one set of targets and every shot. */
+export function oneValveRoom(states: States, room: Room): boolean {
+  return oneValve(descriptor(states, room)?.attributes.plumbing);
+}
+
+/** "Zone 2's valve is open", or in a one-valve room what that valve does. */
+const valveOpen = (states: States, room: Room, zone: string) =>
+  oneValveRoom(states, room) ? "The valve for every zone is open" : `Zone ${zone}'s valve is open`;
+
 export function shotRunning(states: States, room: Room, now: number): string | null {
   const valves = descriptor(states, room)?.attributes.valves;
   const cap = Number(
@@ -774,7 +785,7 @@ export function buildRoom(states: States, room: Room): RoomView {
       id: `${room.id}-controller`,
       severity: "info",
       title: "Watering",
-      detail: `Zone ${shot}'s valve is open: a shot is running, and the controller reports again when it ends (last report ${ageText(now - beat.at!)} ago). Zone phases and statuses are its last report, not live.`,
+      detail: `${valveOpen(states, room, shot)}: a shot is running, and the controller reports again when it ends (last report ${ageText(now - beat.at!)} ago). Zone phases and statuses are its last report, not live.`,
     });
   else if (config && beat.health === "stopped")
     alerts.push({
@@ -842,7 +853,8 @@ export function buildRoom(states: States, room: Room): RoomView {
       tile("vwc", "VWC", "%"),
       tile("ec", "EC", "mS/cm"),
       aggregate("water", "Water today", "L"),
-      aggregate("shots", "Shots today", ""),
+      // A one-valve room's every shot is every zone's: its shots are a zone's, not their sum.
+      aggregate("shots", "Shots today", "", oneValveRoom(states, room)),
     ],
     events: eventsForRoom(states, room),
     entities,
@@ -966,7 +978,7 @@ export function roomStatus(states: States, room: Room, now = Date.now()): RoomSt
     return say(
       "watering",
       "Watering",
-      `Zone ${shot}'s valve is open. The controller reports again when the shot ends.`,
+      `${valveOpen(states, room, shot)}. The controller reports again when the shot ends.`,
     );
   if (beat.health === "stale")
     return say(
@@ -1036,8 +1048,10 @@ export function roomStatus(states: States, room: Room, now = Date.now()): RoomSt
       ? value.filter((item): item is string => typeof item === "string")
       : [];
   };
-  const fired = entries("fired"),
-    blocked = entries("blocked").map(holdWords);
+  // One valve for every zone: each zone's entry says the room's one decision, so it is said once.
+  const once = (list: string[]) => (oneValveRoom(states, room) ? list.slice(0, 1) : list);
+  const fired = once(entries("fired")),
+    blocked = once(entries("blocked").map(holdWords));
   const app = resolve(states, room, "sensor", "app_status")?.state;
   if (fired.length) return say("watering", "Watering", fired.join(" · "));
   if (app === "irrigating") return say("watering", "Watering", "A shot is running.");

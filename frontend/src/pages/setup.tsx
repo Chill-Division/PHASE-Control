@@ -33,6 +33,7 @@ import {
   PLUMBING_LAYOUTS,
   hardwareForLayout,
   isPlumbingLayout,
+  oneValve,
   plumbingErrors,
   plumbingUses,
   type PlumbingLayout,
@@ -42,7 +43,7 @@ import { BATCH_SWITCH_KEYS, DOSER_KEYS } from "@/lib/feed";
 import { changesSwitches, setupChanges } from "@/lib/setup-changes";
 import { engineFlag } from "@/lib/room-mode";
 import type { SetupCandidate, SetupDocument, SetupRoom, SetupZone } from "@/lib/operator-types";
-import { PlumbingDiagram } from "@/components/plumbing-diagram";
+import { PlumbingDiagram, SHARED_VALVE } from "@/components/plumbing-diagram";
 
 function MappingPicker({
   label,
@@ -305,6 +306,10 @@ export function Setup({
     ? ""
     : draft?.plumbing || (isNew ? "" : original?.plumbing_inferred || "");
   const plumbingConfirmed = !asksPlumbing || isNew || !!draft?.plumbing;
+  // One valve waters every zone (owner, 2026-10-22): it is mapped once, on every zone.
+  const shared = oneValve(plumbing);
+  const zoneValves = new Set(activeZones.map((z) => z.valve));
+  const sharedValve = shared && zoneValves.size === 1 ? [...zoneValves][0] : "";
   const errors: string[] = [];
   if (draft) {
     if (asksPlumbing && draft.active) {
@@ -313,11 +318,16 @@ export function Setup({
     }
     if (!draft.room_name.trim()) errors.push("Name the room.");
     if (!draft.zones.length) errors.push("Add a zone.");
-    if (activeZones.some((z) => !z.name.trim() || !z.valve))
-      errors.push("Every active zone needs a name and valve.");
-    const valves = activeZones.map((z) => z.valve).filter(Boolean);
-    if (new Set(valves).size !== valves.length)
-      errors.push("Each active zone must use a distinct valve.");
+    if (shared) {
+      if (activeZones.some((z) => !z.name.trim())) errors.push("Every active zone needs a name.");
+      if (activeZones.length && !sharedValve) errors.push("Choose the valve for every zone.");
+    } else {
+      if (activeZones.some((z) => !z.name.trim() || !z.valve))
+        errors.push("Every active zone needs a name and valve.");
+      const valves = activeZones.map((z) => z.valve).filter(Boolean);
+      if (new Set(valves).size !== valves.length)
+        errors.push("Each active zone must use a distinct valve.");
+    }
     // As the integration checks them (setup_api.py): every batch switch is its own.
     const batch = BATCH_SWITCH_KEYS.map((key) => draft.hardware[key]).filter(
       (id): id is string => typeof id === "string" && !!id,
@@ -721,6 +731,22 @@ export function Setup({
                         }
                       />
                     ))}
+                  {shared && (
+                    <MappingPicker
+                      label={SHARED_VALVE}
+                      values={sharedValve ? [sharedValve] : []}
+                      candidates={candidates("switch")}
+                      disabled={busy}
+                      onChange={(values) =>
+                        setDraft({
+                          ...draft,
+                          zones: draft.zones.map((z) =>
+                            z.active ? { ...z, valve: values[0] || "" } : z,
+                          ),
+                        })
+                      }
+                    />
+                  )}
                 </div>
               </section>
               <section className="panel workspace-card" data-setup-reservoir>
@@ -759,8 +785,10 @@ export function Setup({
                   <div>
                     <h2>Zones & sensor mapping</h2>
                     <p className="muted">
-                      Each zone has its own valve, probes and delivery sizing. Archived IDs are
-                      never renumbered.
+                      {shared
+                        ? "One valve waters every zone at once; each zone has its own probes and delivery sizing."
+                        : "Each zone has its own valve, probes and delivery sizing."}{" "}
+                      Archived IDs are never renumbered.
                     </p>
                   </div>
                   <Button
@@ -771,7 +799,8 @@ export function Setup({
                     }
                     onClick={() => {
                       const id = Math.max(0, ...draft.zones.map((z) => z.id)) + 1;
-                      setDraft({ ...draft, zones: [...draft.zones, newZone(id)] });
+                      const zone = { ...newZone(id), ...(shared ? { valve: sharedValve } : {}) };
+                      setDraft({ ...draft, zones: [...draft.zones, zone] });
                     }}
                   >
                     <Plus size={16} />
@@ -801,13 +830,15 @@ export function Setup({
                         </Button>
                       </div>
                       <div className="workspace-form-grid">
-                        <MappingPicker
-                          label={zone.name + " valve"}
-                          values={[zone.valve]}
-                          candidates={candidates("switch")}
-                          disabled={busy}
-                          onChange={(v) => editZone(zone.id, { valve: v[0] || "" })}
-                        />
+                        {!shared && (
+                          <MappingPicker
+                            label={zone.name + " valve"}
+                            values={[zone.valve]}
+                            candidates={candidates("switch")}
+                            disabled={busy}
+                            onChange={(v) => editZone(zone.id, { valve: v[0] || "" })}
+                          />
+                        )}
                         <MappingPicker
                           label={zone.name + " VWC probes"}
                           values={zone.vwc_sensors}
@@ -898,7 +929,12 @@ export function Setup({
                         <Button
                           variant="outline"
                           disabled={busy}
-                          onClick={() => editZone(z.id, { active: true })}
+                          onClick={() =>
+                            editZone(z.id, {
+                              active: true,
+                              ...(shared ? { valve: sharedValve } : {}),
+                            })
+                          }
                         >
                           <RotateCcw size={15} />
                           Restore zone
@@ -922,6 +958,7 @@ export function Setup({
                 <RoomTests
                   key={draft.entry_id}
                   controller={controller}
+                  shared={oneValve(original.plumbing || original.plumbing_inferred)}
                   zones={original.zones
                     .filter((z) => z.active)
                     .map((z) => ({

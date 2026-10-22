@@ -44,6 +44,7 @@ import {
 } from "@/lib/schedule-words";
 import { fieldCapacitySuggestion, referenceLines, suggestedDraft } from "@/lib/sensor-context";
 import { syncPlanZones } from "@/lib/sync-plan-zones";
+import { oneValveRoom } from "@/lib/model";
 import type { Controller } from "@/lib/types";
 import { errorText } from "@/lib/utils";
 import { useBalancedRows } from "@/lib/use-balanced-rows";
@@ -53,6 +54,7 @@ import type {
   StrategyDocument,
   SteeringProfile,
   ScheduleBlock,
+  ZonePlan,
 } from "@/lib/operator-types";
 import {
   blockForDay,
@@ -171,6 +173,11 @@ export function GrowPlanner({
     };
   }, [controller.roomId, controller.connection, Boolean(document), dirty]);
   const zonePlan = plan?.zones.find((z) => z.zone_id === zoneId);
+  // One valve for every zone (owner, 2026-10-22): one schedule, the zone on show's with each edit,
+  // for every zone. `edits` says which zones an edit changes; `base`, the schedule it starts from.
+  const shared = oneValveRoom(controller.states, controller.room.room);
+  const edits = (id: number) => shared || id === zoneId;
+  const base = (z: ZonePlan) => (shared && zonePlan ? zonePlan : z);
   const blocks = useBalancedRows<HTMLDivElement>(zonePlan?.schedule.length ?? 0);
   const currentBlock = blockForDay(zonePlan, day);
   const profile =
@@ -245,7 +252,7 @@ export function GrowPlanner({
     setPlan({
       ...plan,
       zones: plan.zones.map((z) =>
-        z.zone_id === zoneId ? { ...z, schedule: replaceRange(z.schedule, block) } : z,
+        edits(z.zone_id) ? { ...z, schedule: replaceRange(base(z).schedule, block) } : z,
       ),
     });
     setNotice("");
@@ -871,7 +878,7 @@ export function GrowPlanner({
                         setPlan({
                           ...plan,
                           zones: plan.zones.map((z) =>
-                            z.zone_id === zoneId ? { ...z, start_date: e.target.value } : z,
+                            edits(z.zone_id) ? { ...z, start_date: e.target.value } : z,
                           ),
                         })
                       }
@@ -957,11 +964,11 @@ export function GrowPlanner({
                         setPlan({
                           ...plan,
                           zones: plan.zones.map((z) =>
-                            z.zone_id === zoneId
+                            edits(z.zone_id)
                               ? {
                                   ...z,
                                   schedule: [
-                                    ...z.schedule,
+                                    ...base(z).schedule,
                                     {
                                       start_day: start,
                                       end_day: Math.min(start + 6, 366),
@@ -1033,10 +1040,10 @@ export function GrowPlanner({
                       ...plan,
                       profiles: [...plan.profiles, copy],
                       zones: plan.zones.map((z) =>
-                        z.zone_id === zoneId
+                        edits(z.zone_id)
                           ? {
                               ...z,
-                              schedule: replaceRange(z.schedule, {
+                              schedule: replaceRange(base(z).schedule, {
                                 start_day: firstDay,
                                 end_day: lastDay,
                                 bias: 50,

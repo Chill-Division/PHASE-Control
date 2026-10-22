@@ -55,14 +55,16 @@ const context = await browser.newContext({
   acceptDownloads: true,
   reducedMotion: "reduce",
 });
-await context.route("**/*", (route) => {
+/** The demo loads nothing from elsewhere: a CDN or API request is recorded, and fails. */
+const guard = (route) => {
   const url = new URL(route.request().url());
   if (url.origin !== base || url.pathname.startsWith("/api/")) {
     forbidden.push(url.origin + url.pathname);
     return route.abort();
   }
   return route.continue();
-});
+};
+await context.route("**/*", guard);
 const page = await context.newPage();
 page.on("pageerror", (error) => pageErrors.push(error.message));
 const expectVisible = async (locator) => {
@@ -141,8 +143,8 @@ async function closeZone() {
   await page.getByRole("dialog").waitFor({ state: "hidden" });
 }
 /** Opens a card of Today's targets by its name ("P2 · Maintenance"): one is open at a time. */
-async function openCard(name) {
-  const card = page.locator(`section.phase-card[aria-label="${name}"]`);
+async function openCard(name, on = page) {
+  const card = on.locator(`section.phase-card[aria-label="${name}"]`);
   const head = card.locator(".phase-card-head");
   if ((await head.getAttribute("aria-expanded")) !== "true") await head.click();
   await expectVisible(card.locator(".setting-fields"));
@@ -924,6 +926,80 @@ try {
     await page.getByRole("button", { name: /^Apply \d+ change/ }).click();
     await expectVisible(page.getByRole("button", { name: "How Flower 2 runs: Steering. Change" }));
     await page.goto("about:blank"); // the next check starts from a fresh demo
+  });
+  await check("one valve for every zone: set up once, its shots and targets every zone's", async () => {
+    // Owner, 2026-10-22: the main pump and one fertigation valve water all three zones at once.
+    // A demo of its own at 12:30 of its day, whatever the hour the check runs, so the room has shots
+    // to come once it steers again: CI ran it at 3:30 AM, when the demo's night had none to list.
+    const own = await browser.newContext({
+      viewport: { width: 1440, height: 1000 },
+      reducedMotion: "reduce",
+    });
+    await own.route("**/*", guard);
+    const pin = (second) => own.clock.setFixedTime(new Date(2026, 8, 20, 12, 30, second));
+    await pin(0);
+    const room = await own.newPage();
+    room.on("pageerror", (error) => pageErrors.push(error.message));
+    await room.goto(`${base}/dashboard.html?demo&room=room:#/setup`, { waitUntil: "networkidle" });
+    // Flower 2, Steering, a valve each.
+    await room.locator("#room-plumbing").selectOption("pump_one_valve");
+    // The valve is asked for once, beside the pump: no zone has one of its own any more.
+    assert.equal(await room.getByRole("button", { name: "Map Zone 1 valve", exact: true }).count(), 0);
+    await room.getByRole("button", { name: "Map Valve for every zone", exact: true }).click();
+    await room
+      .getByRole("textbox", { name: "Search Valve for every zone entities" })
+      .fill("switch.demo_spare_2");
+    await room.locator(".mapping-result").filter({ hasText: "switch.demo_spare_2" }).click();
+    const diagram = room.getByRole("group", { name: "How water reaches each zone" });
+    assert.match(await diagram.innerText(), /Valve\s+switch\.demo_spare_2/);
+    assert.doesNotMatch(await diagram.innerText(), /demo_valve_/);
+    // It switches something differently: watering off first, then it saves.
+    const asks = room.locator("[data-switching]");
+    await asks.getByRole("button", { name: /^Switch watering off/ }).click();
+    await room.getByRole("button", { name: /^Apply \d+ change/ }).click();
+    await asks.waitFor({ state: "detached" });
+    await room.getByRole("button", { name: "Review configuration", exact: true }).click();
+    await room.getByRole("button", { name: "Save configuration", exact: true }).click();
+    await room.getByRole("dialog").waitFor({ state: "hidden" });
+    // A test shot waters them all.
+    const tests = room.locator("[data-room-tests]");
+    await expectVisible(tests.getByText(/^Waters every zone for 10 seconds/));
+    assert.equal(await tests.locator("#room-test-zone").count(), 0);
+    // The controller's next pass takes the change on (the demo's 5 s after the save: DEMO_PASS_MS),
+    // and the room steers again.
+    await pin(10);
+    await room.evaluate(() => (location.hash = "#/overview"));
+    await room.getByRole("button", { name: "Refresh controller data" }).first().click();
+    const start = room
+      .locator('[data-room-status="room:"]')
+      .getByRole("button", { name: "Start steering…", exact: true });
+    await expectVisible(start);
+    await start.click();
+    await room.getByRole("button", { name: /^Apply \d+ change/ }).click();
+    await expectVisible(room.getByRole("button", { name: "How Flower 2 runs: Steering. Change" }));
+    // Coming up says each shot once, for all of them.
+    const rows = room.locator("[data-coming-up] .upcoming-list li");
+    await expectVisible(rows.filter({ hasText: /shot/ }).first());
+    const who = (await rows.locator(".upcoming-who").allTextContents()).map((name) => name.trim());
+    assert.ok(who.includes("All zones"), who.join(", "));
+    assert.ok(who.every((name) => ["All zones", "Room"].includes(name)), who.join(", "));
+    // Today's targets: one set, made on every zone.
+    await room.evaluate(() => (location.hash = "#/strategy"));
+    const chips = room.getByRole("group", { name: "Targets of" }).getByRole("button");
+    await expectVisible(chips.first());
+    assert.deepEqual(
+      (await chips.allInnerTexts()).map((text) => text.trim()),
+      ["Every zone", "Whole room"],
+    );
+    await openCard("P1 · Ramp-up", room);
+    const field = room.locator('input[id="setting-number.crop_steering_zone_1_p1_target_vwc"]');
+    await field.fill(String(Number(await field.inputValue()) + 1));
+    await room
+      .getByRole("region", { name: "Unsaved changes" })
+      .getByRole("button", { name: "Review and apply", exact: true })
+      .click();
+    await expectVisible(room.getByRole("dialog").getByRole("button", { name: "Apply 3 changes", exact: true }));
+    await own.close();
   });
   await check("overview: every zone and room metric has its mini visual", async () => {
     await go("overview");

@@ -114,7 +114,9 @@ async def test_a_room_added_later_does_not_reset_what_the_installation_has_seen(
     flow = await hass.config_entries.flow.async_configure(
         flow["flow_id"], {"room_name": "Veg tent"}
     )
-    flow = await hass.config_entries.flow.async_configure(flow["flow_id"], {"num_zones": 1})
+    flow = await hass.config_entries.flow.async_configure(
+        flow["flow_id"], {"num_zones": 1, "plumbing": "valves_only"}
+    )
     flow = await hass.config_entries.flow.async_configure(
         flow["flow_id"],
         {
@@ -123,7 +125,7 @@ async def test_a_room_added_later_does_not_reset_what_the_installation_has_seen(
         },
     )
     done = await hass.config_entries.flow.async_configure(
-        flow["flow_id"], {"plumbing": "valves_only"}
+        flow["flow_id"], {}
     )
     assert done["type"] is FlowResultType.CREATE_ENTRY
     await hass.async_block_till_done()
