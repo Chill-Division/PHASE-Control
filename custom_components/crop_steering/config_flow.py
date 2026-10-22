@@ -22,7 +22,7 @@ from .const import (
     DEFAULT_NUM_ZONES,
     PRODUCT_NAME,
 )
-from .plumbing import PLUMBING_LAYOUTS, infer as infer_plumbing
+from .plumbing import ONE_VALVE_LAYOUTS, PLUMBING_LAYOUTS, infer as infer_plumbing
 from .room import slugify_room
 from .setup_api import RETIRED_HARDWARE
 
@@ -47,7 +47,7 @@ def _sensor_one():
 
 
 def _plumbing_sel():
-    # Shown as a list, not a dropdown: four choices, and a newcomer should see all of them.
+    # Shown as a list, not a dropdown: five choices, and a newcomer should see all of them.
     return selector.SelectSelector(
         selector.SelectSelectorConfig(
             options=list(PLUMBING_LAYOUTS),
@@ -55,6 +55,29 @@ def _plumbing_sel():
             mode=selector.SelectSelectorMode.LIST,
         )
     )
+
+
+def _one_valve(plumbing) -> bool:
+    """One valve waters every zone at once (ONE_VALVE_LAYOUTS): it is asked for once, not a zone's."""
+    return isinstance(plumbing, str) and plumbing in ONE_VALVE_LAYOUTS
+
+
+def _count_schema(num_zones: int, plumbing: str | None = None) -> dict:
+    """How many zones, and how the room is plumbed. Asked together, before the zones are mapped, so
+    the zones' screen asks for a valve each only where each zone has one (owner, 2026-10-22: one
+    fertigation valve for three zones). `plumbing` prefills what the room declared, or for a room
+    from before the question existed, what its switches imply; a new room gets no prefill, so the
+    person setting it up answers it rather than accepting a guess."""
+    return {
+        vol.Required(CONF_NUM_ZONES, default=num_zones): vol.All(
+            vol.Coerce(int), vol.Range(min=MIN_ZONES, max=MAX_ZONES)
+        ),
+        (
+            vol.Required("plumbing", default=plumbing)
+            if plumbing
+            else vol.Required("plumbing")
+        ): _plumbing_sel(),
+    }
 
 
 def _as_list(v):
@@ -67,17 +90,34 @@ def _archived(zc: dict) -> bool:
     return zc.get("active") is False
 
 
-def _zone_schema(num_zones: int, zones: dict | None = None) -> dict:
+def _zone_schema(
+    num_zones: int, zones: dict | None = None, plumbing: str | None = None
+) -> dict:
     """Build the {marker: selector} map for per-zone entity mapping, prefilled from
     an existing `zones` dict (the config entry's shape).
 
     Each zone's valve and its substrate probes, moisture and EC: what a zone needs before it
     can be watered, and what is easiest to pick here. Its label, plant count and sizing, and
     archiving or restoring it, are on the dashboard's Rooms & hardware. A zone archived there
-    is not asked for here, and keeps everything it had.
+    is not asked for here, and keeps everything it had. A room whose one valve waters every
+    zone (`plumbing`, ONE_VALVE_LAYOUTS) is asked for that valve once, first.
     """
     zones = zones or {}
     out: dict = {}
+    if _one_valve(plumbing):
+        mapped = {
+            zc.get("zone_switch")
+            for zc in zones.values()
+            if not _archived(zc) and zc.get("zone_switch")
+        }
+        shared = next(iter(mapped)) if len(mapped) == 1 else ""
+        out[
+            (
+                vol.Required("shared_valve", default=shared)
+                if shared
+                else vol.Required("shared_valve")
+            )
+        ] = _sw_sel()
     for z in range(1, int(num_zones) + 1):
         zc = zones.get(str(z)) or zones.get(z) or {}
         if _archived(zc):
@@ -89,13 +129,14 @@ def _zone_schema(num_zones: int, zones: dict | None = None) -> dict:
         ec = zc.get("ec_sensors") or (
             _as_list(zc.get("ec_front")) + _as_list(zc.get("ec_back"))
         )
-        out[
-            (
-                vol.Required(f"zone_{z}_switch", default=sw)
-                if sw
-                else vol.Required(f"zone_{z}_switch")
-            )
-        ] = _sw_sel()
+        if not _one_valve(plumbing):
+            out[
+                (
+                    vol.Required(f"zone_{z}_switch", default=sw)
+                    if sw
+                    else vol.Required(f"zone_{z}_switch")
+                )
+            ] = _sw_sel()
         out[vol.Optional(f"zone_{z}_vwc", default=vwc)] = _sensor_multi()
         out[vol.Optional(f"zone_{z}_ec", default=ec)] = _sensor_multi()
     return out
@@ -106,16 +147,17 @@ def _hardware_schema(
     params: dict | None = None,
     plumbing: str | None = None,
 ) -> dict:
-    """Build the {marker: selector} map for the room's plumbing and its lights hours.
+    """Build the {marker: selector} map for the switches the room's plumbing has, and its lights
+    hours.
 
     Pot size, drippers and their flow are each zone's, on the dashboard's Rooms & hardware; the
     targets are on Irrigation strategy → Today. A field capacity and a maximum EC asked here used
     to seed only the room's values, which every zone's own overrides: nothing the controller
     steered by ever changed.
 
-    `plumbing` prefills the layout question: what the room declared, or for a room from before
-    the question existed, what its mapped switches imply. A new room gets no prefill, so the
-    person setting it up answers it rather than accepting a guess.
+    `plumbing`, asked with the zone count (_count_schema), decides which switches: the pump where
+    the room has one, the main-line valve where it has one. A field not asked is saved empty,
+    as the plumbing says it is. Without a layout, both are asked.
     """
     hardware = hardware or {}
     params = params or {}
@@ -135,15 +177,11 @@ def _hardware_schema(
         ] = sel
 
     out: dict = {}
-    out[
-        (
-            vol.Required("plumbing", default=plumbing)
-            if plumbing
-            else vol.Required("plumbing")
-        )
-    ] = _plumbing_sel()
-    _ent("pump_switch", _sw_sel())
-    _ent("main_line_switch", _sw_sel())
+    pump, mainline = PLUMBING_LAYOUTS.get(plumbing, (True, True))
+    if pump:
+        _ent("pump_switch", _sw_sel())
+    if mainline:
+        _ent("main_line_switch", _sw_sel())
     out[vol.Optional("lights_on_hour", default=params.get("lights_on_hour", 12))] = (
         vol.All(vol.Coerce(int), vol.Range(min=0, max=23))
     )
@@ -175,7 +213,8 @@ def _build_zones(num_zones: int, data: dict, existing: dict | None = None) -> di
             "zone_number": z,
             "active": True,
             "name": old.get("name") or f"Zone {z}",
-            "zone_switch": data.get(f"zone_{z}_switch", ""),
+            # One valve for every zone (_zone_schema): each zone maps it.
+            "zone_switch": data.get(f"zone_{z}_switch", data.get("shared_valve", "")),
             "vwc_sensors": vwc,
             "ec_sensors": ec,
             "vwc_front": vwc[0] if vwc else "",
@@ -252,11 +291,13 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     def _retry(self, step_id, schema, user_input, info, error):
         return _retry_form(self, step_id, schema, user_input, info, error)
 
-    def _check(self, data):
+    def _check(self, data, check_plumbing=True):
         """Validate what has been entered so far, at the step it was entered on."""
         from .setup_api import configuration_payload, prepare_setup, safety_blockers
 
-        prepared = prepare_setup(self.hass, configuration_payload(data), data)
+        prepared = prepare_setup(
+            self.hass, configuration_payload(data), data, check_plumbing=check_plumbing
+        )
         blockers = safety_blockers(self.hass, proposed=prepared)
         if blockers:
             raise ValueError("; ".join(blockers))
@@ -355,46 +396,46 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_manual_zones(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
-        """Manual configuration - ask how many zones."""
+        """How many zones, and how the room is plumbed: what the next screens ask follows from it."""
         if user_input is None:
             return self.async_show_form(
                 step_id="manual_zones",
-                data_schema=vol.Schema(
-                    {
-                        vol.Required(
-                            CONF_NUM_ZONES, default=DEFAULT_NUM_ZONES
-                        ): vol.All(
-                            vol.Coerce(int), vol.Range(min=MIN_ZONES, max=MAX_ZONES)
-                        ),
-                    }
-                ),
+                data_schema=vol.Schema(_count_schema(DEFAULT_NUM_ZONES)),
                 description_placeholders={
-                    "info": f"Configure {MIN_ZONES}-{MAX_ZONES} irrigation zones. "
-                    "Each zone can have independent sensors and controls."
+                    "info": f"How many irrigation zones the room has ({MIN_ZONES}-{MAX_ZONES}), "
+                    "each with its own probes, and how the water reaches them. The next screens "
+                    "ask only for the switches that plumbing has."
                 },
             )
-
-        # Store number of zones and proceed to basic configuration
         self._data[CONF_NUM_ZONES] = user_input[CONF_NUM_ZONES]
-
+        self._data["plumbing"] = user_input["plumbing"]
         return await self.async_step_zones()
 
     async def async_step_zones(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
-        """Map each zone's valve and sensors via entity pickers."""
+        """Map each zone's valve and sensors via entity pickers: one valve for them all where the
+        plumbing says one valve waters every zone."""
         num = int(self._data.get(CONF_NUM_ZONES, DEFAULT_NUM_ZONES))
+        plumbing = self._data.get("plumbing")
         info = (
-            f"Pick the valve and the substrate probes for each of your {num} zones. You can "
-            "choose more than one moisture or EC probe for a zone: the controller reads their "
-            "average until you choose otherwise in the zone's details on the dashboard. Each "
+            (
+                f"Pick the one valve that waters all {num} zones at once, then each zone's "
+                "substrate probes. The zones share every shot, so they share one phase and one set "
+                "of targets; each keeps its own readings."
+                if _one_valve(plumbing)
+                else f"Pick the valve and the substrate probes for each of your {num} zones."
+            )
+            + " You can choose more than one moisture or EC probe for a zone: the controller reads "
+            "their average until you choose otherwise in the zone's details on the dashboard. Each "
             "zone's name, plant count, pot size and drippers are set there too, under Settings → "
             "Rooms & hardware."
         )
+        schema = vol.Schema(_zone_schema(num, plumbing=plumbing))
         if user_input is None:
             return self.async_show_form(
                 step_id="zones",
-                data_schema=vol.Schema(_zone_schema(num)),
+                data_schema=schema,
                 description_placeholders={"info": info},
             )
         zones = _build_zones(num, user_input)
@@ -405,30 +446,39 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     "room_prefix": self._data.get("room_prefix", ""),
                     "enable_flag": f"switch.crop_steering_{self._data.get('room_prefix', '')}engine_enabled",
                     "zones": zones,
-                }
+                    "plumbing": plumbing,
+                },
+                check_plumbing=False,  # its pump and main line are the next screen's
             )
         except ValueError as err:
-            return self._retry(
-                "zones", vol.Schema(_zone_schema(num)), user_input, info, err
-            )
+            return self._retry("zones", schema, user_input, info, err)
         self._data["zones"] = zones
         return await self.async_step_hardware()
 
     async def async_step_hardware(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
-        """Say how the room is plumbed, map its shared switches, and set its lights hours."""
+        """Map the switches the room's plumbing has, and set its lights hours."""
+        plumbing = self._data.get("plumbing")
+        pump, mainline = PLUMBING_LAYOUTS.get(plumbing, (True, True))
+        switches = " and ".join(
+            what
+            for what, has in (
+                ("the pump, which runs whenever a zone waters", pump),
+                ("the main-line valve that feeds the zones", mainline),
+            )
+            if has
+        )
         info = (
-            "Say how the room is plumbed: a room with one switch per zone, such as a tent on a "
-            "single smart plug, is zone valves only and needs nothing more than the valves you "
-            "have already picked. If water only flows while a pump runs, say so and choose the "
-            "pump. Then the hours the lights come on and go off: the grow-day runs from one "
+            (f"Choose {switches}. " if switches else "")
+            + "Then the hours the lights come on and go off: the grow-day runs from one "
             "lights-on to the next. Watering stays off until you switch it on in PHASE Control."
         )
+        schema = vol.Schema(_hardware_schema(plumbing=plumbing))
         if user_input is None:
             return self.async_show_form(
                 step_id="hardware",
-                data_schema=vol.Schema(_hardware_schema()),
+                data_schema=schema,
                 description_placeholders={"info": info},
             )
         data = {
@@ -444,14 +494,12 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         data["enable_flag"] = (
             f"switch.crop_steering_{data['room_prefix']}engine_enabled"
         )
-        if user_input.get("plumbing"):
-            data["plumbing"] = user_input["plumbing"]
+        if plumbing:
+            data["plumbing"] = plumbing
         try:
             data = self._check(data)
         except ValueError as err:
-            return self._retry(
-                "hardware", vol.Schema(_hardware_schema()), user_input, info, err
-            )
+            return self._retry("hardware", schema, user_input, info, err)
         data["setup_revision"] = 1
         return self.async_create_entry(title=data["name"], data=data)
 
@@ -506,6 +554,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         """Initialize options flow."""
         self._entry = config_entry
         self._edit_num: int | None = None
+        self._edit_plumbing: str | None = None
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
@@ -563,28 +612,30 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
     async def async_step_edit_zones(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
-        """Reconfigure zones — step 1: how many zones (add or remove)."""
+        """Reconfigure zones — step 1: how many zones (add or remove), and how they are plumbed."""
         from .setup_api import effective
 
-        cur = int(effective(self._entry).get("num_zones", 1))
+        data = effective(self._entry)
+        cur = int(data.get("num_zones", 1))
         if user_input is None:
             return self.async_show_form(
                 step_id="edit_zones",
                 data_schema=vol.Schema(
-                    {
-                        vol.Required("num_zones", default=cur): vol.All(
-                            vol.Coerce(int), vol.Range(min=MIN_ZONES, max=MAX_ZONES)
-                        ),
-                    }
+                    _count_schema(
+                        cur,
+                        data.get("plumbing")
+                        or infer_plumbing(data.get("hardware", {})),
+                    )
                 ),
                 description_placeholders={
-                    "info": "Set how many zones you have. Increase it to ADD a zone, decrease to "
-                    "archive the highest ones. You'll map their valves and probes on the next "
-                    "screen; a zone archived in PHASE Control is restored there, under Settings → "
-                    "Rooms & hardware."
+                    "info": "Set how many zones you have, and how the room is plumbed. Increase the "
+                    "count to ADD a zone, decrease it to archive the highest ones. You'll map their "
+                    "valves and probes on the next screen; a zone archived in PHASE Control is "
+                    "restored there, under Settings → Rooms & hardware."
                 },
             )
         self._edit_num = int(user_input["num_zones"])
+        self._edit_plumbing = user_input["plumbing"]
         return await self.async_step_edit_zones_map()
 
     async def async_step_edit_zones_map(
@@ -605,19 +656,30 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             key: int(round(value))
             for key, value in self._live_numbers(LIGHTS_HOURS).items()
         }
+        plumbing = (
+            getattr(self, "_edit_plumbing", None)
+            or data.get("plumbing")
+            or infer_plumbing(data.get("hardware", {}))
+        )
         schema = vol.Schema(
             {
-                **_zone_schema(num, data.get("zones", {})),
+                **_zone_schema(num, data.get("zones", {}), plumbing),
                 **_hardware_schema(
                     data.get("hardware", {}),
                     {**data.get("parameters", {}), **live_lights},
-                    data.get("plumbing") or infer_plumbing(data.get("hardware", {})),
+                    plumbing,
                 ),
             }
         )
         info = (
-            "Swap each zone's valve and substrate probes, how the room is plumbed and its lights "
-            "hours. A zone's name, plant count, pot size and drippers are on the dashboard, under "
+            (
+                "Swap the valve that waters every zone, each zone's substrate probes, the room's "
+                "switches and its lights hours."
+                if _one_valve(plumbing)
+                else "Swap each zone's valve and substrate probes, the room's switches and its "
+                "lights hours."
+            )
+            + " A zone's name, plant count, pot size and drippers are on the dashboard, under "
             "Settings → Rooms & hardware; its targets under Irrigation strategy → Today."
         )
         if user_input is None:
@@ -640,8 +702,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             },
             "parameters": _build_parameters(user_input, data.get("parameters", {})),
         }
-        if user_input.get("plumbing"):
-            new_data["plumbing"] = user_input["plumbing"]
+        new_data["plumbing"] = plumbing
         from .setup_api import (
             configuration_payload,
             prepare_setup,

@@ -19,7 +19,14 @@ PLUMBING_LAYOUTS = {
     "pump_valves": (True, False),
     "mainline_valves": (False, True),
     "pump_mainline_valves": (True, True),
+    "pump_one_valve": (True, False),
 }
+
+# The layouts whose one valve waters every zone of the room at once (owner, 2026-10-22: a pump and a
+# fertigation valve for three zones). Every zone maps that valve; they keep their own probes and
+# readings, and share one phase, one set of targets and every shot. After the four above so that
+# infer() never names it: nothing guesses a room into it.
+ONE_VALVE_LAYOUTS = frozenset({"pump_one_valve"})
 
 # Plain-English names, used in messages an operator reads.
 LABELS = {
@@ -27,6 +34,7 @@ LABELS = {
     "pump_valves": "a pump, then zone valves",
     "mainline_valves": "a main-line valve, then zone valves",
     "pump_mainline_valves": "a pump, a main-line valve, then zone valves",
+    "pump_one_valve": "a pump, then one valve for all the zones",
 }
 
 _STAGES = (

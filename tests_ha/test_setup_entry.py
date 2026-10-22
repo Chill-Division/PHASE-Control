@@ -20,13 +20,13 @@ PANEL = "crop-steering"
 
 async def _install(hass, hardware=None):
     _seed(hass)
-    flow_id = await _to_zones_step(hass)
+    answers = dict(hardware or {})
+    # The wizard asks how the room is plumbed, with the zone count. Unless a test says otherwise,
+    # answer truthfully for the switches it then chooses, as a person with a pump would.
+    plumbing = answers.pop("plumbing", None) or infer(answers)
+    flow_id = await _to_zones_step(hass, plumbing)
     result = await hass.config_entries.flow.async_configure(flow_id, dict(ZONES))
     assert result["step_id"] == "hardware", result.get("errors")
-    answers = dict(hardware or {})
-    # The wizard asks how the room is plumbed. Unless a test says otherwise, answer truthfully for
-    # the switches it chose, as a person with a pump would.
-    answers.setdefault("plumbing", infer(answers))
     result = await hass.config_entries.flow.async_configure(flow_id, answers)
     assert result["type"] is FlowResultType.CREATE_ENTRY, result
     await hass.async_block_till_done()

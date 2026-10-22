@@ -312,7 +312,9 @@ async def test_a_second_room_can_still_be_added_beside_an_upgraded_default_room(
         flow["flow_id"], {"room_name": "Veg tent"}
     )
     assert flow["step_id"] == "manual_zones"
-    flow = await hass.config_entries.flow.async_configure(flow["flow_id"], {"num_zones": 1})
+    flow = await hass.config_entries.flow.async_configure(
+        flow["flow_id"], {"num_zones": 1, "plumbing": "valves_only"}
+    )
     flow = await hass.config_entries.flow.async_configure(
         flow["flow_id"],
         {
@@ -321,7 +323,7 @@ async def test_a_second_room_can_still_be_added_beside_an_upgraded_default_room(
         },
     )
     assert flow["step_id"] == "hardware", flow.get("errors")
-    done = await hass.config_entries.flow.async_configure(flow["flow_id"], {"plumbing": "valves_only"})
+    done = await hass.config_entries.flow.async_configure(flow["flow_id"], {})
     assert done["type"] is FlowResultType.CREATE_ENTRY
     await hass.async_block_till_done()
     # Fully isolated: its own prefixed entities, and the default room's are untouched.

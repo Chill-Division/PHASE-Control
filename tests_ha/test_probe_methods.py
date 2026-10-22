@@ -6,7 +6,6 @@ the controller steers on the chosen reading."""
 
 from homeassistant.data_entry_flow import FlowResultType
 
-from custom_components.crop_steering.plumbing import infer
 from test_real_flow import ZONES, _seed, _to_zones_step
 from test_upgrade_in_place import _upgrade
 
@@ -32,7 +31,7 @@ async def _install_two_probes(hass):
     result = await hass.config_entries.flow.async_configure(flow_id, zones)
     assert result["step_id"] == "hardware", result.get("errors")
     result = await hass.config_entries.flow.async_configure(
-        flow_id, {"plumbing": infer({})}
+        flow_id, {}
     )
     assert result["type"] is FlowResultType.CREATE_ENTRY, result
     await hass.async_block_till_done()

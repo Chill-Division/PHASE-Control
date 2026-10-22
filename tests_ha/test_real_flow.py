@@ -21,13 +21,16 @@ def _seed(hass, valve="off"):
     hass.states.async_set("sensor.gt1_ec", "3100", {"unit_of_measurement": "µS/cm"})
 
 
-async def _to_zones_step(hass):
+async def _to_zones_step(hass, plumbing="valves_only"):
+    """The wizard up to its zones' screen: the room's name, then its zone count and plumbing."""
     flow = hass.config_entries.flow
     result = await flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
     assert result["type"] is FlowResultType.FORM and result["step_id"] == "user"
     result = await flow.async_configure(result["flow_id"], {"name": "Tent"})
     assert result["step_id"] == "manual_zones"
-    result = await flow.async_configure(result["flow_id"], {"num_zones": 1})
+    result = await flow.async_configure(
+        result["flow_id"], {"num_zones": 1, "plumbing": plumbing}
+    )
     assert result["type"] is FlowResultType.FORM and result["step_id"] == "zones"
     return result["flow_id"]
 
@@ -62,7 +65,7 @@ async def test_a_one_switch_tent_becomes_a_room_and_its_switches_get_the_ids_the
     result = await hass.config_entries.flow.async_configure(flow_id, dict(ZONES))
     assert result["step_id"] == "hardware"
     # no pump, no main-line valve, and saying so: the layout is asked, never read off empty fields
-    result = await hass.config_entries.flow.async_configure(flow_id, {"plumbing": "valves_only"})
+    result = await hass.config_entries.flow.async_configure(flow_id, {})
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["data"]["hardware"]["pump_switch"] == "" and result["data"]["plumbing"] == "valves_only"
     assert result["data"]["zones"]["1"]["zone_switch"] == VALVE
@@ -99,7 +102,7 @@ async def test_a_fresh_install_registers_every_entity_under_the_id_its_code_asks
     _seed(hass)
     flow_id = await _to_zones_step(hass)
     await hass.config_entries.flow.async_configure(flow_id, dict(ZONES))
-    await hass.config_entries.flow.async_configure(flow_id, {"plumbing": "valves_only"})
+    await hass.config_entries.flow.async_configure(flow_id, {})
     await hass.async_block_till_done()
 
     checked, wrong = 0, []
@@ -120,7 +123,7 @@ async def test_an_existing_install_keeps_the_entity_ids_its_registry_already_hol
     _seed(hass)
     flow_id = await _to_zones_step(hass)
     await hass.config_entries.flow.async_configure(flow_id, dict(ZONES))
-    result = await hass.config_entries.flow.async_configure(flow_id, {"plumbing": "valves_only"})
+    result = await hass.config_entries.flow.async_configure(flow_id, {})
     await hass.async_block_till_done()
     registry = er.async_get(hass)
     asked, held = "sensor.crop_steering_vwc_zone_1", "sensor.crop_steering_zone_1_vwc"

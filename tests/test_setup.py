@@ -434,3 +434,53 @@ def test_setup_accepts_probe_units_it_can_convert_exactly_and_explains_the_ones_
     states["sensor.ec"].attributes["unit_of_measurement"] = "bananas"
     with pytest.raises(ValueError, match="accepted: .*ms/cm"):
         api.prepare_setup(hass, data, entry.data, "one")
+
+
+def one_valve(*valves):
+    """The room with one valve for all its zones: the pump, then switch.v1 waters both zones."""
+    data = switch_free()
+    data["plumbing"] = "pump_one_valve"
+    data["hardware"] = {"pump_switch": "switch.p", "main_line_switch": ""}
+    for row, valve in zip(data["zones"], valves or ("switch.v1", "switch.v1")):
+        row["valve"] = valve
+    return data
+
+
+def test_a_one_valve_room_maps_its_one_valve_on_every_zone():
+    """Owner, 2026-10-22: the main pump and one fertigation valve water all the zones at once."""
+    hass, entry, _ = rig()
+    asyncio.run(api.save_setup(hass, one_valve()))
+    assert entry.data["plumbing"] == "pump_one_valve"
+    assert {z["zone_switch"] for z in entry.data["zones"].values()} == {"switch.v1"}
+
+
+def test_a_one_valve_room_refuses_a_zone_on_another_valve():
+    hass, entry, _ = rig()
+    with pytest.raises(ValueError, match="every zone uses that one valve"):
+        asyncio.run(api.save_setup(hass, one_valve("switch.v1", "switch.v2")))
+    assert "plumbing" not in entry.data
+
+
+def test_a_room_with_a_valve_each_still_refuses_two_zones_on_one():
+    hass, _, _ = rig()
+    data = one_valve()
+    data["plumbing"] = "pump_valves"
+    with pytest.raises(ValueError, match="already allocated"):
+        asyncio.run(api.save_setup(hass, data))
+
+
+def test_another_room_cannot_use_a_one_valve_rooms_valve():
+    hass, _, _ = rig()
+    hass.config_entries.entries.append(
+        SimpleNamespace(
+            entry_id="other",
+            options={},
+            data={
+                "room_prefix": "other_",
+                "zones": {"1": {"zone_switch": "switch.v1"}},
+                "num_zones": 1,
+            },
+        )
+    )
+    with pytest.raises(ValueError, match="allocated"):
+        asyncio.run(api.save_setup(hass, one_valve()))

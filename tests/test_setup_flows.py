@@ -124,14 +124,59 @@ def test_the_wizard_asks_each_zone_for_its_valve_and_its_substrate_probes_only(
     ]
 
 
-def test_the_last_step_asks_the_plumbing_its_switches_and_the_lights_only(flow_module):
+def test_one_valve_for_every_zone_is_asked_once_and_each_zone_for_its_probes(
+    flow_module,
+):
+    """Owner, 2026-10-22: three zones, no valve each, one fertigation valve for all of them."""
+    assert _fields(flow_module._zone_schema(2, plumbing="pump_one_valve")) == [
+        "shared_valve",
+        "zone_1_vwc",
+        "zone_1_ec",
+        "zone_2_vwc",
+        "zone_2_ec",
+    ]
+    zones = flow_module._build_zones(2, {"shared_valve": "switch.fert"})
+    assert [zones[z]["zone_switch"] for z in ("1", "2")] == ["switch.fert"] * 2
+
+
+def test_configure_offers_the_valve_the_zones_share_and_no_guess_when_they_differ(
+    flow_module, monkeypatch
+):
+    seen = _required_markers(flow_module, monkeypatch)
+    flow_module._zone_schema(
+        2,
+        {"1": {"zone_switch": "switch.fert"}, "2": {"zone_switch": "switch.fert"}},
+        "pump_one_valve",
+    )
+    assert seen["shared_valve"] == {"default": "switch.fert"}
+    flow_module._zone_schema(
+        2,
+        {"1": {"zone_switch": "switch.v1"}, "2": {"zone_switch": "switch.v2"}},
+        "pump_one_valve",
+    )
+    assert seen["shared_valve"] == {}
+
+
+@pytest.mark.parametrize(
+    "plumbing, switches",
+    [
+        (None, ["pump_switch", "main_line_switch"]),
+        ("valves_only", []),
+        ("pump_valves", ["pump_switch"]),
+        ("mainline_valves", ["main_line_switch"]),
+        ("pump_mainline_valves", ["pump_switch", "main_line_switch"]),
+        ("pump_one_valve", ["pump_switch"]),
+    ],
+)
+def test_the_last_step_asks_the_switches_the_plumbing_has_and_the_lights_only(
+    flow_module, plumbing, switches
+):
     """Field capacity and the maximum EC asked here only ever seeded the room's values, which
-    every zone's own overrides; pot size and drippers are each zone's, on Rooms & hardware.
+    every zone's own overrides; pot size and drippers are each zone's, on Rooms & hardware. The
+    plumbing is asked with the zone count, so this step asks only for the switches it has.
     """
-    assert _fields(flow_module._hardware_schema()) == [
-        "plumbing",
-        "pump_switch",
-        "main_line_switch",
+    assert _fields(flow_module._hardware_schema(plumbing=plumbing)) == [
+        *switches,
         "lights_on_hour",
         "lights_off_hour",
     ]
@@ -301,29 +346,62 @@ def test_a_single_switch_tent_is_a_complete_room(flow_module):
 
 def test_the_wizard_stores_the_plumbing_answer(flow_module):
     flow, _states = _wizard(flow_module)
+    asyncio.run(
+        flow.async_step_manual_zones({"num_zones": 1, "plumbing": "valves_only"})
+    )
     asyncio.run(flow.async_step_zones(dict(ZONE_INPUT)))
-    result = asyncio.run(flow.async_step_hardware({"plumbing": "valves_only"}))
+    result = asyncio.run(flow.async_step_hardware({}))
     assert result["type"] == "create_entry"
     assert result["data"]["plumbing"] == "valves_only"
 
 
-def test_a_pump_layout_without_a_pump_is_caught_on_the_step_it_was_answered_on(
+def test_a_pump_layout_without_a_pump_is_caught_on_the_step_that_asks_for_it(
     flow_module,
 ):
     """The mistake inference could not see: "my room has a pump" with the pump never chosen.
     It used to save, and the controller then watered with the valve open and no pump."""
     flow, _states = _wizard(flow_module)
-    asyncio.run(flow.async_step_zones(dict(ZONE_INPUT)))
-    answer = {"plumbing": "pump_valves"}
-    result = asyncio.run(flow.async_step_hardware(dict(answer)))
-    assert result["type"] == "form" and result["step_id"] == "hardware"
-    assert result["data_schema"]["kept"] == answer  # nothing typed is lost
-    assert "no pump switch is chosen" in result["description_placeholders"]["error"]
-    result = asyncio.run(
-        flow.async_step_hardware({**answer, "pump_switch": "switch.p"})
+    asyncio.run(
+        flow.async_step_manual_zones({"num_zones": 1, "plumbing": "pump_valves"})
     )
+    asyncio.run(flow.async_step_zones(dict(ZONE_INPUT)))
+    result = asyncio.run(flow.async_step_hardware({}))
+    assert result["type"] == "form" and result["step_id"] == "hardware"
+    assert "no pump switch is chosen" in result["description_placeholders"]["error"]
+    result = asyncio.run(flow.async_step_hardware({"pump_switch": "switch.p"}))
     assert result["type"] == "create_entry"
     assert result["data"]["plumbing"] == "pump_valves"
+
+
+def test_a_one_valve_room_maps_its_valve_on_every_zone(flow_module):
+    """Owner, 2026-10-22: the main pump and one fertigation valve water all the zones at once."""
+    flow, _states = _wizard(flow_module, zones=2)
+    form = asyncio.run(
+        flow.async_step_manual_zones({"num_zones": 2, "plumbing": "pump_one_valve"})
+    )
+    assert _fields(form["data_schema"])[0] == "shared_valve"  # asked once, not a zone's
+    result = asyncio.run(
+        flow.async_step_zones(
+            {
+                "shared_valve": "switch.v1",
+                "zone_1_vwc": ["sensor.vwc"],
+                "zone_1_ec": ["sensor.ec"],
+                "zone_2_vwc": [],
+                "zone_2_ec": [],
+            }
+        )
+    )
+    assert result["step_id"] == "hardware"  # no pump yet: that is the next screen's
+    assert _fields(result["data_schema"]) == [
+        "pump_switch",
+        "lights_on_hour",
+        "lights_off_hour",
+    ]
+    result = asyncio.run(flow.async_step_hardware({"pump_switch": "switch.p"}))
+    assert result["type"] == "create_entry"
+    zones = result["data"]["zones"]
+    assert [zones[z]["zone_switch"] for z in ("1", "2")] == ["switch.v1"] * 2
+    assert result["data"]["plumbing"] == "pump_one_valve"
 
 
 def _required_markers(flow_module, monkeypatch):
@@ -340,18 +418,23 @@ def _required_markers(flow_module, monkeypatch):
     return seen
 
 
-def test_the_plumbing_question_is_asked_first_and_a_new_room_gets_no_guess(
+def test_the_plumbing_question_is_asked_with_the_zone_count_and_a_new_room_gets_no_guess(
     flow_module, monkeypatch
 ):
     seen = _required_markers(flow_module, monkeypatch)
-    schema = flow_module._hardware_schema()
+    schema = flow_module._count_schema(3)
     assert seen["plumbing"] == {}  # required, no default: a newcomer answers it
-    assert list(schema)[0] == "plumbing"  # asked before the switches it governs
-    assert schema["plumbing"]["options"] == [
+    # Asked before the zones and the switches it governs.
+    assert _fields(schema) == ["num_zones", "plumbing"]
+    plumbing = next(
+        selector for marker, selector in schema.items() if marker == "plumbing"
+    )
+    assert plumbing["options"] == [
         "valves_only",
         "pump_valves",
         "mainline_valves",
         "pump_mainline_valves",
+        "pump_one_valve",
     ]
 
 
@@ -362,10 +445,10 @@ def test_configure_prefills_what_the_room_declared_or_what_its_switches_imply(
     hass, entry, _states = rig()  # from before the question existed: pump and main-line
     flow = flow_module.OptionsFlowHandler(entry)
     flow.hass = hass
-    asyncio.run(flow.async_step_edit_zones_map())
+    asyncio.run(flow.async_step_edit_zones())
     assert seen["plumbing"] == {"default": "pump_mainline_valves"}
     entry.data["plumbing"] = "pump_valves"  # a declaration always wins over the guess
-    asyncio.run(flow.async_step_edit_zones_map())
+    asyncio.run(flow.async_step_edit_zones())
     assert seen["plumbing"] == {"default": "pump_valves"}
 
 
