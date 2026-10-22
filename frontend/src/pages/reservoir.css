@@ -203,15 +203,17 @@
   padding: 0;
   font-size: inherit;
 }
-/* The dosers: small cards like the schedule's weeks, side by side. */
+/* The dosers: small cards like the schedule's weeks, side by side, each row the full width and the
+   rows as even as they can be (useBalancedRows). */
 .res-dosers-head {
   display: flex;
   align-items: center;
   gap: 6px;
 }
 .res-dosers {
+  --card-min: 136px;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(136px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(var(--card-min), 1fr));
   gap: 8px;
   margin: 12px 0 0;
   padding: 0;

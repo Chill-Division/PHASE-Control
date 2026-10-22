@@ -47,12 +47,15 @@
   font-size: 12px;
   color: var(--muted-foreground);
 }
+/* The week across the whole width, its rows as even as they can be (useBalancedRows): eight days in
+   one row where they fit, four and four on a tablet, three a row on a phone. */
 .zone-week-days {
+  --card-min: 112px;
   list-style: none;
   margin: 0;
   padding: 0;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(var(--card-min), 1fr));
   gap: 10px;
 }
 .zone-week-days li {

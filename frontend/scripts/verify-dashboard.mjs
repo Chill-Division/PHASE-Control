@@ -1740,6 +1740,35 @@ try {
       );
     };
     await against("Zone 1");
+    // The week across the whole width: its eight grow-days (seven and today) in one row, the last at
+    // the strip's right edge; four and four on a tablet; three a row on a phone.
+    const week = page.locator(".zone-week-days");
+    const strip = () =>
+      week.evaluate((el) => ({
+        columns: getComputedStyle(el).gridTemplateColumns.split(" ").length,
+        days: el.children.length,
+        gap: Math.round(
+          el.getBoundingClientRect().right - el.lastElementChild.getBoundingClientRect().right,
+        ),
+      }));
+    /** The strip once it settles: it evens its rows once it has been measured. */
+    const settle = async (columns) => {
+      let got = await strip();
+      for (let tries = 0; got.columns !== columns && tries < 20; tries++) {
+        await page.waitForTimeout(250);
+        got = await strip();
+      }
+      return got;
+    };
+    assert.deepEqual(await settle(8), { columns: 8, days: 8, gap: 0 });
+    for (const [width, height, columns] of [
+      [820, 1180, 4],
+      [390, 844, 3],
+    ]) {
+      await page.setViewportSize({ width, height });
+      assert.equal((await settle(columns)).columns, columns, `the week's columns ${width}px wide`);
+    }
+    await page.setViewportSize({ width: 1440, height: 1000 });
     // The zone is picked by its chip, one at a time.
     const chips = page.getByRole("group", { name: "Zone", exact: true }).getByRole("button");
     await chips.nth(1).click();
@@ -1754,6 +1783,56 @@ try {
     assert.equal(probes.length, 3 * (await chips.count()));
     for (const [text, tone] of probes)
       assert.equal(tone, text === "Current" || text === "Enabled" ? "on" : "off", text);
+  });
+  await check("cards fill their rows, and wrap into even rows", async () => {
+    // Owner, 2026-10-22: the Insights week stopped short of the page's right edge on a desktop, as
+    // the dosers, the Schedule's blocks and the stock tanks did, a column or more left empty. Where
+    // cards wrap, the rows come out even ("Option B!"): four where three fit go two and two.
+    /** Each row of a grid's cards: how many, and how far its last stops short of the right edge. */
+    const rows = (selector) => {
+      const el = document.querySelector(selector);
+      const edge = el.getBoundingClientRect().right - parseFloat(getComputedStyle(el).paddingRight);
+      const found = new Map();
+      for (const card of el.children) {
+        const box = card.getBoundingClientRect();
+        const row = found.get(Math.round(box.top)) ?? { cards: 0, short: Infinity };
+        row.cards += 1;
+        row.short = Math.min(row.short, Math.round(edge - box.right));
+        found.set(Math.round(box.top), row);
+      }
+      return [...found.values()];
+    };
+    /** The rows once they settle: the week's days load from the history, and a grid evens its rows
+     * once it has been drawn and measured. */
+    const settled = async (selector, want) => {
+      let got = await page.evaluate(rows, selector);
+      for (let tries = 0; JSON.stringify(got) !== JSON.stringify(want) && tries < 20; tries++) {
+        await page.waitForTimeout(250);
+        got = await page.evaluate(rows, selector);
+      }
+      return got;
+    };
+    await page.setViewportSize({ width: 1920, height: 1080 });
+    for (const [route, grid, cards] of [
+      ["insights", ".zone-week-days", 8],
+      ["reservoir", ".res-dosers", 4],
+      ["grow-plan", ".schedule-blocks", 4],
+      ["stock", ".stock-grid", 4],
+    ]) {
+      await go(route);
+      await expectVisible(page.locator(grid).first());
+      const full = [{ cards, short: 0 }];
+      assert.deepEqual(await settled(grid, full), full, `${route}: ${grid} as one full row`);
+    }
+    // Beside the rooms list three stock tanks fit a row: the four go two and two, both rows full.
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await go("stock");
+    await expectVisible(page.locator(".stock-grid"));
+    const even = [
+      { cards: 2, short: 0 },
+      { cards: 2, short: 0 },
+    ];
+    assert.deepEqual(await settled(".stock-grid", even), even, "four stock tanks: two and two");
   });
   await check(
     "compare runs: each recorded range is a bar on one scale, the previous run grey",
