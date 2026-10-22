@@ -23,6 +23,7 @@ ha_stubs.install()
 from custom_components.crop_steering import (  # noqa: E402
     run_api,
     feed_api,
+    room_order,
     selftest,
     services,
     setup_api,
@@ -66,6 +67,7 @@ CHANGES = {
     "feed_save": {"room_id": ROOM, "expected_revision": 0, "document": {}},
     "feed_mix": {"room_id": ROOM},
     "test_shot": {"room_id": ROOM, "zone": 1},
+    "room_order_save": {"rooms": [ROOM]},
 }
 
 
@@ -133,6 +135,10 @@ def rig(monkeypatch):
         mark_toured=AsyncMock(return_value={"tour": False}),
     )
     monkeypatch.setattr(whats_new, "WhatsNew", lambda hass: notice)
+    order = SimpleNamespace(
+        async_init=AsyncMock(), save=AsyncMock(return_value={"order": [ROOM]})
+    )
+    monkeypatch.setattr(room_order, "RoomOrder", lambda hass: order)
     setup = {
         "read_setup": MagicMock(return_value={}),
         "create_setup": AsyncMock(return_value={}),
@@ -166,6 +172,7 @@ def rig(monkeypatch):
     asyncio.run(selftest.async_setup_selftest(hass))
     asyncio.run(setup_api.async_setup_setup_services(hass))
     asyncio.run(whats_new.async_setup_whats_new(hass, ha_stubs.FakeEntry(), False))
+    asyncio.run(room_order.async_setup_room_order(hass, ha_stubs.FakeEntry()))
 
     def effects():
         """Everything a handler could have done: events, service calls, writes."""
@@ -181,6 +188,7 @@ def rig(monkeypatch):
             setup["create_setup"],
             setup["save_setup"],
             setup["remove_setup"],
+            order.save,
         )
         return (
             len(hass.bus.events),
