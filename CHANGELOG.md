@@ -10,7 +10,9 @@ and code-level detail for developers and AI agents working on the repo.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.5.1] - 2026-10-22
+
+Integration and controller **1.5.1**.
 
 - **Rooms in the order you choose.** **Settings → General → Appearance → Room order** moves a room
   up or down the list, for everyone who opens the dashboard, on every device: the rooms column, the
