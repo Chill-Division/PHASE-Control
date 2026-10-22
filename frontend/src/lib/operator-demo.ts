@@ -19,6 +19,7 @@ import { DEMO_WHATS_NEW } from "./whats-new-demo";
 import { compareVersions } from "./whats-new";
 import { RESERVOIR_KEYS } from "./feed";
 import { changesSwitches, type SwitchedRoom } from "./setup-changes";
+import { DEMO_PASS_MS } from "./demo";
 
 const clone = <T>(value: T): T => structuredClone(value);
 export class OperatorDemo {
@@ -375,6 +376,7 @@ export class OperatorDemo {
       if (action === "setup_read") result = setup;
       else {
         const room = this.rooms!.find((r) => r.entry_id === data.entry_id);
+        let switching = action === "setup_remove";
         if (action !== "setup_create" && (!room || room.revision !== data.expected_revision))
           throw new Error("Room changed. Reload setup.");
         // As the integration's save_setup: only archiving, or a change that maps a switch
@@ -412,6 +414,9 @@ export class OperatorDemo {
               ? []
               : plumbingErrors(layout, (data.hardware || {}) as Record<string, unknown>);
           if (contradictions.length) throw new Error(contradictions.join(" "));
+          // Whether it maps a switch differently: the controller's pass takes it on only with
+          // watering off then (demoBeat).
+          switching = !!room && changesSwitches(room, data as unknown as SwitchedRoom);
           const fresh: SetupRoom = room || {
             entry_id: "demo-entry-" + this.rooms!.length,
             revision: 0,
@@ -460,6 +465,10 @@ export class OperatorDemo {
               enable_flag: flag,
               ...target.hardware,
               ...(target.plumbing ? { plumbing: target.plumbing } : {}),
+              setup_revision: target.revision,
+              demo_switches: switching,
+              // The controller looks on its next pass, not at once (demoBeat).
+              demo_looks_at: Date.now() + DEMO_PASS_MS,
               pump: target.hardware.pump_switch,
               valves: Object.fromEntries(target.zones.map((z) => [z.id, z.valve])),
               zone_names: Object.fromEntries(target.zones.map((z) => [z.id, z.name])),

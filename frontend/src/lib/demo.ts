@@ -165,6 +165,8 @@ export function createDemo(now = Date.now()): States {
     put(`sensor.crop_steering_${prefix}ai_heartbeat`, "online", {
       enable_flag: enable,
       last_beat: new Date(now - 18_000).toISOString(),
+      // The setup it has taken on (the descriptor's setup_revision).
+      setup_revision: 1,
     });
     put(`sensor.crop_steering_${prefix}app_status`, "safe_idle");
     const fired = index ? [] : ["Z1 P1 ramp shot 3/6 (demo)"];
@@ -380,6 +382,9 @@ function demoProbes(
     });
   }
 }
+/** How long after a save the demo's controller looks at it: its next pass, which the real one makes
+ * within a minute. Until then Rooms & hardware says the change is waiting for it. */
+export const DEMO_PASS_MS = 5_000;
 /** The demo controller reports in like a running one, so it never reads as stopped. */
 export function demoBeat(states: States, now = Date.now()): States {
   const stamp = new Date(now).toISOString();
@@ -387,12 +392,35 @@ export function demoBeat(states: States, now = Date.now()): States {
     Object.entries(states).map(([id, entity]) => [
       id,
       /^sensor\.crop_steering_.*ai_heartbeat$/.test(id)
-        ? { ...entity, last_updated: stamp, attributes: { ...entity.attributes, last_beat: stamp } }
+        ? {
+            ...entity,
+            last_updated: stamp,
+            attributes: { ...takeOnSetup(states, id, entity.attributes, now), last_beat: stamp },
+          }
         : /^sensor\.crop_steering_.*waiting_for_app$/.test(id)
           ? { ...entity, last_updated: stamp, attributes: rebased(entity.attributes, now) }
           : entity,
     ]),
   );
+}
+/** What the controller's pass does with a saved setup change it has not taken on: at once when it
+ * switches nothing differently, else only with the room's watering off; until then it holds the
+ * room and says why (the controller's _apply_setup_descriptors, SETUP_WAITING). */
+function takeOnSetup(states: States, beatId: string, beat: Record<string, unknown>, now: number) {
+  const prefix = beatId.slice("sensor.crop_steering_".length, -"ai_heartbeat".length);
+  const config = states[`sensor.crop_steering_${prefix}engine_config`]?.attributes ?? {};
+  const want = config.setup_revision,
+    have = beat.setup_revision;
+  if (typeof want !== "number" || typeof have !== "number" || want <= have) return beat;
+  // Saved since its last pass: it has not looked yet. Its passes keep their own time, not the
+  // dashboard's refreshes (a save refreshes twice).
+  if (Number(config.demo_looks_at) > now) return beat;
+  const off = states[String(config.enable_flag)]?.state === "off";
+  if (config.demo_switches !== true || off) {
+    const { setup_pending: _waiting, ...rest } = beat;
+    return { ...rest, setup_revision: want };
+  }
+  return { ...beat, setup_pending: "Setup change waiting (taken on while watering is off)" };
 }
 /** A demo zone's waiting_for conditions, from its own numbers, as the engine would give them. */
 function demoWaiting(

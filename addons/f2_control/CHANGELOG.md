@@ -1,6 +1,7 @@
 # Unreleased
 
 - The controller takes a saved setup change on within a minute, and one that changes no switch (a sensor, a name) with watering on.
+- The dashboard keeps watering off after a saved setup change until the controller has taken it on.
 
 # 1.4.0
 

@@ -24,6 +24,7 @@ version being released.
 ## Unreleased
 
 - Mapping a sensor or renaming no longer needs watering off, and a change that does is picked up within a minute, not five.
+- After a setup change, watering waits until the controller has picked it up, so switching back on too soon can't hold the room.
 
 ## 1.4.0 - 2026-10-19
 

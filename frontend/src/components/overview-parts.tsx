@@ -145,6 +145,8 @@ export function ModeControl({ controller }: { controller: Controller }) {
           <div className="mode-options" role="radiogroup" aria-label={`How ${room.name} runs`}>
             {choices.map((mode) => {
               const items = modeChanges(state, mode, room.name);
+              // Steering waits while the controller takes on a saved setup change.
+              const waits = mode === "steering" && !!state.waitingSetup && state.mode !== mode;
               return (
                 <button
                   key={mode}
@@ -153,7 +155,7 @@ export function ModeControl({ controller }: { controller: Controller }) {
                   aria-checked={state.mode === mode}
                   className="mode-option"
                   data-mode={mode}
-                  disabled={state.mode === mode || !items.length}
+                  disabled={state.mode === mode || !items.length || waits}
                   onClick={() => {
                     setOpen(false);
                     setOpened({ from: state.mode, items });
@@ -165,7 +167,11 @@ export function ModeControl({ controller }: { controller: Controller }) {
                     <strong>{MODE_WORDS[mode].label}</strong>
                     {state.mode === mode && <span className="mode-now">Now</span>}
                   </span>
-                  <span>{MODE_WORDS[mode].text}</span>
+                  <span>
+                    {waits
+                      ? `Waits for the controller to take on the saved setup change: ${state.waitingSetup}.`
+                      : MODE_WORDS[mode].text}
+                  </span>
                 </button>
               );
             })}
@@ -206,8 +212,14 @@ export function ModeButton({
   const from = mode === "steering" ? "watching" : "steering";
   const items = state.mode === from ? modeChanges(state, mode, room.name) : [];
   if (!items.length && !opened) return null;
-  const label = mode === "steering" ? "Start steering…" : "Switch watering off…";
-  const Icon = mode === "steering" ? Play : Pause;
+  // Steering waits while the controller takes on a saved setup change, and comes back by itself.
+  const waits = mode === "steering" && !!state.waitingSetup;
+  const label = waits
+    ? "Waiting for the controller…"
+    : mode === "steering"
+      ? "Start steering…"
+      : "Switch watering off…";
+  const Icon = waits ? Clock : mode === "steering" ? Play : Pause;
   const start = () => setOpened({ from: state.mode, items });
   return (
     <>
@@ -216,7 +228,7 @@ export function ModeButton({
           <button
             type="button"
             className="status-line-action"
-            disabled={!live(controller)}
+            disabled={!live(controller) || waits}
             onClick={start}
           >
             {label}
@@ -226,7 +238,8 @@ export function ModeButton({
             size="sm"
             className="start-steering"
             data-mode={mode}
-            disabled={!live(controller)}
+            data-waits={waits || undefined}
+            disabled={!live(controller) || waits}
             onClick={start}
           >
             <Icon aria-hidden="true" />

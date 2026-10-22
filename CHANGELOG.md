@@ -17,6 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   saves and is taken on with watering on. Rooms & hardware asks for watering off only when a switch
   is remapped, in plain words, and stops asking once watering is off. When a change does wait, the
   Overview says so in plain words, with **Switch watering off…** beside it.
+- **Watering waits for a saved change.** Saved with watering off, a change is taken on at the
+  controller's next pass, and until then watering can't be switched back on: **Start steering…**
+  reads **Waiting for the controller…**. Switched back on sooner, it used to hold the room until
+  watering was cycled off again.
 
 ### 🔧 Technical notes
 
@@ -41,6 +45,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   plainly, with `ModeButton` (**Switch watering off…**, the mode pill's Watching only review) while
   watering is on; a zone held for it reads **Setup change waiting** and raises no zone notice of its
   own. The demo refuses a save as the integration does. CS-201's help says the same.
+- Dashboard: `setupWait` (`lib/model.ts`) says when the controller takes on a saved change it has
+  not yet (the heartbeat's `setup_revision` below the descriptor's, the heartbeat fresh): "within a
+  minute", or once the hardware it names as running reads off. Until then the mode pill's Steering
+  option, **Start steering…** (`ModeButton`) and Rooms & hardware's watering switch (`WateringPower`)
+  are disabled and say why, and the Watching only line says what it waits for. The demo's controller
+  takes a saved change on at its own next pass (`DEMO_PASS_MS` after the save, however often the
+  dashboard refreshes), with watering on only when it switches nothing differently.
 
 ## [1.4.0] - 2026-10-19
 

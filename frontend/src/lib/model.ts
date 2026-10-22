@@ -894,6 +894,25 @@ const stoppedText = (beat: { at: number | null }, now: number) =>
     ? "The controller app has stopped."
     : `The controller app stopped ${ageText(now - beat.at)} ago.`;
 
+/** When the controller takes on a saved setup change it has not taken on yet, in a few words, or
+ * null when there is none: its heartbeat names an older setup revision than the room's descriptor.
+ * Only while it reports: a silent controller has its own line, and nothing could water then anyway.
+ * Until it has, watering waits rather than going back on (GT4, 2026-10-19: switched back on at
+ * once, it held the room until it was cycled off again). */
+export function setupWait(states: States, room: Room, now = Date.now()): string | null {
+  const heartbeat = resolve(states, room, "sensor", "ai_heartbeat");
+  const have = heartbeat?.attributes.setup_revision,
+    want = descriptor(states, room)?.attributes.setup_revision,
+    pending = heartbeat?.attributes.setup_pending;
+  if (typeof have !== "number" || typeof want !== "number" || want <= have) return null;
+  if (readHeartbeat(heartbeat, now).health !== "fresh") return null;
+  // Held for hardware still running, it takes the change on once that reads off; else at its next
+  // pass.
+  return typeof pending === "string" && /every pump and valve/.test(pending)
+    ? "once every pump and valve in the room reads off"
+    : "within a minute";
+}
+
 /** One line per room from what the controller publishes: watering, holding and why, not watering
  * and what to do, or how old the data is once the controller has stopped reporting. */
 export function roomStatus(states: States, room: Room, now = Date.now()): RoomStatus {
@@ -987,11 +1006,14 @@ export function roomStatus(states: States, room: Room, now = Date.now()): RoomSt
           "Not watering",
           `${pending}. Correct the room in Settings → Rooms & hardware.`,
         );
+  const wait = engine === "off" ? setupWait(states, room, now) : null;
   if (engine === "off")
     return say(
       "stopped",
       "Not watering",
-      "The room is Watching only: the controller reads the probes and follows the phases, but opens no valve. A new room starts this way, so nothing is watered before its hardware has been checked.",
+      wait
+        ? `The room is Watching only while the controller takes on a saved setup change, which it does ${wait}. Steering can start once it has.`
+        : "The room is Watching only: the controller reads the probes and follows the phases, but opens no valve. A new room starts this way, so nothing is watered before its hardware has been checked.",
       { label: "Start steering…", route: "overview", mode: "steering" },
     );
   if (engine !== "on")

@@ -1,4 +1,4 @@
-import { descriptor, numeric, resolve, roomActiveId, roomIsActive } from "./model";
+import { descriptor, numeric, resolve, roomActiveId, roomIsActive, setupWait } from "./model";
 import { growDay } from "./day-timeline";
 import type { Change, Room, States } from "./types";
 
@@ -32,6 +32,8 @@ export interface ModeState {
   roomActiveEntity: string | null;
   engineEntity: string | null;
   engineOn: boolean | null;
+  /** When the controller takes on a saved setup change it has not yet: Steering waits for it. */
+  waitingSetup: string | null;
 }
 
 export function roomMode(states: States, room: Room): ModeState {
@@ -47,7 +49,13 @@ export function roomMode(states: States, room: Room): ModeState {
       : engineOn === false
         ? "watching"
         : null;
-  return { mode, roomActiveEntity, engineEntity, engineOn };
+  return {
+    mode,
+    roomActiveEntity,
+    engineEntity,
+    engineOn,
+    waitingSetup: setupWait(states, room),
+  };
 }
 
 /** The writes that take a room from how it runs now to `target`, with their before and after. */
