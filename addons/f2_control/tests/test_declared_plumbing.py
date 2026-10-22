@@ -218,4 +218,6 @@ def test_the_controller_and_the_integration_agree_on_the_layouts():
         name: (pump == "True", mainline == "True")
         for name, pump, mainline in re.findall(r'"(\w+)":\s*\((True|False),\s*(True|False)\)', block)
     }
-    assert theirs == controller.PLUMBING_LAYOUTS and len(theirs) == 4
+    assert theirs == controller.PLUMBING_LAYOUTS and len(theirs) == 5
+    one_valve = re.search(r"^ONE_VALVE_LAYOUTS = frozenset\(\{(.*?)\}\)", source, re.S | re.M).group(1)
+    assert set(re.findall(r'"(\w+)"', one_valve)) == controller.ONE_VALVE_LAYOUTS == {"pump_one_valve"}

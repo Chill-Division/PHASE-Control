@@ -24,6 +24,7 @@ import math
 import os
 import re
 import signal
+import statistics
 import sys
 import time
 from datetime import date, datetime, timedelta, timezone
@@ -429,7 +430,29 @@ PLUMBING_LAYOUTS = {
     "pump_valves": (True, False),
     "mainline_valves": (False, True),
     "pump_mainline_valves": (True, True),
+    "pump_one_valve": (True, False),
 }
+# The layouts whose one valve waters every zone of the room at once (owner, 2026-10-22: a pump and a
+# fertigation valve for three zones). The zones keep their own probes and readings, and share one phase,
+# one set of targets and every shot (_valve_group).
+ONE_VALVE_LAYOUTS = frozenset({"pump_one_valve"})
+
+
+def combine_readings(values, method="Average"):
+    """Readings made one, as the integration makes a zone's probes one (calculations.combine_probes):
+    their average (also for a method it does not know), median, lowest or highest. None for none."""
+    values = [float(v) for v in values]
+    if not values:
+        return None
+    if method == "Median":
+        value = statistics.median(values)
+    elif method == "Lowest":
+        value = min(values)
+    elif method == "Highest":
+        value = max(values)
+    else:
+        value = sum(values) / len(values)
+    return round(value, 2)
 
 
 def with_plumbing(hw, descriptor):
@@ -655,7 +678,7 @@ def _local(value):
     return at
 
 
-def plumbing_hold(hw):
+def plumbing_hold(hw, zones=()):
     """Why a room must not be watered given the plumbing it DECLARED, or None.
 
     Undeclared (every install set up before this existed): None - pump and main-line are used when
@@ -663,8 +686,32 @@ def plumbing_hold(hw):
     Without this, a pumped room whose pump mapping was cleared (or lost) looked exactly like a
     one-switch tent: the valve opened, no pump ran, and the shot was counted as delivered while
     the plants got nothing. A declaration turns that silent dry run into a hold with a reason.
+
+    `zones`, the room's zones in use, are held to their valves too: one valve for all of them where
+    the room says so (ONE_VALVE_LAYOUTS), else a valve each, declared or not. Two zones on one valve
+    without it were watered once for each zone that wanted water, every zone getting that many times
+    the water while each counted one shot.
     """
     layout = (hw or {}).get("plumbing")
+    valves = (hw or {}).get("valves") or {}
+    used = {zone: valves.get(zone) for zone in zones if valves.get(zone)}
+    if layout in ONE_VALVE_LAYOUTS and len(set(used.values())) > 1:
+        return (
+            "setup says one valve waters every zone, but its zones are mapped to different valves ("
+            + ", ".join(f"zone {zone} {valve}" for zone, valve in sorted(used.items()))
+            + ") - not watering until they agree; map the one valve in the PHASE Control setup"
+        )
+    if layout not in ONE_VALVE_LAYOUTS:
+        shared = {}
+        for zone, valve in sorted(used.items()):
+            shared.setdefault(valve, []).append(zone)
+        for valve, on in shared.items():
+            if len(on) > 1:
+                return (
+                    f"zones {', '.join(map(str, on[:-1]))} and {on[-1]} are mapped to one valve ({valve}) - "
+                    "not watering them once for each zone: give each zone its own valve, or set the "
+                    "room's plumbing to a pump, then one valve for all the zones"
+                )
     if not layout:
         return None
     needs = PLUMBING_LAYOUTS.get(layout)
@@ -1955,18 +2002,102 @@ class Controller:
             )
         return p
 
-    def _snapshot(self, room, zone, now, lights_on, lights_just_on):
+    @classmethod
+    def _valve_mates(cls, room, zone):
+        """The zones a shot on `zone` waters: every zone of a one-valve room, else the zone alone."""
+        group = cls._valve_group(room)
+        return group if group and zone in group else [zone]
+
+    @staticmethod
+    def _valve_group(room):
+        """The zones one valve waters together, the one that decides for them first, or None: a room
+        that declares one valve for every zone (ONE_VALVE_LAYOUTS), with more than one zone in use.
+        The first zone's settings are the room's. Its pass decides for all of them on all their readings
+        (_group_readings), the others take on its phase and day (_follow_lead), and its shot is counted
+        on each of them (_count_shot)."""
+        if room.hw.get("plumbing") not in ONE_VALVE_LAYOUTS or len(room.zones) < 2:
+            return None
+        return sorted(room.zones)
+
+    def _group_readings(self, room, group):
+        """A one-valve room's one moisture reading and one EC -> (vwc, ec, own): its zones' readings
+        made one the way its first zone makes its own probes one (that zone's moisture or EC method),
+        and each zone's own (vwc, ec), None where it can't be read."""
+        own = {
+            zone: tuple(
+                self._read_sensor(
+                    self._fused_id(room.prefix, metric, zone, room.zones[zone].get(metric)), lo=0, hi=hi
+                )
+                for metric, hi in (("vwc", 100), ("ec", 20))
+            )
+            for zone in group
+        }
+        made = []
+        for index, metric in enumerate(("vwc", "ec")):
+            method = ha_get(f"select.crop_steering_{room.prefix}zone_{group[0]}_{metric}_method")[0]
+            values = [read[index] for read in own.values() if read[index] is not None]
+            made.append(combine_readings(values, method or "Average"))
+        return made[0], made[1], own
+
+    # What a one-valve room's other zones take on from its first zone's pass (_valve_group): the phase
+    # and the day it is in, its counters and its EC steer, so each says what the room does and counts it.
+    _FOLLOWED = ("phase", "last_phase_change", "peak", "shots", "daily_vol", "last_daily_reset",
+                 "last_shot", "last_shot_is_anchor", "ec_offset", "last_ec_steer")
+
+    def _follow_lead(self, room, group):
+        lead = room.state[group[0]]
+        changed = False
+        for zone in group[1:]:
+            st = room.state[zone]
+            for key in self._FOLLOWED:
+                if st.get(key) != lead.get(key):
+                    st[key] = lead.get(key)
+                    changed = True
+        if changed:
+            self._save_state()
+
+    def _report_unread_zones(self, room, own, now):
+        """A one-valve room is watered on the readings its zones give: one zone's probe that can't be
+        read leaves the room's reading and is said, as any dead probe is. With none readable the first
+        zone's pass is blind, and says so itself."""
+        since = room.__dict__.setdefault("_unread_since", {})
+        unread = [zone for zone, (vwc, _ec) in own.items() if vwc is None]
+        for zone in own:
+            if zone not in unread or len(unread) == len(own):
+                since.pop(zone, None)
+                continue
+            out_min = (now - since.setdefault(zone, now)).total_seconds() / 60.0
+            if out_min < BLIND_GRACE_MIN:
+                continue
+            looking = self._fused_id(room.prefix, "vwc", zone, room.zones[zone].get("vwc"))
+            code, what = self._unreadable(looking)
+            self._alert(
+                f"blind_{room.slug}_z{zone}",
+                code,
+                _PROBE_ALERTS[code][0],
+                f"{what} One valve waters this room's zones together, so until it reads again they are "
+                f"watered on the others' readings. {_PROBE_ALERTS[code][1]}\n\nSensor: {looking}",
+                room=room,
+                zone=zone,
+            )
+
+    def _snapshot(self, room, zone, now, lights_on, lights_just_on, readings=None):
+        """The zone as decide() sees it, from its own moisture and EC, or from `readings` (a one-valve
+        room's, read for all its zones: _group_readings)."""
         st = room.state[zone]
-        vwc = self._read_sensor(
-            self._fused_id(room.prefix, "vwc", zone, room.zones[zone].get("vwc")),
-            lo=0,
-            hi=100,
-        )
-        ec = self._read_sensor(
-            self._fused_id(room.prefix, "ec", zone, room.zones[zone].get("ec")),
-            lo=0,
-            hi=20,
-        )
+        if readings is not None:
+            vwc, ec = readings
+        else:
+            vwc = self._read_sensor(
+                self._fused_id(room.prefix, "vwc", zone, room.zones[zone].get("vwc")),
+                lo=0,
+                hi=100,
+            )
+            ec = self._read_sensor(
+                self._fused_id(room.prefix, "ec", zone, room.zones[zone].get("ec")),
+                lo=0,
+                hi=20,
+            )
         if vwc is None:
             return None, self._params(room, zone)
         if vwc > st["peak"]:
@@ -2184,9 +2315,13 @@ class Controller:
         return True, size, Reason(f"TEST shot {TEST_SHOT_S} s (asked for)", "test_shot")
 
     def _shot_litres(self, room, zone, size):
-        """What a shot of `size` % takes from the reservoir: that much of the zone's substrate."""
-        substrate = self._substrate_l(room, zone)
-        return size / 100.0 * substrate if math.isfinite(substrate) and substrate > 0 else 0.0
+        """What a shot of `size` % takes from the reservoir: that much of the zone's substrate, and in a
+        one-valve room of every zone's, which the one shot waters (_valve_group)."""
+        litres = 0.0
+        for mate in self._valve_mates(room, zone):
+            substrate = self._substrate_l(room, mate)
+            litres += size / 100.0 * substrate if math.isfinite(substrate) and substrate > 0 else 0.0
+        return litres
 
     def _reservoir_block(self, room, zone, size):
         """Why a shot waits for the reservoir, or None: it would take the reservoir under its minimum,
@@ -2229,9 +2364,10 @@ class Controller:
         shot as the engine would size it from where the zone is now (next_shot_size), or a maintenance
         shot for a zone without a probe. What a refill is planned against (_refill_due)."""
         litres = 0.0
+        group = self._valve_group(room)
         for zone in room.zones:
             p = params.get(zone)
-            if p is None:
+            if p is None or (group and zone in group[1:]):  # watered by the first zone's (_shot_litres)
                 continue
             st, snap = room.state[zone], snaps.get(zone)
             size = (next_shot_size(dataclasses.replace(snap, phase=st["phase"], shot_count=st["shots"]), p)
@@ -3014,13 +3150,16 @@ class Controller:
         snapshot = getattr(room, "strategy_snapshot", None)
         # A hardware fault holds every zone of the room, wanting water or not: none reads "Optimal".
         held = self._hardware_fault_short(room)
+        group = self._valve_group(room)
         for zone, (fire, _size, reason) in decisions.items():
+            # A one-valve room reads as one: its first zone's snapshot is all its zones' readings.
+            reads = group[0] if group and zone in group else zone
             if not fire:
                 self._publish_zone_status(
                     room, zone,
                     zone_status_label(room.state[zone]["phase"], False,
                                       held or strategy_block(snapshot, zone),
-                                      not held and zone not in snaps, reason),
+                                      not held and reads not in snaps, reason),
                     reason,
                 )
         self._heartbeat(room, now, self._hardware_fault_block(room))
@@ -3105,7 +3244,7 @@ class Controller:
                 "no hardware mapped — set this zone's valve (and the pump and mainline, if the room "
                 "has them) in the PHASE Control integration (or the add-on `hardware` option)"
             )
-        plumbing = plumbing_hold(hw)
+        plumbing = plumbing_hold(hw, room.zones)
         if plumbing:
             self._alert(
                 f"plumbing_{room.slug}",
@@ -3134,6 +3273,13 @@ class Controller:
             f"switch.crop_steering_{room.prefix}zone_{zone}_manual_override", False
         ):
             return "manual override"
+        for mate in self._valve_mates(room, zone):  # one valve: a zone paused holds them all
+            if mate == zone:
+                continue
+            if not self._on(f"switch.crop_steering_{room.prefix}zone_{mate}_enabled", True):
+                return f"{self._zone_title(room, mate)} paused (one valve waters every zone)"
+            if self._on(f"switch.crop_steering_{room.prefix}zone_{mate}_manual_override", False):
+                return f"{self._zone_title(room, mate)} on manual override (one valve waters every zone)"
         # External operator holds (tank dosing / manual fill / flush) are configurable
         # (self.hold_entities, empty by default) — an install without them never holds here.
         for f in self.hold_entities:
@@ -3339,6 +3485,24 @@ class Controller:
             "measurement": "estimated controller delivery; current grow-day to date",
         }
         return round(sum(item["litres"] for item in history), 2), attrs
+
+    def _shares(self, room, zone):
+        """What a shot on `zone` gives each zone it waters, as a part of what `zone` gets: the zone alone
+        gets it all; in a one-valve room (_valve_group) each zone gets its own flow's worth. Read before
+        anything opens, as the shot's litres are, so an edit mid-shot rewrites neither."""
+        mates = self._valve_mates(room, zone)
+        if len(mates) == 1:
+            return {zone: 1.0}
+        flow = self._zone_flow_lps(room, zone)
+        known = math.isfinite(flow) and flow > 0
+        return {mate: self._zone_flow_lps(room, mate) / flow if known and mate != zone else 1.0
+                for mate in mates}
+
+    def _count_shot(self, room, size_pct, *, delivered_l, steering, shares):
+        """A delivered shot's water, counted on every zone it reached (`shares`, from _shares)."""
+        for mate, share in shares.items():
+            self._advance_shot_counters(room, mate, size_pct, delivered_l=delivered_l * share,
+                                        steering=steering)
 
     def _advance_shot_counters(self, room, zone, size_pct, *, delivered_l=None, steering=True):
         """A delivered shot's water, counted. A test shot (steering False) is water like any other, but
@@ -3743,16 +3907,17 @@ class Controller:
         step = 2.0
         valve = room.hw.get("valves", {}).get(zone)
         valve_seen_on = False
+        stops = [
+            (room.enable_flag, "off"),
+            (f"switch.crop_steering_{room.prefix}room_active", "off"),
+        ]
+        for mate in self._valve_mates(room, zone):  # one valve: any zone it waters switched off stops it
+            stops += [
+                (f"switch.crop_steering_{room.prefix}zone_{mate}_enabled", "off"),
+                (f"switch.crop_steering_{room.prefix}zone_{mate}_manual_override", "on"),
+            ]
         while time.monotonic() < deadline:
-            for entity, stop_state in (
-                (room.enable_flag, "off"),
-                (f"switch.crop_steering_{room.prefix}room_active", "off"),
-                (f"switch.crop_steering_{room.prefix}zone_{zone}_enabled", "off"),
-                (
-                    f"switch.crop_steering_{room.prefix}zone_{zone}_manual_override",
-                    "on",
-                ),
-            ):
+            for entity, stop_state in stops:
                 remaining = deadline - time.monotonic()
                 if remaining <= 0:
                     break
@@ -3858,7 +4023,7 @@ class Controller:
         if getattr(room, "shot_inflight", None):
             self._say(room, zone, "shot held: an interrupted shot's hardware is not accounted for yet")
             return
-        plumbing = plumbing_hold(room.hw)
+        plumbing = plumbing_hold(room.hw, room.zones)
         if plumbing:  # never open a valve on a room whose declared pump is not there to run
             self._say(room, zone, f"shot held: {plumbing}")
             return
@@ -3871,6 +4036,7 @@ class Controller:
         # substrate or dripper configuration mid-shot must not rewrite its litres.
         nominal_l = (flow_lps * duration_s if flow_lps is not None
                      else size_pct / 100.0 * self._substrate_l(room, zone))
+        shares = self._shares(room, zone)
         self._busy = True
         self._shot_room = room  # the room whose shot is in flight right now (see _safe_off)
         hw = room.hw
@@ -3957,8 +4123,8 @@ class Controller:
                 # Counted as a kill-switch abort is: the shot counts, with only the water it delivered.
                 run = elapsed / duration_s if duration_s > 0 else 1.0
                 counted = True
-                self._advance_shot_counters(room, zone, size_pct * run, delivered_l=nominal_l * run,
-                                            steering=steering)
+                self._count_shot(room, size_pct * run, delivered_l=nominal_l * run, steering=steering,
+                                 shares=shares)
                 return
             # CLOSE sequence. A failed close (e.g. HA went unreachable mid-shot) leaves the valve
             # OPEN and the SOFTWARE CANNOT fix it — only the hardware fail-safe (NC valve /
@@ -3991,17 +4157,23 @@ class Controller:
             # only delivered part of the shot, so scale the volume by the fraction actually run.
             delivered_pct = size_pct * (elapsed / duration_s if duration_s > 0 else 1.0)
             counted = True
-            self._advance_shot_counters(
-                room, zone, delivered_pct,
+            self._count_shot(
+                room, delivered_pct,
                 delivered_l=nominal_l * (elapsed / duration_s if duration_s > 0 else 1.0),
-                steering=steering,
+                steering=steering, shares=shares,
             )
             if aborted:
                 by = aborted[1]
                 why = {
                     room.enable_flag: "the engine switch was turned off",
                     f"switch.crop_steering_{room.prefix}room_active": "Room Active was switched off",
-                    f"switch.crop_steering_{room.prefix}zone_{zone}_enabled": "this zone was switched off",
+                    **{
+                        f"switch.crop_steering_{room.prefix}zone_{mate}_enabled": (
+                            f"{self._zone_title(room, mate)}, on the same valve, was switched off"
+                            if mate != zone else "this zone was switched off"
+                        )
+                        for mate in self._valve_mates(room, zone)
+                    },
                 }.get(by, "manual override was turned on")
                 self._alert(
                     f"killshot_{room.slug}_z{zone}",
@@ -4022,8 +4194,8 @@ class Controller:
             if valve_started is not None and not counted:
                 counted = True
                 run = (time.monotonic() - valve_started) / duration_s if duration_s > 0 else 1.0
-                self._advance_shot_counters(room, zone, size_pct * run, delivered_l=nominal_l * run,
-                                            steering=steering)
+                self._count_shot(room, size_pct * run, delivered_l=nominal_l * run, steering=steering,
+                                 shares=shares)
             raise
         except Exception as e:
             log("shot error", room.slug, zone, e)
@@ -4296,8 +4468,11 @@ class Controller:
                                           "daily water limit left")
                     size, dur = round(size * allowed / dur, 2), allowed
             what, why = log_words.shot(reason)
+            mates = self._valve_mates(room, zone)
+            litres = flow * dur if len(mates) == 1 else sum(self._zone_flow_lps(room, z) for z in mates) * dur
+            every = f" for {len(mates)} zones" if len(mates) > 1 else ""
             self._say(room, zone, f"{st['phase']} {what} {log_words.amount(size)}% for {dur} s "
-                                  f"(~{flow * dur:.1f} L): {why}")
+                                  f"(~{litres:.1f} L{every}): {why}")
             # Count configured flow x actual runtime, including caps, truncation,
             # the minimum duration and partial aborts. Preserve this flow snapshot
             # so later sizing edits cannot change an already delivered volume.
@@ -4571,8 +4746,21 @@ class Controller:
         )
         lights_just_on = lights_on and was_off
         snaps, decisions, healthy, blind, params = {}, {}, [], [], {}
+        # One valve for every zone: the first zone's pass decides for them all, on all their readings.
+        group = self._valve_group(room)
+        followers = set(group[1:]) if group else set()
+        readings, own, waiting = None, {}, {}
+        if group:
+            for zone in group[1:]:  # a phase picked on any of them moves them all
+                self._apply_phase_request(room, zone, room.state[group[0]], now)
+            vwc, ec, own = self._group_readings(room, group)
+            readings = (vwc, ec)
+            self._report_unread_zones(room, own, now)
         for zone in room.zones:
             st = room.state[zone]
+            if zone in followers:
+                self._water_usage(room, zone, now)  # its water is its own, counted by _count_shot
+                continue
             self._apply_phase_request(room, zone, st, now)
             self._water_usage(room, zone, now)
             if self._starts_day(room, st, now, lights_on, lights_just_on):
@@ -4580,7 +4768,7 @@ class Controller:
                 # below clears it as well, but only after decide() has read the P2 threshold (its P0
                 # bypass test) with yesterday's offset baked in.
                 st["ec_offset"], st["last_ec_steer"] = 0.0, None
-            snap, p = self._snapshot(room, zone, now, lights_on, lights_just_on)
+            snap, p = self._snapshot(room, zone, now, lights_on, lights_just_on, readings)
             params[zone] = p
             if snap is None:
                 room._blind_since.setdefault(zone, now)
@@ -4629,6 +4817,7 @@ class Controller:
                     **({"shot_count": 0} if new_phase == "P1" else {}),
                 )
             self._publish_waiting_for(room, zone, shown, p, now)
+            waiting[zone] = (shown, p)
             # The EC steer runs on ec_smooth, which only settled readings feed (see _settled_ec).
             if (snap.ec is not None and snap.ec_smooth is not None and p.stacking_on
                     and st["phase"] == "P2" and p.ec_target_p2 > 0):
@@ -4660,6 +4849,7 @@ class Controller:
         for zone, p in blind:
             st = room.state[zone]
             self._publish_waiting_for(room, zone, None, p, now)  # no probe: nothing to compare
+            waiting[zone] = (None, p)
             # A dead probe must NOT freeze the daily cycle: still honour the time-based
             # phase forces (lights-off -> P3, P3 -> P0 at the new photoperiod). Only the
             # VWC-driven transitions are paused while blind.
@@ -4711,13 +4901,21 @@ class Controller:
         room._drawn_l = room._waiting_l = 0.0  # this pass's shots, and any waiting for a refill
         for zone in room.zones:  # a test shot asked for takes the zone's turn this pass
             test = self._test_shot(room, zone, now)
-            if test:
-                decisions[zone] = test
+            if test:  # in a one-valve room the room's turn: its one shot waters every zone
+                decisions[group[0] if zone in followers else zone] = test
+        if group:
+            self._follow_lead(room, group)
+            for zone in group[1:]:
+                params[zone] = self._params(room, zone)
+                if group[0] in decisions:
+                    decisions[zone] = decisions[group[0]]
+                if group[0] in waiting:
+                    self._publish_waiting_for(room, zone, *waiting[group[0]], now)
         if room._beat is None or not room._beat[1]:
             self._report_before_acting(room, decisions, snaps, now)
         pub = {}
         for zone in room.zones:
-            if zone not in decisions:
+            if zone not in decisions or zone in followers:
                 continue
             fire, size, reason = decisions[zone]
             # A dead probe cannot establish an emergency on THIS row. Copy/fallback
@@ -4779,6 +4977,13 @@ class Controller:
                 "vmax": room._vmax.get(zone),
                 "next_h": next_h,
             }
+        if group and group[0] in pub:
+            first = pub[group[0]]
+            for zone in group[1:]:  # what the room's one shot did, said on every zone it waters
+                pub[zone] = {**first, "phase": room.state[zone]["phase"], "ec_settled": None,
+                             "p": params[zone], "vmax": None}
+            for zone in group:  # each zone's own readings, for its own safety status
+                pub[zone]["vwc"], pub[zone]["ec"] = own.get(zone, (None, None))
         for z, why in cross_zone_outliers(snaps):
             self._alert(
                 f"xzone_{room.slug}_{z}",
