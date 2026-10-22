@@ -25,6 +25,7 @@ version being released.
 
 - Mapping a sensor or renaming no longer needs watering off, and a change that does is picked up within a minute, not five.
 - After a setup change, watering waits until the controller has picked it up, so switching back on too soon can't hold the room.
+- A room switched to Steering that isn't watering now says Steering · on hold, in amber, instead of plain Steering.
 
 ## 1.4.0 - 2026-10-19
 

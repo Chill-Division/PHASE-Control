@@ -21,6 +21,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   controller's next pass, and until then watering can't be switched back on: **Start steering…**
   reads **Waiting for the controller…**. Switched back on sooner, it used to hold the room until
   watering was cycled off again.
+- **Steering says when it is on hold.** A room switched to Steering that waters nothing (a fault, a
+  setup change waiting, a strategy hold, no word from the controller) reads **Steering · on hold**
+  in amber, in the pill and the rooms column, not a plain Steering. Its clock and Coming up expect
+  no shot from it, and the Zones heading says none is watering.
 
 ### 🔧 Technical notes
 
@@ -52,6 +56,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   are disabled and say why, and the Watching only line says what it waits for. The demo's controller
   takes a saved change on at its own next pass (`DEMO_PASS_MS` after the save, however often the
   dashboard refreshes), with watering on only when it switches nothing differently.
+- Dashboard: `onHold` (`lib/room-mode.ts`) is the room's switches saying Steering while `roomStatus`
+  is `stopped` or `stale`. The mode pill (`data-held`, its label "Steering, on hold") and the rooms
+  column's mode then read "Steering · on hold" in the warning tone, and the Zones heading "none
+  watering: the room is on hold". `comingUp` no longer lists the controller's own next shot for a
+  held zone (`next.basis` "held"), as the clock's ticks already did not: the controller publishes
+  what a zone waits for even while a hold keeps it from acting. `verify-live` stages a held room.
 
 ## [1.4.0] - 2026-10-19
 
