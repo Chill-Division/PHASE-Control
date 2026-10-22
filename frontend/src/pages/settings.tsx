@@ -27,6 +27,7 @@ import { Pill, type PillTone } from "@/components/mini-visuals";
 import type { Controller } from "@/lib/types";
 import { errorText } from "@/lib/utils";
 import { RoomPower } from "@/components/room-controls";
+import { RoomOrder } from "@/components/room-order";
 import type { ThemePreference, ThemeSource } from "@/lib/ha-theme";
 import { defaultRoomChoice, setDefaultRoomChoice } from "@/lib/default-room";
 import { useWaterView, type WaterView } from "@/lib/water-view";
@@ -268,6 +269,7 @@ export function Settings({
                 </p>
               </div>
             )}
+            {controller.rooms.length > 1 && <RoomOrder controller={controller} />}
             <div>
               <h3 id="water-view-label">Water today, shown as</h3>
               <div

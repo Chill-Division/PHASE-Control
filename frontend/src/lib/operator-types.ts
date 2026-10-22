@@ -21,7 +21,8 @@ export type OperatorAction =
   | "test_shot"
   | "whats_new_get"
   | "whats_new_seen"
-  | "whats_new_tour_seen";
+  | "whats_new_tour_seen"
+  | "room_order_save";
 
 export interface ParameterLimit {
   value: number | null;

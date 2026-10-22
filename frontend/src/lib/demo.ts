@@ -83,6 +83,8 @@ export function createDemo(now = Date.now()): States {
       ...(index ? {} : DEMO_RESERVOIR),
       // Both rooms have been saved in Rooms & hardware.
       setup_revision: 1,
+      // No room order has been chosen in Settings yet.
+      room_position: null,
     });
     put(`switch.demo_${prefix}pump`, index ? "off" : "on");
     // A probe's three EC readings as some probe firmware publishes them, its estimated pore EC

@@ -301,6 +301,14 @@ export function Setup({
     if (draft)
       setDraft({ ...draft, zones: draft.zones.map((z) => (z.id === id ? { ...z, ...patch } : z)) });
   }
+  /** The rooms in the order the dashboard lists them (Settings › Room order), archived ones after. */
+  function inOrder(rooms: SetupRoom[]) {
+    const place = (room: SetupRoom) => {
+      const at = controller.rooms.findIndex((listed) => listed.prefix === room.prefix);
+      return at < 0 ? Infinity : at;
+    };
+    return [...rooms].sort((a, b) => place(a) - place(b) || 0);
+  }
   function candidates(kind: string) {
     return (data?.candidates || [])
       .filter((c) => (kind === "switch" ? c.domain === "switch" : c.domain === "sensor"))
@@ -569,7 +577,7 @@ export function Setup({
               >
                 {isNew && <option value="new">New room</option>}
                 {!data.rooms.length && !isNew && <option value="">No rooms configured</option>}
-                {data.rooms.map((r) => (
+                {inOrder(data.rooms).map((r) => (
                   <option key={r.entry_id} value={r.entry_id}>
                     {r.room_name}
                     {!r.active ? " (archived)" : ""}

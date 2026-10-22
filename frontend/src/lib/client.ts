@@ -192,6 +192,7 @@ export class HaClient {
       "whats_new_get",
       "whats_new_seen",
       "whats_new_tour_seen",
+      "room_order_save",
     ];
     if (!allowed.includes(action)) throw new Error("Unsupported workspace action.");
     const outdated = new Error(

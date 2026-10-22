@@ -152,10 +152,12 @@ export function descriptor(states: States, room: Room): EntityState | undefined 
 }
 export function discoverRooms(states: States): Room[] {
   const rooms: Room[] = [];
+  // Each room's place in the order chosen in Settings, which its descriptor publishes.
+  const places = new Map<string, number>();
   for (const entity of Object.values(states)) {
     if (!/^sensor\.crop_steering_.*engine_config$/.test(entity.entity_id)) continue;
     if (entity.attributes.active === false) continue;
-    const { prefix, slug, num_zones, room_name, friendly_name } = entity.attributes;
+    const { prefix, slug, num_zones, room_name, friendly_name, room_position } = entity.attributes;
     if (
       typeof prefix !== "string" ||
       !/^(?:[a-z0-9_]+_)?$/.test(prefix) ||
@@ -167,6 +169,8 @@ export function discoverRooms(states: States): Room[] {
     if (rooms.some((r) => r.prefix === prefix)) continue;
     // ':' cannot occur in a validated prefix, including named "f2"/"default".
     const id = `room:${prefix}`;
+    if (typeof room_position === "number" && Number.isInteger(room_position) && room_position >= 0)
+      places.set(id, room_position);
     // The sensor's HA friendly name can be generic or retained from an older setup.
     // The descriptor publishes the actual user-configured room name.
     const configuredName = typeof room_name === "string" ? room_name.trim() : "";
@@ -187,8 +191,23 @@ export function discoverRooms(states: States): Room[] {
             : "Default room"),
     });
   }
-  return rooms.sort((a, b) =>
-    a.prefix === "" ? -1 : b.prefix === "" ? 1 : a.name.localeCompare(b.name),
+  // The rooms the chosen order names first, in it (owner, 2026-10-22); then the rest, as before any
+  // order was chosen: the first room set up, then the others by name.
+  const place = (room: Room) => places.get(room.id) ?? Infinity;
+  return rooms.sort(
+    (a, b) =>
+      place(a) - place(b) ||
+      (a.prefix === "" ? -1 : b.prefix === "" ? 1 : a.name.localeCompare(b.name)),
+  );
+}
+
+/** The integration keeps a room order (each room's descriptor says where it comes, or null): one
+ * from before it publishes none, and Settings then has no order to change. */
+export function roomOrderOffered(states: States): boolean {
+  return Object.values(states).some(
+    (entity) =>
+      /^sensor\.crop_steering_.*engine_config$/.test(entity.entity_id) &&
+      "room_position" in entity.attributes,
   );
 }
 
