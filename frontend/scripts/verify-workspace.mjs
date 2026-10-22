@@ -731,6 +731,26 @@ try {
     assert.equal((await reading.innerText()).split("\n")[0], "0.639");
     await page.keyboard.press("Escape");
   });
+  await check("The EC picker asks for pore-water EC, and lists it before bulk EC", async () => {
+    // Owner, 2026-10-22: a probe gives a raw conductivity, a bulk EC and an estimated pwEC, and they
+    // differ a lot. The EC targets are pwEC; the picker said nothing and listed the bulk ones first.
+    await fresh("setup");
+    await visible(page.locator("#room-name"));
+    const map = page.getByRole("button", { name: "Map Zone 1 EC probes", exact: true });
+    const hint = page.locator(`[id="${await map.getAttribute("aria-describedby")}"]`);
+    assert.equal(await hint.innerText(), "Pore-water EC (pwEC), not bulk EC or a raw conductivity.");
+    await map.click();
+    const dialog = page.getByRole("dialog");
+    assert.match(await dialog.innerText(), /Pore-water EC \(pwEC\) is what the EC targets are written in/);
+    const names = await dialog.locator(".mapping-result strong").allInnerTexts();
+    assert.equal(names[0], "Demo Substrate Estimated pwEC");
+    const others = names.filter((name) => /\bEC\b/.test(name) && !/Bulk|pwEC/.test(name));
+    assert.ok(others.length > 0, "the zones' own EC probes are offered too");
+    const after = Math.max(...others.map((name) => names.indexOf(name)));
+    for (const name of ["Demo Substrate Bulk EC", "Demo Substrate Conductivity"])
+      assert.ok(names.indexOf(name) > after, `${name} comes after every other EC`);
+    await page.keyboard.press("Escape");
+  });
   await check(
     "Schedule and setup are accessible and fit 390px with keyboard reachable mappings",
     async () => {
