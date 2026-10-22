@@ -12,29 +12,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- **A setup change no longer strands a room.** The controller takes a saved change on within a
-  minute, not five, and one that changes no switch (a sensor such as the tank's, a name, a size)
-  saves and is taken on with watering on. Rooms & hardware asks for watering off only when a switch
-  is remapped, in plain words, and stops asking once watering is off. When a change does wait, the
-  Overview says so in plain words, with **Switch watering off…** beside it.
-- **Watering waits for a saved change.** Saved with watering off, a change is taken on at the
-  controller's next pass, and until then watering can't be switched back on: **Start steering…**
-  reads **Waiting for the controller…**. Switched back on sooner, it used to hold the room until
-  watering was cycled off again.
-- **Steering says when it is on hold.** A room switched to Steering that waters nothing (a fault, a
-  setup change waiting, a strategy hold, no word from the controller) reads **Steering · on hold**
-  in amber, in the pill and the rooms column, not a plain Steering. Its clock and Coming up expect
-  no shot from it, and the Zones heading says none is watering.
-- **Cards fill the width, in even rows.** The Insights week, the dosers, the Schedule's weeks and
-  the stock tanks fill the whole width on a wide screen, and where they wrap the rows come out even:
-  four stock tanks beside the rooms list go two and two, not three and one. Phones are as they were.
 - **One valve for every zone.** A room whose zones have no valve each, only the pump and one valve
   that waters them all (a fertigation valve), can be set up as *a pump, then one valve for all the
   zones*. Its zones keep their own probes, cards and charts but share every shot: the controller
   decides once, on all their readings, and counts the shot on each, so they share one phase and one
-  set of targets. The setup wizard now asks how the room is plumbed with the zone count, then only
-  for the valves and switches that plumbing has. Two zones on one valve under any other plumbing
-  are held, not watered once for each zone.
+  set of targets. The setup wizard asks how a room is plumbed with its zone count, then only for the
+  valves and switches that plumbing has.
+- **A setup change no longer strands a room.** The controller takes a saved change on within a
+  minute, not five, and one that changes no switch (a sensor such as the tank's, a name, a size)
+  saves and is taken on with watering on. A change that remaps a switch asks for watering off, in
+  plain words, and watering then waits for the controller rather than holding the room when it is
+  switched back on too soon.
+- **Steering says when it is on hold.** A room switched to Steering that waters nothing reads
+  **Steering · on hold** in amber, and its clock and Coming up expect no shot from it.
+- Bug fixes and improvements.
 
 ### 🔧 Technical notes
 
