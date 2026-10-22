@@ -16,7 +16,7 @@ import { DayDial, phaseColor } from "@/components/day-dial";
 import { time } from "@/components/dashboard";
 import { ageText } from "@/lib/controller-health";
 import { roomStatus, runningVersions } from "@/lib/model";
-import { MODE_WORDS, roomClock, roomMode, zoneColor } from "@/lib/room-mode";
+import { MODE_WORDS, onHold, roomClock, roomMode, zoneColor } from "@/lib/room-mode";
 import type { Controller, Room } from "@/lib/types";
 import "./shell.css";
 
@@ -223,6 +223,7 @@ export function RoomsColumn({
         {controller.rooms.map((room) => {
           const status = roomStatus(controller.states, room, now);
           const { mode } = roomMode(controller.states, room);
+          const held = onHold(mode, status.tone);
           return (
             <button
               key={room.id}
@@ -237,9 +238,13 @@ export function RoomsColumn({
                 <span className="room-card-head">
                   <strong>{room.name}</strong>
                   {mode && (
-                    <span className="room-card-mode">
-                      <i style={{ background: MODE_DOT[mode] }} aria-hidden="true" />
+                    <span className="room-card-mode" data-held={held || undefined}>
+                      <i
+                        style={{ background: held ? "var(--warning)" : MODE_DOT[mode] }}
+                        aria-hidden="true"
+                      />
                       {MODE_WORDS[mode].label}
+                      {held && " · on hold"}
                     </span>
                   )}
                 </span>

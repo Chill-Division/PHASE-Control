@@ -35,7 +35,14 @@ import type { DrybackTrend } from "@/lib/dryback";
 import { dayDryback, type GrowDay } from "@/lib/day-timeline";
 import { roomStatus } from "@/lib/model";
 import { scheduleDays } from "@/components/targets-banner";
-import { MODE_WORDS, modeChanges, roomMode, zoneColor, type RoomMode } from "@/lib/room-mode";
+import {
+  MODE_WORDS,
+  modeChanges,
+  onHold,
+  roomMode,
+  zoneColor,
+  type RoomMode,
+} from "@/lib/room-mode";
 import type { Controller, Notice, Zone } from "@/lib/types";
 import { dailyWater } from "@/lib/water-delivery";
 import { mlPerPlant, plantText, roomPerPlant, useWaterView } from "@/lib/water-view";
@@ -116,6 +123,7 @@ export function ModeControl({ controller }: { controller: Controller }) {
   }>({ from: null, items: [] });
   if (!state.engineEntity && !state.roomActiveEntity) return null;
   const words = state.mode ? MODE_WORDS[state.mode].label : "Unknown";
+  const held = onHold(state.mode, roomStatus(controller.states, room).tone);
   const choices = (["steering", "watching", "off"] as const).filter(
     (mode) => mode !== "off" || state.roomActiveEntity,
   );
@@ -125,13 +133,14 @@ export function ModeControl({ controller }: { controller: Controller }) {
         type="button"
         className="mode-pill"
         data-mode={state.mode ?? "unknown"}
+        data-held={held || undefined}
         aria-haspopup="dialog"
-        aria-label={`How ${room.name} runs: ${words}. Change`}
+        aria-label={`How ${room.name} runs: ${words}${held ? ", on hold" : ""}. Change`}
         disabled={!live(controller)}
         onClick={() => setOpen(true)}
       >
         <i aria-hidden="true" />
-        {words}
+        {held ? `${words} · on hold` : words}
         <ChevronDown size={17} aria-hidden="true" />
       </button>
       <Dialog open={open} onOpenChange={setOpen}>
@@ -709,8 +718,9 @@ export function comingUp(lanes: Lane[], day: GrowDay, now: number): Upcoming[] {
     const { next } = lane;
     let live: number | null = null;
     // What the controller has said comes first, so the list agrees with the zone's card; the
-    // dashboard's own estimate fills in only what it hasn't, against the trigger it uses.
-    const said = lane.stopped ? null : controllerShot(lane, now);
+    // dashboard's own estimate fills in only what it hasn't, against the trigger it uses. A held
+    // zone has none: the controller says what it waits for even while a hold keeps it from acting.
+    const said = lane.stopped || next.basis === "held" ? null : controllerShot(lane, now);
     if (said?.time !== null && said?.time !== undefined) {
       live = said.time;
       items.push({ time: live, who, color, text: said.text, due: live <= now, shot: true });

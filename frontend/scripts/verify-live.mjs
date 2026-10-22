@@ -488,6 +488,35 @@ try {
     assert.deepEqual(await reading(1, 2), ["Unavailable / unverified", "off"]);
     assert.deepEqual(await reading(2, 2), ["Current", "on"]);
   });
+  await check("a room switched to Steering but held says so, in its pill and the rooms column", async () => {
+    // GT4, 2026-10-19: the pill said Steering over a room held for a setup change.
+    const beat = "sensor.crop_steering_ai_heartbeat";
+    const before = states[beat].attributes;
+    put(beat, "online", {
+      ...before,
+      last_beat: new Date().toISOString(),
+      setup_pending: "Setup change waiting (taken on while watering is off)",
+    });
+    await page.goto(`${base}/dashboard.html?room=room:#/overview`, { waitUntil: "networkidle" });
+    const pill = page.locator(".mode-pill");
+    await visible(pill);
+    assert.equal(await pill.getAttribute("aria-label"), "How Flower 2 runs: Steering, on hold. Change");
+    assert.equal((await pill.innerText()).trim(), "Steering · on hold");
+    const mode = (name) =>
+      page
+        .locator("nav.rooms-column button.room-card")
+        .filter({ has: page.getByText(name, { exact: true }) })
+        .locator(".room-card-mode");
+    assert.equal((await mode("Flower 2").innerText()).trim(), "Steering · on hold");
+    assert.equal((await mode("Flower 1").innerText()).trim(), "Steering");
+    // Taken on: plain Steering again.
+    put(beat, "online", { ...before, last_beat: new Date().toISOString() });
+    await page.reload({ waitUntil: "networkidle" });
+    await visible(pill);
+    assert.equal(await pill.getAttribute("aria-label"), "How Flower 2 runs: Steering. Change");
+    assert.equal(await pill.getAttribute("data-held"), null);
+    await chooseRoom("Flower 1"); // where the checks below look
+  });
   await check(
     "authentication failure preserves explicit offline state and disables writes",
     async () => {
