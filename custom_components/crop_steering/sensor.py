@@ -263,9 +263,19 @@ class CropSteeringEngineConfigSensor(SensorEntity):
     def native_value(self) -> Any:
         return self._slug
 
+    async def async_added_to_hass(self) -> None:
+        from homeassistant.helpers.dispatcher import async_dispatcher_connect
+
+        from .room_order import SIGNAL
+
+        # A new room order: publish this room's place in it.
+        self.async_on_remove(
+            async_dispatcher_connect(self.hass, SIGNAL, self.async_write_ha_state)
+        )
+
     @property
     def extra_state_attributes(self) -> dict:
-        return build_engine_config(
+        attributes = build_engine_config(
             self._prefix,
             self._slug,
             self._num_zones,
@@ -275,6 +285,10 @@ class CropSteeringEngineConfigSensor(SensorEntity):
             integration_version=SOFTWARE_VERSION,
             entry_id=self._entry.entry_id,
         )
+        # Where the dashboard lists this room (room_order.py): None until an order names it.
+        order = self.hass.data.get(DOMAIN, {}).get("_room_order") if self.hass else None
+        attributes["room_position"] = order.position(self._prefix) if order else None
+        return attributes
 
 
 class CropSteeringStockSensor(SensorEntity):

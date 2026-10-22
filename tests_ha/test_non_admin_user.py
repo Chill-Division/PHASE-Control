@@ -36,6 +36,7 @@ CHANGES = {
     "feed_mix": {"room_id": ROOM},
     "test_shot": {"room_id": ROOM, "zone": 1},
     "set_manual_override": {"zone": 1},
+    "room_order_save": {"rooms": [ROOM]},
     "setup_read": {},
     "setup_create": {},
     "setup_save": {},

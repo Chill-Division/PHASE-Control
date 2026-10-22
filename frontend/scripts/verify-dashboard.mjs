@@ -1990,6 +1990,28 @@ try {
     );
     await axe("settings notifications");
   });
+  await check("settings: the rooms are listed in the order chosen there, everywhere", async () => {
+    // Owner, 2026-10-22: GR1 was set up after GR2, and was listed second with no way to move it.
+    await go("settings");
+    await expectVisible(page.getByRole("list", { name: "Room order" }));
+    const names = (where) => page.locator(where).allInnerTexts();
+    assert.deepEqual(await names(".room-order-name"), ["Flower 2", "Flower 1"]);
+    assert.equal(await page.getByRole("button", { name: "Move Flower 2 up" }).isDisabled(), true);
+    await page.getByRole("button", { name: "Move Flower 1 up", exact: true }).click();
+    await page.waitForFunction(
+      () => document.querySelector(".room-order-name")?.textContent === "Flower 1",
+    );
+    // The rooms column, and the room the dashboard opens on, follow it.
+    assert.deepEqual(await names(".rooms-column .room-card strong"), ["Flower 1", "Flower 2"]);
+    assert.equal(
+      await page.locator("#default-room option").first().innerText(),
+      "The first room, Flower 1",
+    );
+    await axe("settings room order");
+    // The next check starts from a fresh demo, its rooms in no chosen order.
+    await page.goto("about:blank");
+    await go("settings");
+  });
   await check(
     "state pills: the connection in Settings, the room and its watering on the Overview",
     async () => {

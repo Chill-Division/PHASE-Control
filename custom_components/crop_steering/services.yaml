@@ -359,6 +359,15 @@ test_shot:
           min: 1
           max: 99
           mode: box
+room_order_save:
+  name: Save the room order
+  description: The order the dashboard lists the rooms in, for every device and every person, first to last. A room left out is listed after them. Needs a Home Assistant administrator when a signed-in user calls it, directly or through a script they start; automations are unaffected.
+  fields:
+    rooms:
+      required: true
+      example: '["room:gr1_", "room:"]'
+      selector:
+        object:
 whats_new_get:
   name: Read what's new
   description: The release highlights shipped with this integration, the installed version and the last release the dashboard's What's new window showed. Changes nothing.

@@ -1,4 +1,4 @@
-import { useLayoutEffect, useEffect, useState } from "react";
+import { useLayoutEffect, useEffect, useId, useState } from "react";
 import {
   Check,
   Plus,
@@ -45,6 +45,15 @@ import { engineFlag } from "@/lib/room-mode";
 import type { SetupCandidate, SetupDocument, SetupRoom, SetupZone } from "@/lib/operator-types";
 import { PlumbingDiagram, SHARED_VALVE } from "@/components/plumbing-diagram";
 
+// Owner, 2026-10-22: a probe can give three EC readings, and they differ a lot. The EC targets are
+// pore-water EC (the Athena Handbook's Substrate EC), and so is what the controller compares the
+// feed with: a bulk EC reads lower, so it would shrink shots and never dilute.
+const EC_HINT = "Pore-water EC (pwEC), not bulk EC or a raw conductivity.";
+const EC_CHOOSING =
+  "Pore-water EC (pwEC) is what the EC targets are written in, and an estimated pwEC is fine. " +
+  "Bulk EC and a raw conductivity read lower, and lower still as the substrate dries: if that is " +
+  "all a probe gives, leave EC unmapped.";
+
 function MappingPicker({
   label,
   values,
@@ -52,6 +61,8 @@ function MappingPicker({
   multiple = false,
   onChange,
   disabled = false,
+  hint,
+  choosing,
 }: {
   label: string;
   values: string[];
@@ -59,9 +70,14 @@ function MappingPicker({
   multiple?: boolean;
   onChange: (values: string[]) => void;
   disabled?: boolean;
+  /** Which kind of reading to map, where that matters, in a line under the label. */
+  hint?: string;
+  /** The same in full, where the entity is chosen. */
+  choosing?: string;
 }) {
   const [open, setOpen] = useState(false),
     [search, setSearch] = useState("");
+  const hintId = useId();
   const filtered = candidates.filter((c) =>
     (c.name + " " + c.entity_id + " " + c.unit).toLowerCase().includes(search.toLowerCase()),
   );
@@ -86,11 +102,17 @@ function MappingPicker({
           <Pill tone="on">{selected.length === 1 ? "Mapped" : `${selected.length} mapped`}</Pill>
         )}
       </div>
+      {hint && (
+        <small className="mapping-hint" id={hintId}>
+          {hint}
+        </small>
+      )}
       <Button
         type="button"
         variant="outline"
         className="mapping-button"
         aria-label={"Map " + label}
+        aria-describedby={hint ? hintId : undefined}
         disabled={disabled}
         onClick={() => {
           setSearch("");
@@ -112,6 +134,7 @@ function MappingPicker({
           <DialogHeader>
             <DialogTitle>Map {label}</DialogTitle>
             <DialogDescription>
+              {choosing && `${choosing} `}
               {multiple
                 ? "Choose one or more probes. The integration combines their readings."
                 : "Choose the entity already configured in Home Assistant."}{" "}
@@ -278,6 +301,14 @@ export function Setup({
     if (draft)
       setDraft({ ...draft, zones: draft.zones.map((z) => (z.id === id ? { ...z, ...patch } : z)) });
   }
+  /** The rooms in the order the dashboard lists them (Settings › Room order), archived ones after. */
+  function inOrder(rooms: SetupRoom[]) {
+    const place = (room: SetupRoom) => {
+      const at = controller.rooms.findIndex((listed) => listed.prefix === room.prefix);
+      return at < 0 ? Infinity : at;
+    };
+    return [...rooms].sort((a, b) => place(a) - place(b) || 0);
+  }
   function candidates(kind: string) {
     return (data?.candidates || [])
       .filter((c) => (kind === "switch" ? c.domain === "switch" : c.domain === "sensor"))
@@ -289,8 +320,11 @@ export function Setup({
             : kind === "vwc"
               ? (c.unit === "%" ? 2 : 0) + (/vwc|moisture|water.content/i.test(c.name) ? 1 : 0)
               : kind === "ec"
-                ? (/mS\/cm|dS\/m|µS\/cm|uS\/cm/i.test(c.unit) ? 2 : 0) +
-                  (/conductivity|\bec\b/i.test(c.name) ? 1 : 0)
+                ? // Pore-water EC first, as the targets are written in it; a probe's bulk EC and
+                  // raw conductivity after any other EC.
+                  (/mS\/cm|dS\/m|µS\/cm|uS\/cm/i.test(c.unit) ? 2 : 0) +
+                  (/pw\s*ec|pore/i.test(c.name) ? 2 : /\bec\b/i.test(c.name) ? 1 : 0) -
+                  (/bulk|conductivity/i.test(c.name) ? 1 : 0)
                 : 0;
         return preferred(b) - preferred(a) || a.name.localeCompare(b.name);
       });
@@ -543,7 +577,7 @@ export function Setup({
               >
                 {isNew && <option value="new">New room</option>}
                 {!data.rooms.length && !isNew && <option value="">No rooms configured</option>}
-                {data.rooms.map((r) => (
+                {inOrder(data.rooms).map((r) => (
                   <option key={r.entry_id} value={r.entry_id}>
                     {r.room_name}
                     {!r.active ? " (archived)" : ""}
@@ -851,6 +885,8 @@ export function Setup({
                           label={zone.name + " EC probes"}
                           values={zone.ec_sensors}
                           multiple
+                          hint={EC_HINT}
+                          choosing={EC_CHOOSING}
                           candidates={candidates("ec")}
                           disabled={busy}
                           onChange={(v) => editZone(zone.id, { ec_sensors: v })}

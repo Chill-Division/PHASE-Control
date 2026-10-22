@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { discoverRooms, buildRoom, numeric, validateChange } from "./model";
+import { discoverRooms, buildRoom, numeric, roomOrderOffered, validateChange } from "./model";
 import { applyChanges, HaClient } from "./client";
 import { createDemo, demoHistory } from "./demo";
 import type { States, EntityState } from "./types";
@@ -77,6 +77,29 @@ describe("room model", () => {
       expect(discoverRooms(states)[0].name).toBe("Default room");
     },
   );
+  it("lists the rooms in the order chosen in Settings, and the others after it as before", () => {
+    // Owner, 2026-10-22: GR1 was set up after GR2, and was listed second with no way to move it.
+    const states = fixture();
+    const first = states["sensor.crop_steering_engine_config"].attributes,
+      second = states["sensor.crop_steering_f1_engine_config"].attributes;
+    const ids = () => discoverRooms(states).map((room) => room.id);
+    // An integration from before the order: the first room set up first, as always.
+    expect(ids()).toEqual(["room:", "room:f1_"]);
+    expect(roomOrderOffered(states)).toBe(false);
+    Object.assign(first, { room_position: null });
+    Object.assign(second, { room_position: null });
+    expect(ids()).toEqual(["room:", "room:f1_"]);
+    expect(roomOrderOffered(states)).toBe(true);
+    Object.assign(first, { room_position: 1 });
+    Object.assign(second, { room_position: 0 });
+    expect(ids()).toEqual(["room:f1_", "room:"]);
+    // A room the order does not name, one added since, comes after the rooms it names.
+    Object.assign(first, { room_position: null });
+    expect(ids()).toEqual(["room:f1_", "room:"]);
+    Object.assign(first, { room_position: 0 });
+    Object.assign(second, { room_position: "1" });
+    expect(ids()).toEqual(["room:", "room:f1_"]);
+  });
   it("never replaces missing F1 data with default room data", () => {
     const states = fixture();
     const rooms = discoverRooms(states);

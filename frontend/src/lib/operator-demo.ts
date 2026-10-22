@@ -312,6 +312,26 @@ export class OperatorDemo {
         this.whatsNewSeen = version;
       return { seen: this.whatsNewSeen } as T;
     }
+    if (action === "room_order_save") {
+      const order = Array.isArray(data.rooms) ? data.rooms.map(String) : [];
+      const states = { ...this.getStates() },
+        rooms = discoverRooms(states);
+      for (const [index, id] of order.entries()) {
+        if (!rooms.some((room) => room.id === id))
+          throw new Error(`There is no room '${id}' to put in order`);
+        if (order.indexOf(id) !== index) throw new Error(`${id} is in the order twice`);
+      }
+      for (const room of rooms) {
+        const id = "sensor.crop_steering_" + room.prefix + "engine_config";
+        const place = order.indexOf(room.id);
+        states[id] = {
+          ...states[id],
+          attributes: { ...states[id].attributes, room_position: place < 0 ? null : place },
+        };
+      }
+      this.updateStates(states);
+      return { order } as T;
+    }
     if (action.startsWith("runs_")) {
       this.runDemo ||= new RunDemo(this.getStates);
       return this.runDemo.call(action, data) as T;

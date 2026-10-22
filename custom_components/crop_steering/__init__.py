@@ -210,6 +210,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     _remove_retired_entities(hass, entry)
 
+    # The order the dashboard lists the rooms in (Settings): loaded before the room's entities, as
+    # its descriptor publishes the room's place in it.
+    try:
+        from .room_order import async_setup_room_order
+
+        await async_setup_room_order(hass, entry)
+    except (
+        Exception
+    ) as err:  # pragma: no cover - never block setup on the order of a list
+        _LOGGER.warning("Room order unavailable: %s", err)
+
     # Set up platforms
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     _link_zone_devices(hass, entry)
@@ -335,6 +346,9 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     from .whats_new import async_unload_whats_new
 
     await async_unload_whats_new(hass, entry)
+    from .room_order import async_unload_room_order
+
+    await async_unload_room_order(hass, entry)
     hass.data[DOMAIN].pop(entry.entry_id, None)
 
     # Unload services only when the last loaded room goes away â€” other loaded

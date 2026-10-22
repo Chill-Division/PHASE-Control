@@ -83,15 +83,27 @@ export function createDemo(now = Date.now()): States {
       ...(index ? {} : DEMO_RESERVOIR),
       // Both rooms have been saved in Rooms & hardware.
       setup_revision: 1,
+      // No room order has been chosen in Settings yet.
+      room_position: null,
     });
     put(`switch.demo_${prefix}pump`, index ? "off" : "on");
-    // A probe's estimated pore EC as some probe firmware publishes it, unrounded. Nothing maps it,
-    // so it is only among the entities Rooms & hardware offers.
-    if (!index)
+    // A probe's three EC readings as some probe firmware publishes them, its estimated pore EC
+    // unrounded: its bulk EC is that EC times the moisture, and its raw conductivity the same in
+    // µS/cm. Nothing maps them, so they are only among the entities Rooms & hardware offers.
+    if (!index) {
       put("sensor.demo_substrate_estimated_pwec", 0.639473676681519, {
         friendly_name: "Demo Substrate Estimated pwEC",
         unit_of_measurement: "mS/cm",
       });
+      put("sensor.demo_substrate_bulk_ec", 0.38, {
+        friendly_name: "Demo Substrate Bulk EC",
+        unit_of_measurement: "mS/cm",
+      });
+      put("sensor.demo_substrate_conductivity", 384, {
+        friendly_name: "Demo Substrate Conductivity",
+        unit_of_measurement: "µS/cm",
+      });
+    }
     // What the integration publishes for every room's nutrient batches, and, for Flower 2, what the
     // controller reports: its reservoir reads 640 mm to the water, 29% full, plenty above its 5%.
     const feed = index ? null : sampleFeed();
