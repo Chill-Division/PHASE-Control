@@ -1,5 +1,6 @@
 # Unreleased
 
+- The dashboard lists the rooms in the order chosen in its Settings, on every device.
 - Rooms & hardware says which EC reading to map, pore-water EC (pwEC), and lists those first.
 
 # 1.5.0

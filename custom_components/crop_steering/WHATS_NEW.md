@@ -23,6 +23,7 @@ version being released.
 
 ## Unreleased
 
+- Choose the order your rooms are listed in, in Settings, the same on every device.
 - Setup now says which EC reading to pick for each zone, pore-water EC (pwEC), and lists those first.
 
 ## 1.5.0 - 2026-10-22
