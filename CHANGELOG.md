@@ -28,6 +28,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Cards fill the width, in even rows.** The Insights week, the dosers, the Schedule's weeks and
   the stock tanks fill the whole width on a wide screen, and where they wrap the rows come out even:
   four stock tanks beside the rooms list go two and two, not three and one. Phones are as they were.
+- **One valve for every zone.** A room whose zones have no valve each, only the pump and one valve
+  that waters them all (a fertigation valve), can be set up as *a pump, then one valve for all the
+  zones*. Its zones keep their own probes, cards and charts but share every shot: the controller
+  decides once, on all their readings, and counts the shot on each, so they share one phase and one
+  set of targets. The setup wizard now asks how the room is plumbed with the zone count, then only
+  for the valves and switches that plumbing has. Two zones on one valve under any other plumbing
+  are held, not watered once for each zone.
 
 ### 🔧 Technical notes
 
@@ -71,6 +78,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   replaces `repeat(auto-fill, …)`, which kept empty columns, on `.zone-week-days`, `.res-dosers`,
   `.schedule-blocks` and `.stock-grid`. A `verify-dashboard` check holds the four to one full row at
   1920 px and four stock tanks to two and two beside the rooms list.
+- Controller: `ONE_VALVE_LAYOUTS` (`pump_one_valve`: a pump, no main line, every zone's valve the
+  same). `_valve_group` makes the first zone's pass the room's: `_group_readings` combines every
+  zone's fused VWC and EC with that zone's `vwc_method`/`ec_method` (`combine_readings`, the copy of
+  `calculations.combine_probes`), `_follow_lead` copies its phase, peak, counters and EC steer to
+  the others, and `_shares`/`_count_shot` count the shot on each zone by its flow, frozen before
+  the valve opens. `_blocked` and `_wait_shot` read every zone's enabled and manual-override
+  switches; a phase or a test shot asked for on any zone is the room's; `_shot_litres` and
+  `_plan_next_round` count the room's water; `_report_unread_zones` still reports a zone's dead
+  probe. `plumbing_hold(hw, zones)` holds a one-valve room whose zones map different valves, and
+  two zones on one valve under any other layout, declared or not. `test_one_valve_room.py`.
+- Integration: `plumbing.ONE_VALVE_LAYOUTS`. The config flow asks the plumbing with the zone count
+  (`manual_zones`, `edit_zones`: `_count_schema`), then the shared valve once (`shared_valve`, mapped
+  on every zone by `_build_zones`) or each zone's, and only the switches the layout has
+  (`_hardware_schema(plumbing)`). `prepare_setup` resolves the layout before the zones: a one-valve
+  room's zones share its valve, every active zone must use it and no other room may;
+  `check_plumbing=False` lets the wizard check the zones before it asks for the pump.
+  `tests_ha/test_one_valve_room.py` takes the wizard to the descriptor and the real controller's one
+  shot, and Rooms & hardware's refusal of a second valve.
+- Dashboard: `ONE_VALVE_LAYOUTS`/`oneValve` (`lib/plumbing.ts`) and `oneValveRoom` (`lib/model.ts`).
+  Rooms & hardware maps **Valve for every zone** once beside the pump (the zones without a valve
+  picker), the diagram draws it, and saving checks every zone uses it; the demo saves it as the
+  integration does. In a one-valve room Coming up and the clock follow the first zone's lane as "All
+  zones" (`comingUp`/`dialZones` `shared`), the room's shots today are a zone's rather than their
+  sum, Today's targets has one **Every zone** chip whose changes are reviewed on every zone, and the
+  Schedule's edits, pause, manual override, phase moves, probe reading and the test shot apply to
+  every zone. CS-202's help names the two valve holds. A `verify-dashboard` check sets a room up
+  this way and follows it to the Overview, Today's targets and the test shot.
 
 ## [1.4.0] - 2026-10-19
 

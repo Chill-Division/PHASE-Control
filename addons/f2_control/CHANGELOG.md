@@ -4,6 +4,7 @@
 - The dashboard keeps watering off after a saved setup change until the controller has taken it on.
 - A room switched to Steering that isn't watering says Steering · on hold.
 - The dashboard's cards fill the width, in even rows.
+- A room whose one valve waters every zone gets one shot, decided on all its zones' readings and counted on each.
 
 # 1.4.0
 

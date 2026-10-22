@@ -157,7 +157,7 @@ Registering last month's run today captures today's reference configuration. It 
 An HA administrator uses **Settings → Rooms & hardware**. Pair devices and expose their entities in HA first; this workspace maps existing entities.
 
 1. Choose an existing room or **Add room**. Give it a clear name. Names may change without changing its stable identity.
-2. Map **Room pump** and **Mainline valve**, then each active zone's valve. **Shared room hardware** draws how water reaches each zone: the pump and main line the room's plumbing has, then each zone's valve with its probes and sizing; click a part to go to its mapping. Search by friendly name or exact entity ID; inspect the displayed value/unit before selecting.
+2. Map **Room pump** and **Mainline valve**, then each active zone's valve. A room plumbed as *A pump, then one valve for all the zones* maps that valve once, as **Valve for every zone**, and its zones have no valve of their own. **Shared room hardware** draws how water reaches each zone: the pump and main line the room's plumbing has, then each zone's valve, or the one valve for all of them, with each zone's probes and sizing; click a part to go to its mapping. Search by friendly name or exact entity ID; inspect the displayed value/unit before selecting.
 3. Select one or more VWC and EC probes per zone. **Clear mapping** removes the selected mapping; **Done** closes the picker. Several probes in a zone become one moisture and one EC reading: their average until you choose otherwise in the zone's details, under **Probes** (average, median, lowest or highest, for moisture and EC apart; each choice shows what the zone would read with it now). Automatic outlier rejection is not provided.
 4. Enter plant count, substrate litres **per plant**, drippers **per plant**, and flow in litres/hour **per dripper**. Review existing values instead of replacing them with generic defaults.
 5. Map the optional room equipment, and the **Reservoir & dosers** if the controller app mixes the room's feed (see [Mix nutrient batches](#mix-nutrient-batches-reservoir)). Explicitly map shared equipment only where appropriate; never reuse a zone valve accidentally.
@@ -167,6 +167,16 @@ An HA administrator uses **Settings → Rooms & hardware**. Pair devices and exp
 Zone and room removal archives stable IDs. **Restore zone** or **Restore room** reactivates the same identity after review; archived slots are not silently reused for different hardware. Adding/archiving a zone may require updating a draft irrigation strategy's assignments.
 
 Every saved change is recorded in Home Assistant's **Activity** (the logbook), on the room's device page too: who saved it and what changed, for example *Growroom 2 setup saved (revision 2): renamed from "PHASE Control"*. A change Home Assistant refuses is not saved, so it is not recorded; the review says why it was refused.
+
+### One valve for every zone
+
+Some rooms have no valve for each zone: the pump and one valve (a fertigation valve, say) water every zone at once. Plumb such a room as **A pump, then one valve for all the zones**, here or in the setup wizard. Its zones keep their own probes, cards and charts, but the controller makes one decision for all of them, on their readings combined the way the first zone reads its probes (their average unless you choose otherwise), and fires one shot that it counts on every zone. So they share one phase and one set of targets:
+
+- **Irrigation strategy → Today** shows one **Every zone** chip, and a change there is made on every zone; the Schedule's edits apply to every zone too.
+- Pausing a zone, ending its manual override or moving it to another phase does so for all of them, and so does how a zone's probes are read.
+- Coming up and the clock say each shot once, for all zones, and a test shot waters them all.
+
+Under any other plumbing, two zones mapped to one valve hold the room (CS-202) rather than open that valve once for each zone.
 
 ### Tests
 
