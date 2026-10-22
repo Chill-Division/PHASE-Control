@@ -14,7 +14,17 @@ import type {
 import type { States } from "./types";
 import { discoverRooms, numeric } from "./model";
 import { blockForDay, dateForDay, growDay, interpolate, localDate, planErrors } from "./grow-plan";
-import { inferPlumbing, plumbingErrors } from "./plumbing";
+import { inferPlumbing, oneValve, plumbingErrors } from "./plumbing";
+
+/** What a one-valve room's controller publishes alike for every zone (its first zone's pass). */
+const FOLLOWED = [
+  "phase",
+  "status",
+  "waiting_for_app",
+  "daily_water_app",
+  "irrigation_count_app",
+  "last_irrigation_app",
+];
 import { DEMO_WHATS_NEW } from "./whats-new-demo";
 import { compareVersions } from "./whats-new";
 import { RESERVOIR_KEYS } from "./feed";
@@ -397,7 +407,12 @@ export class OperatorDemo {
           if (!zones?.length || zones.length > 24)
             throw new Error("Configure between 1 and 24 zone slots.");
           const valves = zones.filter((z) => z.active).map((z) => z.valve);
-          if (valves.some((v) => !v) || new Set(valves).size !== valves.length)
+          // As the integration does: one valve for every zone where the plumbing says so.
+          const layout = String(data.plumbing || room?.plumbing || "");
+          if (oneValve(layout) && data.active !== false) {
+            if (valves.some((v) => !v) || new Set(valves).size > 1)
+              throw new Error("With one valve for all the zones, every zone uses that one valve.");
+          } else if (valves.some((v) => !v) || new Set(valves).size !== valves.length)
             throw new Error("Each active zone needs a distinct valve.");
           const otherValves = new Set(
             this.rooms!.filter((r) => r !== room && r.active).flatMap((r) =>
@@ -408,7 +423,6 @@ export class OperatorDemo {
             throw new Error("A valve is already mapped to another room.");
           if (!String(data.room_name || "").trim()) throw new Error("Enter a room name.");
           // As the integration does: a declared layout has to match the switches, both ways.
-          const layout = String(data.plumbing || room?.plumbing || "");
           const contradictions =
             data.active === false
               ? []
@@ -482,6 +496,18 @@ export class OperatorDemo {
               attributes: {},
               last_updated: new Date().toISOString(),
             };
+          // One valve for every zone: the controller decides once, so every zone says what the first
+          // does, its phase, status, wait and the day's water and shots, each with its own readings.
+          if (oneValve(target.plumbing) && target.active) {
+            const ids = target.zones.filter((z) => z.active).map((z) => z.id);
+            for (const key of FOLLOWED) {
+              const lead = states[`sensor.crop_steering_${target.prefix}zone_${ids[0]}_${key}`];
+              for (const zone of ids.slice(1)) {
+                const id = `sensor.crop_steering_${target.prefix}zone_${zone}_${key}`;
+                if (lead && states[id]) states[id] = { ...lead, entity_id: id };
+              }
+            }
+          }
           this.updateStates(states);
         }
       }

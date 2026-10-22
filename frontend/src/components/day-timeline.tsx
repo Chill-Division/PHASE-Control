@@ -61,7 +61,7 @@ import {
   type TimelineRows,
   type TypicalPoint,
 } from "@/lib/day-timeline";
-import { descriptor, numeric } from "@/lib/model";
+import { descriptor, numeric, oneValveRoom } from "@/lib/model";
 import {
   buildPlanningCurve,
   dryRates,
@@ -561,6 +561,7 @@ export function useLanes(
   layers: Layers,
 ) {
   const { room, states } = controller;
+  const shared = oneValveRoom(states, room.room);
   const { view } = useWaterView();
   const decisions = rows[entities.attributeIds[0]] ?? [];
   const settings = new Map(room.settings.map((setting) => [setting.entityId, setting]));
@@ -609,6 +610,10 @@ export function useLanes(
     const phaseTarget = (key: string) =>
       zone.phase === phase ? zone.target.value : read(zone, key);
     const target = phase === "P2" ? phaseTarget("p2_vwc_threshold") : null;
+    // One valve for every zone: another zone paused holds this one too.
+    const pausedMate = shared
+      ? room.zones.find((other) => other.id !== zone.id && other.enabled === false)
+      : undefined;
     const stopped = !room.roomActive
       ? "the room is off"
       : zone.stale
@@ -617,7 +622,9 @@ export function useLanes(
           ? "the room is Watching only"
           : zone.enabled === false
             ? "zone scheduling is paused"
-            : null;
+            : pausedMate
+              ? `${pausedMate.name} is paused, and one valve waters every zone`
+              : null;
     const ramp = phase === "P1" ? phaseTarget("p1_target_vwc") : null;
     const ceiling = ramp === null ? null : Math.min(ramp, read(zone, "field_capacity") ?? Infinity);
     const held = blocks.at(-1)?.open ? blocks.at(-1)! : null;

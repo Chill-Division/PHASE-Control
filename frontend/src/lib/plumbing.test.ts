@@ -1,11 +1,13 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
+  ONE_VALVE_LAYOUTS,
   PLUMBING_HINTS,
   PLUMBING_LABELS,
   PLUMBING_LAYOUTS,
   hardwareForLayout,
   inferPlumbing,
+  oneValve,
   plumbingErrors,
   plumbingUses,
 } from "./plumbing";
@@ -22,10 +24,18 @@ describe("declared plumbing", () => {
       { pump: m[2] === "True", mainline: m[3] === "True" },
     ]);
     expect(theirs).toEqual(Object.entries(PLUMBING_LAYOUTS));
+    const one = /^ONE_VALVE_LAYOUTS = frozenset\(\{(.*?)\}\)/m.exec(source)![1];
+    expect([...one.matchAll(/"(\w+)"/g)].map((m) => m[1])).toEqual([...ONE_VALVE_LAYOUTS]);
     expect(Object.keys(PLUMBING_LABELS)).toEqual(Object.keys(PLUMBING_LAYOUTS));
     expect(Object.keys(PLUMBING_HINTS)).toEqual(Object.keys(PLUMBING_LAYOUTS));
   });
 
+  it("knows the layout whose one valve waters every zone, and never guesses a room into it", () => {
+    expect(oneValve("pump_one_valve")).toBe(true);
+    expect(oneValve("pump_valves")).toBe(false);
+    expect(oneValve(undefined)).toBe(false);
+    expect(inferPlumbing({ pump_switch: "switch.p", main_line_switch: "" })).toBe("pump_valves");
+  });
   it("infers a prefill from the mapped switches", () => {
     expect(inferPlumbing({})).toBe("valves_only");
     expect(inferPlumbing({ pump_switch: "switch.p", main_line_switch: "" })).toBe("pump_valves");

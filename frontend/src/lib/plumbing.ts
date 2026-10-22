@@ -5,20 +5,31 @@ export const PLUMBING_LAYOUTS = {
   pump_valves: { pump: true, mainline: false },
   mainline_valves: { pump: false, mainline: true },
   pump_mainline_valves: { pump: true, mainline: true },
+  pump_one_valve: { pump: true, mainline: false },
 } as const;
 export type PlumbingLayout = keyof typeof PLUMBING_LAYOUTS;
+/** The layouts whose one valve waters every zone of the room at once (owner, 2026-10-22: a pump
+ * and a fertigation valve for three zones). Every zone maps that valve; they keep their own probes
+ * and readings, and share one phase, one set of targets and every shot. ONE_VALVE_LAYOUTS in
+ * plumbing.py. */
+export const ONE_VALVE_LAYOUTS: ReadonlySet<string> = new Set<PlumbingLayout>(["pump_one_valve"]);
+export const oneValve = (layout: unknown) =>
+  typeof layout === "string" && ONE_VALVE_LAYOUTS.has(layout);
 
 export const PLUMBING_LABELS: Record<PlumbingLayout, string> = {
   valves_only: "Zone valves only",
   pump_valves: "A pump, then zone valves",
   mainline_valves: "A main-line valve, then zone valves",
   pump_mainline_valves: "A pump, a main-line valve, then zone valves",
+  pump_one_valve: "A pump, then one valve for all the zones",
 };
 export const PLUMBING_HINTS: Record<PlumbingLayout, string> = {
   valves_only: "Each zone is one switch and nothing else, such as a tent on one smart plug.",
   pump_valves: "The pump has to run whenever a zone waters.",
   mainline_valves: "Mains or gravity pressure behind a shared valve; no pump to switch.",
   pump_mainline_valves: "The pump starts, the shared valve opens, then the zone valve.",
+  pump_one_valve:
+    "The pump starts, then one valve waters every zone at once: they share every shot, so they share one phase and one set of targets.",
 };
 
 const STAGES = [

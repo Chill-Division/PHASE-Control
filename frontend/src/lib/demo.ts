@@ -13,6 +13,7 @@ import { dateForDay, localDate } from "./grow-plan";
 import { numeric } from "./model";
 import { feedEntities, sampleFeed } from "./feed-demo";
 import { levelPct, mappedNumbers, planOf } from "./feed";
+import { oneValve } from "./plumbing";
 
 /** The demo workspace, which the browser checks and the screenshots use: opened with `?demo`. */
 export function isDemoLocation(location: Pick<Location, "search">): boolean {
@@ -681,9 +682,12 @@ export function demoDay(states: States, request: TimelineRequest, now = Date.now
     const valves = (config.attributes.valves ?? {}) as Record<string, string>;
     const events: { time: number; zone: number; list: "fired" | "blocked"; text: string | null }[] =
       [];
+    // One valve for every zone: one day for all of them, the first zone's, as the controller runs it.
+    const shared = oneValve(config.attributes.plumbing);
     for (let zone = 1; zone <= Number(config.attributes.num_zones); zone++) {
       const vwc = `sensor.crop_steering_${prefix}vwc_zone_${zone}`;
-      const at = (hour: number) => request.start + seedOf(vwc) * 180_000 + hour * 3_600_000;
+      const day = shared ? `sensor.crop_steering_${prefix}vwc_zone_1` : vwc;
+      const at = (hour: number) => request.start + seedOf(day) * 180_000 + hour * 3_600_000;
       const phases = [
         [0.02, "P0"],
         [1.5, "P1"],
@@ -694,10 +698,11 @@ export function demoDay(states: States, request: TimelineRequest, now = Date.now
         { state: "P3", time: request.start },
         ...phases.map(([hour, state]) => ({ state, time: at(hour) })),
       ]);
-      const hold = !prefix && zone === 2 ? [2.5, 2.7] : null;
-      const disabled = prefix && zone === 3 ? 6 : Infinity;
+      const hold = !shared && !prefix && zone === 2 ? [2.5, 2.7] : null;
+      const disabled = !shared && prefix && zone === 3 ? 6 : Infinity;
       // Each grow-day's shots run a little longer or shorter than the day before's.
-      const drift = 1 + 0.12 * Math.sin(new Date(request.start).getDate() * 1.9 + zone);
+      const drift =
+        1 + 0.12 * Math.sin(new Date(request.start).getDate() * 1.9 + (shared ? 1 : zone));
       const shots: { hour: number; seconds: number; text: string }[] = [];
       for (let shot = 0, hour = 1.5; shot < 6; shot++, hour += 1 / 3) {
         if (hold && hour >= hold[0] && hour < hold[1]) hour = hold[1];
