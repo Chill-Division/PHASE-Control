@@ -18,7 +18,7 @@ import {
 } from "@/components/overview-parts";
 import type { Controller, Notice } from "@/lib/types";
 import { leadingNotices, roomStatus } from "@/lib/model";
-import { roomMode } from "@/lib/room-mode";
+import { onHold, roomMode } from "@/lib/room-mode";
 import { useDrybackTrends } from "@/lib/use-recent-moisture";
 import { coreWaterValue, waterParameters } from "@/lib/water-delivery";
 import { roomPlants } from "@/lib/water-view";
@@ -62,8 +62,10 @@ export function Overview({
       .filter((notice) => notice.zoneId === id)
       .sort((a, b) => RANK[a.severity] - RANK[b.severity])[0];
   const on = room.zones.filter((item) => item.enabled === true && item.override !== true).length;
-  // Zones switched on water only while the room is Steering.
-  const watching = roomMode(controller.states, room.room).mode === "watching";
+  // Zones switched on water only while the room is Steering, and not on hold.
+  const mode = roomMode(controller.states, room.room).mode;
+  const watching = mode === "watching",
+    held = onHold(mode, status.tone);
   return (
     <div className="overview" data-overview>
       <header className="room-header">
@@ -119,7 +121,9 @@ export function Overview({
                       ? `each with its own day and its band from trigger to peak · ${
                           watching
                             ? "none watering: the room is Watching only"
-                            : `${on} of ${room.zones.length} watering`
+                            : held
+                              ? "none watering: the room is on hold"
+                              : `${on} of ${room.zones.length} watering`
                         }`
                       : ""}
                   </span>

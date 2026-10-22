@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { buildRoom, discoverRooms, leadingNotices, roomStatus, setupWait } from "./model";
-import { roomMode } from "./room-mode";
+import { onHold, roomMode } from "./room-mode";
 import { ageText, ageTone, parseControllerTime, readHeartbeat } from "./controller-health";
 import { createDemo, demoBeat } from "./demo";
 import type { EntityState, Notice, States } from "./types";
@@ -585,6 +585,27 @@ describe("room status line", () => {
     });
     expect(beat(saved(true, "off")).setup_revision).toBe(2);
     expect(beat(saved(true, "off")).setup_pending).toBeUndefined();
+  });
+  it("says Steering is on hold when the switches say Steering and nothing is watered", () => {
+    // GT4, 2026-10-19: the pill said Steering over a room held for a setup change.
+    const held = (states: States) =>
+      onHold(roomMode(states, discoverRooms(states)[0]).mode, status(states).tone);
+    expect(held(fixture())).toBe(false); // holding in band: steering as it should
+    const waiting = fixture([
+      entity(HEARTBEAT, "healthy", {
+        enable_flag: "input_boolean.f2_control_enabled",
+        setup_pending: "Setup change waiting (taken on while watering is off)",
+      }),
+    ]);
+    expect(held(waiting)).toBe(true);
+    const silent = fixture();
+    silent[HEARTBEAT] = { ...silent[HEARTBEAT], last_updated: ago(15 * 60_000) };
+    expect(status(silent).tone).toBe("stale");
+    expect(held(silent)).toBe(true);
+    // Watching only and Room off say what they are already.
+    waiting["input_boolean.f2_control_enabled"] = entity("input_boolean.f2_control_enabled", "off");
+    expect(held(waiting)).toBe(false);
+    expect(onHold("off", "off")).toBe(false);
   });
   it("calls a zone held for a waiting setup change so, with no notice of its own", () => {
     for (const words of [

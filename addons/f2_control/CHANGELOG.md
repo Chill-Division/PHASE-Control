@@ -2,6 +2,7 @@
 
 - The controller takes a saved setup change on within a minute, and one that changes no switch (a sensor, a name) with watering on.
 - The dashboard keeps watering off after a saved setup change until the controller has taken it on.
+- A room switched to Steering that isn't watering says Steering · on hold.
 
 # 1.4.0
 

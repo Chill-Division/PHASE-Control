@@ -118,9 +118,18 @@ describe("Coming up", () => {
     ]);
   });
   it("expects no shot from a zone that is stopped or held", () => {
+    // Held, the controller still says what it waits for (here a P2 top-up under its trigger).
+    const waiting = {
+      at: NOW,
+      conditions: [{ rule: "p2_topup", shot: true, to: null, op: "<", value: 69, now: 68 }],
+    };
     for (const quiet of [
       lane("GT1", { stopped: "the room is Watching only" }),
       lane("GT1", { next: { at: null, basis: "held" } }),
+      lane("GT4", {
+        zone: { name: "GT4", phase: "P2", waiting },
+        next: { at: null, basis: "held" },
+      }),
     ])
       expect(rows([quiet]).map((row) => row[2])).toEqual([
         "Into P3, the overnight dryback (predicted)",

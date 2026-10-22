@@ -42,6 +42,15 @@
 .mode-option[data-mode="watching"] i {
   background: var(--warning);
 }
+/* Steering by its switches, yet not watering: amber, and "· on hold" beside it. */
+.mode-pill[data-mode="steering"][data-held] {
+  background: var(--tone-warning-bg);
+  border-color: var(--tone-warning-line);
+  color: var(--tone-warning-ink);
+}
+.mode-pill[data-mode="steering"][data-held] i {
+  background: var(--warning);
+}
 .mode-pill:disabled {
   opacity: 0.6;
 }

@@ -172,6 +172,9 @@
   color: var(--tone-paused-ink);
   white-space: nowrap;
 }
+.room-card-mode[data-held] {
+  color: var(--tone-warning-ink);
+}
 .room-card-mode i {
   width: 7px;
   height: 7px;

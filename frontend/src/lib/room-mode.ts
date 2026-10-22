@@ -1,6 +1,6 @@
 import { descriptor, numeric, resolve, roomActiveId, roomIsActive, setupWait } from "./model";
 import { growDay } from "./day-timeline";
-import type { Change, Room, States } from "./types";
+import type { Change, Room, RoomStatus, States } from "./types";
 
 /** How a room runs, in one choice instead of two switches: Steering (the room on and its watering
  * on), Watching only (on, but its engine switch off: the probes are read and the phases followed,
@@ -18,6 +18,13 @@ export const MODE_WORDS: Record<RoomMode, { label: string; text: string }> = {
     text: "Nothing growing: no watering and no alerts. Back on within a day, it carries on where it was; after longer, a fresh run starts.",
   },
 };
+
+/** Steering by its switches, yet watering nothing: held (a fault, a setup change waiting, a strategy
+ * hold) or its controller silent. The mode then says "Steering · on hold", not a plain Steering over
+ * a room that is not watering (GT4, 2026-10-19). */
+export function onHold(mode: RoomMode | null, tone: RoomStatus["tone"]): boolean {
+  return mode === "steering" && (tone === "stopped" || tone === "stale");
+}
 
 /** The room's engine switch, as the controller reports it, else as setup recorded it. */
 export function engineFlag(states: States, room: Room): string | null {
