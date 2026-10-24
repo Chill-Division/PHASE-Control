@@ -2215,7 +2215,7 @@ class Controller:
         enabled = self._on(f"switch.crop_steering_{room.prefix}auto_setpoints", False)
         planned = bool(getattr(room, "strategy_required", False))
         was = learn["outcome"]
-        outcome = auto_setpoints.ramp_outcome(learn, st["phase"])
+        outcome = auto_setpoints.ramp_outcome(learn, st["phase"], snap.vwc)
         if outcome != was:
             self._say(room, zone, f"Auto setpoints: today's ramp outcome {outcome} (peak {learn['peak']}%)")
             if outcome == "suspect":

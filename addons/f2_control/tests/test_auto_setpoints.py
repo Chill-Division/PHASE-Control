@@ -78,8 +78,9 @@ def test_while_the_ramp_is_still_climbing_the_target_is_left_alone():
 def test_shots_that_never_lifted_vwc_are_a_delivery_problem_not_saturation():
     learn = au.fresh()
     _ramp(learn, [0.1, 0.0, 0.1], start=24.0)  # flat from the first shot: water is not reaching the probe
-    assert au.ramp_outcome(learn, "P1") == "suspect"
-    assert learn["peak"] is None and au.p1_target(learn, vwc=24.2, phase="P1") is None
+    assert au.ramp_outcome(learn, "P1") == "pending"  # while the ramp goes on, the water may be on its way
+    assert au.ramp_outcome(learn, "P2", vwc=24.2) == "suspect"  # the engine ended it, and it never climbed
+    assert learn["peak"] is None and au.p1_target(learn, vwc=24.2, phase="P2") is None
     assert "not reaching" in au.frozen_reason(learn)
 
 
@@ -87,8 +88,30 @@ def test_a_plateau_far_below_the_known_peak_is_not_believed():
     learn = au.fresh()
     learn["peak"] = 36.0
     _ramp(learn, [1.8, 1.6, 0.1, 0.1], start=27.0)  # stalls at 30.6, five points under what it held last week
-    assert au.ramp_outcome(learn, "P1") == "suspect"
+    assert au.ramp_outcome(learn, "P1") == "pending"  # not full: the ramp goes on
     assert learn["peak"] == 36.0
+    # The engine ends the ramp there (its shot limit): water is not getting where it should.
+    assert au.ramp_outcome(learn, "P2", vwc=30.6) == "suspect"
+    assert learn["peak"] == 36.0
+    assert au.frozen_reason(learn).startswith(
+        "the ramp ended at 30.6%, 5.4 points under the peak this zone has held (36.0%)"
+    )
+
+
+def test_a_ramp_that_reads_late_or_sits_flat_and_then_reaches_its_target_is_not_suspect():
+    # GR2, 24 October 2026: the THC-S read the first ramp shots 34 minutes late, so they settled flat, then
+    # the ramp climbed, sat at 77.7 for two shots and reached its target. Judged mid-ramp, it raised CS-404,
+    # as on 19 and 20 October: three mornings that all went on to reach the target.
+    learn = au.fresh()
+    learn["peak"] = 84.6
+    au.new_day(learn, "2026-10-24", 62.4)
+    pre = [62.4, 62.2, 62.2, 65.3, 77.0, 77.7, 77.7, 79.7]  # the reading right before each ramp shot
+    for k, vwc in enumerate(pre):
+        au.shot(learn, "P1", 3.0, vwc, T0 + k * 14 * MIN)  # each settles the one before it
+        assert au.ramp_outcome(learn, "P1", vwc) == "pending", k
+    assert [r["flat"] for r in learn["ramp"]] == [True, True, False, False, True, True, False]
+    assert au.ramp_outcome(learn, "P2", 84.8) == "reached"  # the engine ended it at its target
+    assert au.frozen_reason(learn) is None and learn["peak"] == 84.6
 
 
 def test_the_spike_right_after_a_shot_is_not_the_peak():
@@ -228,7 +251,7 @@ def test_status_tells_the_operator_what_it_is_doing():
     assert au.status(learn, enabled=False)[0] == "off"
     assert au.status(learn, enabled=True)[0] == "learning"
     _ramp(learn, [0.1, 0.0, 0.1], start=24.0)
-    au.ramp_outcome(learn, "P1")
+    au.ramp_outcome(learn, "P2")  # a ramp that ended without lifting the reading
     state, attrs = au.status(learn, enabled=True)
     assert state == "frozen" and attrs["p1_outcome"] == "suspect" and attrs["learned_peak"] is None
 
