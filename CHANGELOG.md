@@ -10,6 +10,27 @@ and code-level detail for developers and AI agents working on the repo.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+- **Automatic targets judge the morning ramp once it is over.** A probe that feels the water half an
+  hour after a shot, or a ramp that sits flat for a couple of shots before it climbs again, no longer
+  pauses a zone's automatic targets with CS-404: GR2 raised it on three mornings whose ramps all went
+  on to reach their target. A ramp that ends well under the zone's peak, or never lifts the reading,
+  still raises it.
+
+### 🔧 Technical notes
+
+- Controller: `auto_setpoints.ramp_outcome(learn, phase, vwc)` decides a plateau mid-ramp only near a
+  peak the zone has held, after a real climb; flat shots far under that peak leave the outcome
+  `pending` while P1 goes on. Once the engine has ended the ramp (P2 or P3), `suspect` is a ramp that
+  ended more than `SUSPECT_DROP_PTS` under the learned peak, judged at the reading now because the last
+  shot has not settled yet, or, with no peak learned, one that never climbed `MIN_CLIMB_PTS`. CS-404's
+  reason reads "the ramp ended at …". The learned state's shape is unchanged.
+  `test_a_ramp_that_reads_late_or_sits_flat_and_then_reaches_its_target_is_not_suspect` replays GR2's
+  24 October ramp.
+- Docs: CS-404 (`docs/error-codes.json`, shown in Help) says when a ramp is judged and lists drip lines
+  that drain between shots as a cause; HOW_IT_WORKS describes the judgement.
+
 ## [1.5.1] - 2026-10-22
 
 Integration and controller **1.5.1**.

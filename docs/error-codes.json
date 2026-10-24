@@ -449,12 +449,13 @@
       "title": "Automatic targets paused",
       "source": "notification",
       "severity": "warning",
-      "meaning": "Automatic setpoints adjust a zone's targets from how its morning ramp goes. This morning's ramp didn't look like water reaching the probe, so automatic adjustment is paused for the zone. The notification says what looked wrong.",
+      "meaning": "Automatic setpoints adjust a zone's targets from how its morning ramp goes. This morning's ramp ended well under the peak the zone has held, or without lifting the reading at all, so automatic adjustment is paused for the zone. The notification says what looked wrong. A ramp is judged once it is over: a probe that feels the water late, or a ramp that sits flat for a few shots and then climbs, is not a fault.",
       "watering": "Carries on with the current targets. The next morning's ramp is judged again.",
       "causes": [
         "A blocked dripper, a kinked line, or a valve not opening.",
         "The probe has moved, or isn't where the drippers wet the cube.",
-        "Shots too small to lift the reading."
+        "Shots too small to lift the reading.",
+        "Drip lines that drain between shots: each shot refills them first, so the plants get less than its size says."
       ],
       "fixes": [
         "Check the zone's drippers and lines, and do a catch test.",

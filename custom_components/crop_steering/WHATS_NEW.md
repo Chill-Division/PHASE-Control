@@ -21,6 +21,10 @@ people who build the system:
 `tests/test_whats_new.py` checks the shape and the plain words, and that the newest section is the
 version being released.
 
+## Unreleased
+
+- Automatic targets no longer pause when a probe feels the morning's water late: the ramp is judged once it is over.
+
 ## 1.5.1 - 2026-10-22
 
 - Choose the order your rooms are listed in, in Settings, the same on every device.

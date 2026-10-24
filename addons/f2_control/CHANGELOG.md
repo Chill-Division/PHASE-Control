@@ -1,3 +1,7 @@
+# Unreleased
+
+- Automatic targets wait for the morning ramp to end before judging it, so a probe that feels the water late no longer pauses them.
+
 # 1.5.1
 
 Pair with integration 1.5.1.

@@ -584,7 +584,7 @@ setup change (CS-201) and a hardware hold (CS-301, CS-308, CS-309) are still rep
 
 *Warning · Notification*
 
-**What it means.** Automatic setpoints adjust a zone's targets from how its morning ramp goes. This morning's ramp didn't look like water reaching the probe, so automatic adjustment is paused for the zone. The notification says what looked wrong.
+**What it means.** Automatic setpoints adjust a zone's targets from how its morning ramp goes. This morning's ramp ended well under the peak the zone has held, or without lifting the reading at all, so automatic adjustment is paused for the zone. The notification says what looked wrong. A ramp is judged once it is over: a probe that feels the water late, or a ramp that sits flat for a few shots and then climbs, is not a fault.
 
 **Watering meanwhile.** Carries on with the current targets. The next morning's ramp is judged again.
 
@@ -593,6 +593,7 @@ setup change (CS-201) and a hardware hold (CS-301, CS-308, CS-309) are still rep
 - A blocked dripper, a kinked line, or a valve not opening.
 - The probe has moved, or isn't where the drippers wet the cube.
 - Shots too small to lift the reading.
+- Drip lines that drain between shots: each shot refills them first, so the plants get less than its size says.
 
 **Suggested fixes**
 
