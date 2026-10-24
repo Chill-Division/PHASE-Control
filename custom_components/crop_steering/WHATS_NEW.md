@@ -21,7 +21,7 @@ people who build the system:
 `tests/test_whats_new.py` checks the shape and the plain words, and that the newest section is the
 version being released.
 
-## Unreleased
+## 1.5.2 - 2026-10-24
 
 - Automatic targets no longer pause when a probe feels the morning's water late: the ramp is judged once it is over.
 
