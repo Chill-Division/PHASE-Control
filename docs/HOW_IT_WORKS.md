@@ -149,9 +149,11 @@ off. It never touches the rescue level, the dryback target or any timing.
   ramp that reaches its target while still climbing aims a point higher the next day.
 
 Until it has two days of each drying rate, it only keeps the peak target and the maintenance trigger
-near the zone's peak; the day plan below starts after that. A ramp that barely climbed, or stalled
-well under a peak the zone has reached before, looks like a delivery or probe problem: nothing is
-learned or changed, and the zone's Auto line says to check the dripper, line and probe.
+near the zone's peak; the day plan below starts after that. A ramp is judged once it is over: one
+that ended well under a peak the zone has reached before, or never lifted the reading, looks like a
+delivery or probe problem. Nothing is learned or changed, and the zone's Auto line says to check the
+dripper, line and probe. Flat shots partway through a ramp are not judged on their own: water can take
+half an hour to reach a probe, and a ramp can sit flat for a few shots before it climbs again.
 
 ### How it plans the day
 

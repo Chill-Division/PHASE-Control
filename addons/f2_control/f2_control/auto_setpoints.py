@@ -13,8 +13,10 @@ should be, from how the probe actually behaved:
   * After a plateau the peak is held for a few days, then probed one point higher again. A ramp that
     reaches its target while still responding means tomorrow aims one point higher.
   * A "plateau" is only believed if the ramp really climbed and did not stall far under a peak the
-    zone has held before. Anything else is a delivery or probe problem: nothing is learned, nothing
-    is rewritten, and the reason is published.
+    zone has held before. Flat shots anywhere else are not judged while the ramp goes on: water can
+    take half an hour to reach a probe, and a ramp can sit flat for a couple of shots before it
+    climbs again. Only a ramp that ENDS far under that peak, or never climbed, is a delivery or probe
+    problem: nothing is learned, nothing is rewritten, and the reason is published.
   * The rescue level is the operator's emergency floor and never one of these setpoints. The other
     targets keep clear of it: the maintenance trigger stays the engine's ladder above it, and a
     dryback that would end under it is planned only as deep as it lets the zone go.
@@ -139,23 +141,36 @@ def tick(learn, vwc, phase, ts, lights_on, dryback_rate, minutes_since_shot):
         acc[0], acc[1] = acc[0] + dryback_rate, acc[1] + 1
 
 
-def ramp_outcome(learn, phase):
-    """pending | reached | short | plateau | suspect. Decided once per day; learning happens here."""
+def _far_under(learn, reading):
+    """Too far under a peak the zone has held for the substrate to be full."""
+    return learn["peak"] is not None and reading < learn["peak"] - SUSPECT_DROP_PTS
+
+
+def ramp_outcome(learn, phase, vwc=None):
+    """pending | reached | short | plateau | suspect. Decided once per day; learning happens here.
+
+    `vwc` is the reading now. When the engine has just ended the ramp, its last shot has not settled
+    yet, and the reading that met the target is where the ramp really ended.
+    """
     if learn["outcome"] != "pending" or not learn["ramp"]:
         return learn["outcome"]
     ramp = learn["ramp"]
     top = max(r["settled"] for r in ramp)
     flat = len(ramp) >= PLATEAU_SHOTS and all(r.get("flat") for r in ramp[-PLATEAU_SHOTS:])
-    if phase == "P1" and flat:
-        climbed = top - (learn["ramp_start"] if learn["ramp_start"] is not None else top) >= MIN_CLIMB_PTS
-        far_under = learn["peak"] is not None and top < learn["peak"] - SUSPECT_DROP_PTS
-        if climbed and not far_under:
+    start = learn["ramp_start"] if learn["ramp_start"] is not None else top
+    if phase == "P1":
+        # Owner, 2026-10-24: GR2's probe reads a shot 9 to 34 minutes after it fires, the drier the
+        # coco the later, and its ramps sit flat for a couple of shots before climbing again. Judged
+        # mid-ramp, three ramps that went on to reach their target raised CS-404. Only a plateau near a
+        # peak the zone has held is decided here; the ramp's end decides the rest.
+        if flat and top - start >= MIN_CLIMB_PTS and not _far_under(learn, top):
             learn.update(prev_peak=learn["peak"], prev_hold=learn["hold_days"])
             learn.update(outcome="plateau", peak=top, hold_days=HOLD_DAYS)
-        else:
-            learn.update(outcome="suspect", stalled_at=top)
-    elif phase in ("P2", "P3"):  # the engine graduated the ramp itself
-        if not ramp[-1].get("flat") and not flat:  # still taking water when the target was met
+    elif phase in ("P2", "P3"):  # the engine ended the ramp itself
+        end = top if vwc is None else max(top, vwc)
+        if _far_under(learn, end) or (learn["peak"] is None and end - start < MIN_CLIMB_PTS):
+            learn.update(outcome="suspect", stalled_at=end)
+        elif not ramp[-1].get("flat") and not flat:  # still taking water when the target was met
             learn.update(outcome="reached", peak=max(top, learn["peak"] or 0.0))  # a plateau hold stays in force
         else:
             learn["outcome"] = "short"
@@ -168,8 +183,8 @@ def frozen_reason(learn):
     if learn["outcome"] != "suspect":
         return None
     if learn["peak"] is not None and learn["stalled_at"] is not None and learn["stalled_at"] < learn["peak"] - SUSPECT_DROP_PTS:
-        return (f"ramp stalled at {learn['stalled_at']:.1f}%, {learn['peak'] - learn['stalled_at']:.1f} points under "
-                f"the peak this zone has held ({learn['peak']:.1f}%): check delivery and the probe")
+        return (f"the ramp ended at {learn['stalled_at']:.1f}%, {learn['peak'] - learn['stalled_at']:.1f} points "
+                f"under the peak this zone has held ({learn['peak']:.1f}%): check delivery and the probe")
     return "ramp shots are not lifting VWC: water is not reaching this probe (check the dripper, line and probe)"
 
 

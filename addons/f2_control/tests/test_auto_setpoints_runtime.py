@@ -131,11 +131,19 @@ def test_an_armed_grow_plan_owns_the_room_so_nothing_is_written():
 
 def test_a_ramp_that_never_lifted_vwc_freezes_and_alerts_once_instead_of_learning_a_false_ceiling():
     c, fake, room = _rig()
-    _flat_ramp(c, fake, room, rises=(0.1, 0.0, 0.1), start=24.0)
+    vwc, now = _flat_ramp(c, fake, room, rises=(0.1, 0.0, 0.1), start=24.0)
+
+    def alerts():
+        sent = [d for dom, svc, d in fake.calls if (dom, svc) == ("persistent_notification", "create")]
+        return [a for a in sent if "auto_" in a["notification_id"]]
+
+    assert alerts() == []  # while the ramp goes on, its water may still be on the way to the probe
+    room.state[1]["phase"] = "P2"  # the engine ended the ramp, and the reading never climbed
+    for k in (1, 2):
+        _tick(c, fake, room, vwc, now + timedelta(minutes=k))
     assert _writes(fake) == {}
     assert fake.sets["sensor.crop_steering_zone_1_auto_setpoints"][0] == "frozen"
-    alerts = [d for dom, svc, d in fake.calls if (dom, svc) == ("persistent_notification", "create")]
-    assert len([a for a in alerts if "auto_" in a["notification_id"]]) == 1
+    assert len(alerts()) == 1
 
 
 def test_learned_state_is_saved_with_the_zone_and_restored():
