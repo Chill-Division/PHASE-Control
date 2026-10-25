@@ -87,6 +87,27 @@ def test_the_room_decides_once_and_its_one_shot_is_counted_on_every_zone(monkeyp
     assert [pub[z]["vwc"] for z in ZONES] == [40, 41, 42]  # each zone still says its own reading
 
 
+def test_each_zone_counts_its_own_water_and_starts_the_grow_day_from_nothing(monkeypatch):
+    # Owner, 2026-10-26: GT1, one valve for GT1-AT's 5 plants and GT1-LMC's 2, each plant one 4 L/h
+    # dripper. Every pass the second zone copied the first's water today, so GT1-LMC read 2.5 times
+    # GT1-AT's a plant, though every plant got the same.
+    c, fake, room = _room(monkeypatch)
+    for zone, plants in zip(ZONES, (5, 2, 2)):
+        fake.set_state(f"number.crop_steering_zone_{zone}_plant_count", str(plants))
+    for zone in ZONES:
+        probe(fake, zone, 40)
+    c._loop_room(room, Clock.now())  # the shot
+    c._loop_room(room, Clock.now())  # the next pass, where the other zones follow the first
+    water = [room.state[z]["daily_vol"] for z in ZONES]
+    assert water[0] > 0
+    assert water[1:] == [pytest.approx(water[0] * 2 / 5)] * 2  # the same a plant
+    assert [room.state[z]["shots"] for z in ZONES] == [1, 1, 1]  # one shot, every zone's
+    # The first zone starts a new grow-day: every zone counts from nothing.
+    room.state[1].update(daily_vol=0.0, last_daily_reset=date(2026, 10, 23))
+    c._follow_lead(room, c._valve_group(room))
+    assert [room.state[z]["daily_vol"] for z in ZONES] == [0.0, 0.0, 0.0]
+
+
 def test_the_zones_readings_decide_together_as_the_first_zone_reads_its_probes(monkeypatch):
     c, fake, room = _room(monkeypatch)
     for zone, vwc in zip(ZONES, (40, 60, 60)):  # one zone dry, the room on average not
