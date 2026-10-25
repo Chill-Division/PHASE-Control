@@ -24,8 +24,9 @@ version being released.
 ## Unreleased
 
 - See when your reservoir will need refilling, estimated from how fast it went down over the last day.
-- Where one valve waters every zone, each zone now shows the water it actually got.
 - A zone waiting for its reservoir to refill now shows as information, not as a critical alert.
+- Help now shows which steering mode each stage of flower calls for, from the Athena Handbook.
+- Bug fixes and improvements.
 
 ## 1.5.2 - 2026-10-24
 

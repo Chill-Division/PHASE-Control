@@ -1,8 +1,9 @@
 # Unreleased
 
 - Feed › Reservoir says when the reservoir will need refilling, from how fast it has gone down.
-- In a room where one valve waters every zone, each zone counts the water it got, not the first zone's.
-- The dashboard shows a zone waiting for a reservoir refill as information, not as a critical alert.
+- A zone waiting for a reservoir refill shows as information, not as a critical alert.
+- Help shows which steering mode each stage of flower calls for.
+- Bug fixes and improvements.
 
 # 1.5.2
 
