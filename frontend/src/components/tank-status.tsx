@@ -5,6 +5,8 @@ import { Pill } from "@/components/mini-visuals";
 import type { Controller } from "@/lib/types";
 import { tankTelemetry, type TankReading } from "@/lib/tank-telemetry";
 import { TankLevelChart } from "./tank-level-chart";
+import { refillByText, useRefillBy } from "./refill-estimate";
+import { refillByWords } from "@/lib/refill-estimate";
 import "./tank-status.css";
 
 export function TankStatus({
@@ -28,6 +30,8 @@ export function TankStatus({
   // Nothing refills it by itself, and it is down to the level a reminder comes at (CS-706).
   const remind = tank.source?.remindPct ?? null;
   const soon = remind !== null && level !== null && level <= remind;
+  const refillBy = useRefillBy(controller, tank.source, level);
+  const by = refillBy && refillByText(refillBy);
   // The drawing's inside runs from y=119 (empty) to y=1 (full): 1.18 units per percent.
   const surface = level === null ? null : 119 - level * 1.18;
   return (
@@ -114,6 +118,16 @@ export function TankStatus({
               </div>
             </>
           )}
+          {/* Owner, 2026-10-26: when it will need refilling, from how fast it went in the last day. */}
+          {by && (
+            <div className="tank-refill-by" data-refill-by>
+              <dt>{by.label}</dt>
+              <dd>
+                {by.when}
+                {by.note && <small>{by.note}</small>}
+              </dd>
+            </div>
+          )}
         </dl>
       </div>
     </section>
@@ -138,6 +152,7 @@ export function ReservoirSummary({
   const remind = source?.remindPct ?? null;
   const soon = remind !== null && level !== null && level <= remind;
   const min = source?.minPct ?? null;
+  const refillBy = useRefillBy(controller, source, level);
   const mapped = !!(tank.level.entityId || tank.pump.entityId || refill);
   if (!mapped)
     return (
@@ -164,7 +179,13 @@ export function ReservoirSummary({
       : refill?.now === "Not running"
         ? "Idle"
         : (refill?.now ?? (tank.pump.on === false ? "Pump off" : null));
+  const estimate = refillBy?.estimate.at ?? null;
   const line = [
+    estimate !== null &&
+      estimate !== Infinity &&
+      (estimate <= refillBy!.now
+        ? "refill now"
+        : `${refillBy!.selfRefilling ? "estimated refill by" : "estimated refill needed by"} ${refillByWords(estimate, refillBy!.now)}`),
     refill?.lastAt &&
       `last refill ${new Date(refill.lastAt).toLocaleString([], { dateStyle: "short", timeStyle: "short" })}${refill.lastStopped ? " (stopped)" : ""}`,
     min !== null && `minimum ${Math.round(min)}%`,

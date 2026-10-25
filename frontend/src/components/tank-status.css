@@ -148,6 +148,17 @@
 .tank-equipment .is-on dd {
   color: var(--primary-strong);
 }
+/* The estimated refill: a row of its own under the pump and the refills, with how it was worked out. */
+.tank-equipment .tank-refill-by {
+  grid-column: 1 / -1;
+}
+.tank-refill-by small {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-weight: 400;
+}
 @media (max-width: 480px) {
   .tank-layout {
     padding: 16px;

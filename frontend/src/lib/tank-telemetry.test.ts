@@ -98,10 +98,12 @@ describe("room tank telemetry", () => {
       distance: { unit: "mm", fullMm: 125, emptyMm: 850 },
       minPct: 5,
       remindPct: null, // its automatic refills keep it up
+      selfRefilling: true,
     });
     // With them off, a reminder to refill it by hand comes at 20%; one at its minimum never does.
     states["switch.crop_steering_auto_batches"].state = "off";
     expect(tankTelemetry(states, room).source?.remindPct).toBe(20);
+    expect(tankTelemetry(states, room).source?.selfRefilling).toBe(false);
     states["sensor.crop_steering_feed_plan"].attributes.remind_pct = 5;
     expect(tankTelemetry(states, room).source?.remindPct).toBeNull();
     // Flower 1 has no reservoir level sensor to chart.
@@ -114,6 +116,7 @@ describe("room tank telemetry", () => {
       distance: { unit: "cm", fullMm: 125, emptyMm: 850 },
       minPct: 5,
       remindPct: null,
+      selfRefilling: false,
     };
     const series = levelSeries(
       [
