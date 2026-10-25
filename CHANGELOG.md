@@ -22,6 +22,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   other zones showed the first zone's water today instead of their own: GT1's two plants read 2.5
   times what its five did, a plant, though every plant got the same shot. Each now counts the water
   its own drippers gave. Watering itself was never affected.
+- **A reservoir refill no longer reads as Critical.** A zone waiting for its reservoir's batch,
+  another room's refill or its settings to load is shown as information, saying watering carries on
+  by itself. A hold someone set (a paused zone, a manual override, an external hold) is a warning
+  saying how it resumes, and only a fault stays Critical. GR2's batch mixing at the start of P1, with
+  automatic refills set up, read "GR2 needs attention" in red.
 
 ### 🔧 Technical notes
 
@@ -37,6 +42,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   water `_count_shot` gives each (its own flow's worth, `_shares`) instead of copying the first
   zone's every pass; `_follow_lead` zeroes a zone's own count when the first zone starts a new
   grow-day. Its water history was already its own. `test_one_valve_room.py`.
+- Dashboard: `zoneLabelWords` labels a hold that ends by itself (`refilling its reservoir (…)`,
+  `waiting for …'s reservoir refill (…)`, `waiting for its settings to load`) `Waiting: …`, and
+  `setHoldWords` words a hold someone set (`zone disabled`, `manual override`, a one-valve room's
+  other zone paused or on override, `external hold (…)`). `buildRoom` gives the first an Info notice
+  ("… is waiting"), the second a Warning ("… isn't being watered"); every other hold stays Critical
+  ("… needs attention"). A batch that fails still raises CS-701 to CS-705, and a zone a hold leaves
+  dry CS-207. The demo holds a room's watering zones while its batch runs, as the controller's
+  `_batch_hold` does. `controller-health.test.ts`, and verify-dashboard's reservoir check.
 
 ## [1.5.2] - 2026-10-24
 
