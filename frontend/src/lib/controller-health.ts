@@ -82,6 +82,24 @@ export const holdWords = (text: string) => text.replace(/room off \(kill switch\
 export const WATCHING_LABEL = "Watching only";
 /** A zone's status while the room's saved setup change waits for the controller. */
 export const SETUP_LABEL = "Setup change waiting";
+/** Holds that end by themselves: the room's nutrient batch (its pump is busy), another room's that
+ * shares the water, and the settings still loading at a start. The zone waits; nothing is wrong. A
+ * batch that goes wrong raises its own CS-701 to CS-705, and a zone left dry by any hold CS-207. */
+const ROUTINE_HOLD =
+  /^(refilling its reservoir \(|waiting for .+'s reservoir refill \(|waiting for its settings to load)/;
+/** What a hold someone set on purpose means, in the dashboard's words: it stays until it is undone.
+ * Null for any other hold. */
+export function setHoldWords(hold: string): string | null {
+  if (hold === "zone disabled") return "Paused: no shots until it's switched back on.";
+  if (hold === "manual override")
+    return "On manual override: no shots from the controller until the override is off.";
+  if (/ paused \(one valve waters every zone\)$/.test(hold))
+    return `${hold}: no shots until it's switched back on.`;
+  if (/ on manual override \(one valve waters every zone\)$/.test(hold))
+    return `${hold}: no shots from the controller until the override is off.`;
+  if (/^external hold \(/.test(hold)) return `E${hold.slice(1)}: no shots while it's on.`;
+  return null;
+}
 /** A zone's status label in the dashboard's words. The controller labels a held zone "Blocked:"
  * and its hold; held for the room's watering switch, that is the room's Watching only (its status
  * line says so, with the way back to Steering), not a fault of the zone's. */
@@ -93,6 +111,9 @@ export function zoneLabelWords(label: string): string {
   if (words === "watering switch unavailable") return "Watering switch unavailable";
   // A saved setup change the controller has not taken on: the room's line says so, and how on.
   if (/^Setup change/.test(words)) return SETUP_LABEL;
+  // Owner, 2026-10-25: GR2's batch mixing at the start of P1 raised a Critical "needs attention",
+  // with automatic refills set up. A hold that ends by itself is the zone waiting, not stopped.
+  if (ROUTINE_HOLD.test(words)) return `Waiting: ${words}`;
   return label;
 }
 /** The controller's own zone label (`zone_status_label` in crop_steering_engine/core.py), rebuilt

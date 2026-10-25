@@ -212,6 +212,27 @@ export class FeedDemo {
           },
           last_updated: now.toISOString(),
         };
+        // As the controller does (_batch_hold): while the batch runs, the room's every shot waits,
+        // and each zone that would water says so.
+        const hold = "refilling its reservoir (filling)";
+        const zones = Number(
+          states[`sensor.crop_steering_${prefix}engine_config`]?.attributes.num_zones ?? 0,
+        );
+        const blocked: string[] = [];
+        for (let zone = 1; zone <= zones; zone++) {
+          const phase = states[`sensor.crop_steering_${prefix}zone_${zone}_phase`]?.state;
+          const zoneStatus = states[`sensor.crop_steering_${prefix}zone_${zone}_status`];
+          if (!zoneStatus || (phase !== "P1" && phase !== "P2")) continue;
+          blocked.push(`Z${zone} ${phase} ${hold}`);
+          states[zoneStatus.entity_id] = { ...zoneStatus, state: `Blocked: ${hold}` };
+        }
+        const decision = states[`sensor.crop_steering_${prefix}current_decision`];
+        if (decision && blocked.length)
+          states[decision.entity_id] = {
+            ...decision,
+            state: blocked[0],
+            attributes: { ...decision.attributes, fired: [], blocked },
+          };
       }
       this.updateStates(states);
       return { ...clone(doc), requested: now.toISOString() };
