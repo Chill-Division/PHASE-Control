@@ -1,6 +1,7 @@
 # Unreleased
 
 - Feed › Reservoir says when the reservoir will need refilling, from how fast it has gone down.
+- In a room where one valve waters every zone, each zone counts the water it got, not the first zone's.
 
 # 1.5.2
 

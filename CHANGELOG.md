@@ -18,6 +18,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   It goes by how fast the recorded level fell over the last day, refills left out, played forward in
   the same daily pattern, so a reservoir that empties during the morning ramp shows its refill in the
   morning. It needs no tank size, and works for a reservoir refilled by hand.
+- **Each zone on one valve shows its own water.** In a room where one valve waters every zone, the
+  other zones showed the first zone's water today instead of their own: GT1's two plants read 2.5
+  times what its five did, a plant, though every plant got the same shot. Each now counts the water
+  its own drippers gave. Watering itself was never affected.
 
 ### 🔧 Technical notes
 
@@ -29,6 +33,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   card has an Estimated refill by row ("needed by", with the reminder's time, unless the controller
   refills it: `LevelSource.selfRefilling`), and the Overview's reservoir line leads with it.
   `levelReadings` is shared with the level chart. `refill-estimate.test.ts`, and verify-tank-status.
+- Controller: `daily_vol` is no longer in `_FOLLOWED`, so a one-valve room's other zones keep the
+  water `_count_shot` gives each (its own flow's worth, `_shares`) instead of copying the first
+  zone's every pass; `_follow_lead` zeroes a zone's own count when the first zone starts a new
+  grow-day. Its water history was already its own. `test_one_valve_room.py`.
 
 ## [1.5.2] - 2026-10-24
 

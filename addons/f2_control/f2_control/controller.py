@@ -2040,8 +2040,9 @@ class Controller:
         return made[0], made[1], own
 
     # What a one-valve room's other zones take on from its first zone's pass (_valve_group): the phase
-    # and the day it is in, its counters and its EC steer, so each says what the room does and counts it.
-    _FOLLOWED = ("phase", "last_phase_change", "peak", "shots", "daily_vol", "last_daily_reset",
+    # and the day it is in, its shot count and its EC steer, so each says what the room does. Not its
+    # water: a shot gives each zone its own flow's worth (_shares), and each counts its own.
+    _FOLLOWED = ("phase", "last_phase_change", "peak", "shots", "last_daily_reset",
                  "last_shot", "last_shot_is_anchor", "ec_offset", "last_ec_steer")
 
     def _follow_lead(self, room, group):
@@ -2049,6 +2050,12 @@ class Controller:
         changed = False
         for zone in group[1:]:
             st = room.state[zone]
+            # Owner, 2026-10-26: GT1's second zone copied the first's water today every pass, so with
+            # 5 plants and 2 on the one valve it read 2.5 times the first's a plant. Each zone counts its
+            # own, from nothing at the grow-day the first zone starts.
+            if st.get("last_daily_reset") != lead.get("last_daily_reset"):
+                st["daily_vol"] = 0.0
+                changed = True
             for key in self._FOLLOWED:
                 if st.get(key) != lead.get(key):
                     st[key] = lead.get(key)

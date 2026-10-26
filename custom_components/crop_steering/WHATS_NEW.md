@@ -24,6 +24,7 @@ version being released.
 ## Unreleased
 
 - See when your reservoir will need refilling, estimated from how fast it went down over the last day.
+- Where one valve waters every zone, each zone now shows the water it actually got.
 
 ## 1.5.2 - 2026-10-24
 
