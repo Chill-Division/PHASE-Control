@@ -1,3 +1,7 @@
+# Unreleased
+
+- Feed › Reservoir says when the reservoir will need refilling, from how fast it has gone down.
+
 # 1.5.2
 
 Pair with integration 1.5.2.

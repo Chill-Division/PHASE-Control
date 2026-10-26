@@ -69,6 +69,14 @@ try {
   // The refills are the controller's own record: none running, and when the last one ended.
   assert.equal(await tank.locator("[data-refill-state]").getAttribute("data-refill-state"), "idle");
   assert.match(await tank.innerText(), /Refill\s+Not running/);
+  // Owner, 2026-10-26: when it will need refilling, from how fast it went in the last day (the
+  // demo's refill left out).
+  const refillBy = tank.locator("[data-refill-by]");
+  await refillBy.waitFor();
+  assert.match(
+    await refillBy.innerText(),
+    /^Estimated refill by\n(Today|Tomorrow|Mon|Tue|Wed|Thu|Fri|Sat|Sun)\b.*\n.*at its 5% minimum\. It used \d+% of the tank in the last day\.$/,
+  );
   assert.doesNotMatch(await tank.innerText(), /Not mapped/, "nothing on the card asks to be mapped");
   // Beside the tank, its level over the last 24 hours (the refill, and the shots since), ending on now.
   const history = tank.locator("[data-tank-history]");
@@ -154,6 +162,10 @@ try {
   assert.equal(await summary.locator("[data-pump-state]").getAttribute("data-pump-state"), "on");
   assert.match(await summary.innerText(), /29%\s*full/);
   assert.match(await summary.innerText(), /last refill .*minimum 5%/);
+  await page.waitForFunction(
+    (selector) => /^estimated refill by /.test(document.querySelector(`${selector} .reservoir-line`)?.textContent ?? ""),
+    SUMMARY,
+  );
   assert.doesNotMatch(await summary.innerText(), /°C/, "no water temperature on the summary");
   assert.doesNotMatch(
     await summary.innerText(),
@@ -276,6 +288,9 @@ try {
   await page.locator(".res-batch [data-refill-soon]").waitFor(); // 29%, at or under 30%
   const reminded = page.locator(FULL);
   await reminded.locator("[data-refill-soon]").waitFor();
+  // Refilled by hand, its refill is needed by then (owner, 2026-10-26).
+  await reminded.locator("[data-refill-by]").waitFor();
+  assert.equal(await reminded.locator("[data-refill-by] dt").innerText(), "Estimated refill needed by");
   await reminded.locator(".tank-remind-line").first().waitFor({ state: "attached" });
   assert.match(
     await reminded.locator("[data-tank-history]").getAttribute("aria-label"),

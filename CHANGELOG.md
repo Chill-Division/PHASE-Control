@@ -10,6 +10,26 @@ and code-level detail for developers and AI agents working on the repo.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+- **Estimated refill by.** Feed → Reservoir says when the reservoir is expected to reach its minimum,
+  and the Overview's reservoir card leads with it: "Estimated refill by" where the controller refills
+  it, "Estimated refill needed by" where it is refilled by hand, with when its reminder comes.
+  It goes by how fast the recorded level fell over the last day, refills left out, played forward in
+  the same daily pattern, so a reservoir that empties during the morning ramp shows its refill in the
+  morning. It needs no tank size, and works for a reservoir refilled by hand.
+
+### 🔧 Technical notes
+
+- Dashboard: `refillEstimate` (`lib/refill-estimate.ts`) takes the level sensor's last 24 hours as
+  quarter-hour medians, leaves out any rise over 3 points (a refill), and walks the day's falls
+  forward from now until the level reaches the minimum (0 without one), up to 30 days; without about
+  a day of recorded level, or with hardly any use, it says why instead. `useRefillBy` reads 25 hours
+  of the level every 10 minutes while shown, and works the reminder's time out the same way. The tank
+  card has an Estimated refill by row ("needed by", with the reminder's time, unless the controller
+  refills it: `LevelSource.selfRefilling`), and the Overview's reservoir line leads with it.
+  `levelReadings` is shared with the level chart. `refill-estimate.test.ts`, and verify-tank-status.
+
 ## [1.5.2] - 2026-10-24
 
 Integration and controller **1.5.2**.

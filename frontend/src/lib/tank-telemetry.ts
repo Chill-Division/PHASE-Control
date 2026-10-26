@@ -20,6 +20,8 @@ export interface LevelSource {
   /** While nothing refills it by itself, the level a person is reminded to refill it by hand at, %
    * (reminderPct); null where no reminder comes. */
   remindPct: number | null;
+  /** The controller refills it by itself: it has what a refill needs, and automatic refills are on. */
+  selfRefilling: boolean;
 }
 
 /** The refills the controller runs for the room's reservoir, as it records them. */
@@ -100,6 +102,7 @@ export function tankTelemetry(states: States, room: Room) {
           },
           minPct: minPct > 0 ? minPct : null,
           remindPct,
+          selfRefilling: canRefill(config) && auto === "on",
         }
       : null;
   return {
@@ -130,6 +133,20 @@ export function middleTimeFits(width: number, start: string, middle: string, end
 /** The reservoir's recorded readings as % full over the last `hours`, in LEVEL_STEPS steps: each step
  * the middle reading recorded in it, or with none the level it held (Home Assistant records a change,
  * not a level that holds still). It ends on `current`, the level the card shows now. */
+/** A level sensor's recorded readings as % full, oldest first, worked out as the controller does. */
+export function levelReadings(
+  points: { time: string; value: number }[],
+  source: LevelSource,
+): { at: number; pct: number }[] {
+  const { distance } = source;
+  const pctOf = (value: number) =>
+    levelPct(distanceMm(value, distance.unit), distance.fullMm, distance.emptyMm);
+  return points
+    .map((point) => ({ at: Date.parse(point.time), pct: pctOf(point.value) }))
+    .filter((r): r is { at: number; pct: number } => Number.isFinite(r.at) && r.pct !== null)
+    .sort((a, b) => a.at - b.at);
+}
+
 export function levelSeries(
   points: { time: string; value: number }[],
   source: LevelSource,
@@ -137,13 +154,7 @@ export function levelSeries(
   current: number | null,
   now = Date.now(),
 ): { at: number; pct: number | null }[] {
-  const { distance } = source;
-  const pctOf = (value: number) =>
-    levelPct(distanceMm(value, distance.unit), distance.fullMm, distance.emptyMm);
-  const readings = points
-    .map((point) => ({ at: Date.parse(point.time), pct: pctOf(point.value) }))
-    .filter((r): r is { at: number; pct: number } => Number.isFinite(r.at) && r.pct !== null)
-    .sort((a, b) => a.at - b.at);
+  const readings = levelReadings(points, source);
   const tenth = (pct: number | null) => (pct === null ? null : Math.round(pct * 10) / 10);
   const start = now - hours * 3_600_000,
     step = (now - start) / LEVEL_STEPS;
