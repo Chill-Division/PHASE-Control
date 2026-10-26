@@ -704,6 +704,19 @@ try {
     await page.setViewportSize({ width: 390, height: 844 });
     await noOverflow();
     await page.setViewportSize({ width: 1440, height: 1000 });
+    // Owner, 2026-10-25: while a batch runs every shot in the room waits, and that is information,
+    // not a Critical "needs attention" (GR2's raised one with automatic refills set up).
+    await go("overview");
+    const needs = page.locator("[data-needs-you] .needs-row");
+    await expectVisible(needs.first());
+    const notices = await needs.evaluateAll((all) =>
+      all.map((row) => [row.dataset.severity, row.querySelector(".needs-title strong").textContent]),
+    );
+    assert.ok(
+      notices.some(([tone, title]) => tone === "info" && title === "Zone 1, Zone 2 and Zone 3 are waiting"),
+      JSON.stringify(notices),
+    );
+    assert.ok(!notices.some(([tone]) => tone === "critical"), JSON.stringify(notices));
   });
   await check("feed schedule: each week its recipe from Week 1's day; a pick holds until next week", async () => {
     await go("reservoir");

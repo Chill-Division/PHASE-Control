@@ -23,6 +23,7 @@ import {
   RESTING,
   WATCHING_LABEL,
   zoneLabelWords,
+  setHoldWords,
 } from "./controller-health";
 import { BATCH_SWITCH_KEYS } from "./feed";
 import { oneValve } from "./plumbing";
@@ -733,8 +734,14 @@ export function buildRoom(states: States, room: Room): RoomView {
   };
   // Zones with the identical problem share one notice instead of one each. A hardware fault is the
   // room's: its own notice below says it once, not again for each zone it blocks.
-  const problems = new Map<string, { kind: "sensors" | "status"; detail: string; zones: Zone[] }>();
+  const problems = new Map<
+    string,
+    { kind: "sensors" | "waiting" | "held" | "status"; detail: string; zones: Zone[] }
+  >();
   for (const zone of zones) {
+    const waiting = /^Waiting: (.*)$/.exec(zone.status)?.[1];
+    const held = /^Blocked: (.*)$/.exec(zone.status)?.[1];
+    const set = held === undefined ? null : setHoldWords(held);
     const problem =
       zone.vwc.value === null || zone.ec.value === null
         ? {
@@ -752,10 +759,18 @@ export function buildRoom(states: States, room: Room): RoomView {
                 .join(" ") +
               " Check probes and update times before relying on automatic irrigation.",
           }
-        : /fault|blocked|unsafe|error/i.test(zone.status) &&
-            !(roomFault && /hardware fault/i.test(zone.status))
-          ? { kind: "status" as const, detail: zone.status }
-          : null;
+        : // A hold that ends by itself, or one someone set, is no fault of the zone's.
+          waiting !== undefined
+          ? {
+              kind: "waiting" as const,
+              detail: `${waiting.charAt(0).toUpperCase()}${waiting.slice(1)}: watering carries on by itself once that's done.`,
+            }
+          : set
+            ? { kind: "held" as const, detail: set }
+            : /fault|blocked|unsafe|error/i.test(zone.status) &&
+                !(roomFault && /hardware fault/i.test(zone.status))
+              ? { kind: "status" as const, detail: zone.status }
+              : null;
     if (!problem) continue;
     const key = `${problem.kind}\n${problem.detail}`;
     problems.set(key, { ...problem, zones: [...(problems.get(key)?.zones ?? []), zone] });
@@ -771,9 +786,18 @@ export function buildRoom(states: States, room: Room): RoomView {
       title:
         kind === "sensors"
           ? `${list}: sensor data unavailable`
-          : `${list} ${one ? "needs" : "need"} attention`,
+          : kind === "waiting"
+            ? `${list} ${one ? "is" : "are"} waiting`
+            : kind === "held"
+              ? `${list} ${one ? "isn't" : "aren't"} being watered`
+              : `${list} ${one ? "needs" : "need"} attention`,
       detail,
-      severity: kind === "sensors" ? "warning" : "critical",
+      severity:
+        kind === "waiting"
+          ? "info"
+          : kind === "sensors" || kind === "held"
+            ? "warning"
+            : "critical",
       ...(one ? { zoneId: one.id } : {}),
     };
   });

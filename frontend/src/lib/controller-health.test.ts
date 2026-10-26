@@ -331,8 +331,8 @@ describe("notices", () => {
       { reason: "P2 top-up" },
     );
     expect(view(states).alerts.map((alert) => [alert.title, alert.zoneId])).toEqual([
-      ["Zone 3 needs attention", 3],
       ["Zone 1 and Zone 2: sensor data unavailable", undefined],
+      ["Zone 3 isn't being watered", 3],
     ]);
   });
 });
@@ -415,7 +415,65 @@ describe("zone status text", () => {
     const other = fixture([
       entity("sensor.crop_steering_zone_1_status", "Blocked: manual override", { reason: "P2" }),
     ]);
-    expect(view(other).alerts.map((alert) => alert.title)).toEqual(["Zone 1 needs attention"]);
+    expect(view(other).alerts.map((alert) => alert.title)).toEqual(["Zone 1 isn't being watered"]);
+  });
+  it("calls a hold that ends by itself waiting, an Info, and one someone set a Warning", () => {
+    // Owner, 2026-10-25: GR2's batch mixing at the start of P1, with automatic refills set up,
+    // raised a Critical "GR2 needs attention".
+    const held = (words: string) =>
+      view(
+        fixture([
+          entity("sensor.crop_steering_zone_1_status", `Blocked: ${words}`, { reason: "P1 ramp" }),
+        ]),
+      );
+    for (const words of [
+      "refilling its reservoir (mixing)",
+      "waiting for Flower 1's reservoir refill (filling)",
+      "waiting for its settings to load (P1 target, P2 shot size)",
+    ]) {
+      const room = held(words);
+      expect(room.zones[0].status).toBe(`Waiting: ${words}`);
+      expect(room.alerts).toEqual([
+        expect.objectContaining({
+          title: "Zone 1 is waiting",
+          severity: "info",
+          detail: `${words[0].toUpperCase()}${words.slice(1)}: watering carries on by itself once that's done.`,
+          zoneId: 1,
+        }),
+      ]);
+    }
+    for (const [words, detail] of [
+      ["zone disabled", "Paused: no shots until it's switched back on."],
+      [
+        "manual override",
+        "On manual override: no shots from the controller until the override is off.",
+      ],
+      [
+        "Zone 2 paused (one valve waters every zone)",
+        "Zone 2 paused (one valve waters every zone): no shots until it's switched back on.",
+      ],
+      ["external hold (tank_dosing)", "External hold (tank_dosing): no shots while it's on."],
+    ])
+      expect(held(words).alerts).toEqual([
+        expect.objectContaining({
+          title: "Zone 1 isn't being watered",
+          severity: "warning",
+          detail,
+        }),
+      ]);
+    // A fault, and any hold this dashboard doesn't know, stays Critical.
+    for (const words of [
+      "switch.gr2_valve offline (reads neither on nor off)",
+      "Strategy hold: snapshot unavailable",
+      "something new",
+    ])
+      expect(held(words).alerts).toEqual([
+        expect.objectContaining({
+          title: "Zone 1 needs attention",
+          severity: "critical",
+          detail: `Blocked: ${words}`,
+        }),
+      ]);
   });
   it("shows the last reported status, marked stale, when the controller is not reporting", () => {
     const states = fixture([integration(1, "Dry - Needs Water")]);
