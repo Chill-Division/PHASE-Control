@@ -12,21 +12,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- **Estimated refill by.** Feed → Reservoir says when the reservoir is expected to reach its minimum,
-  and the Overview's reservoir card leads with it: "Estimated refill by" where the controller refills
-  it, "Estimated refill needed by" where it is refilled by hand, with when its reminder comes.
-  It goes by how fast the recorded level fell over the last day, refills left out, played forward in
-  the same daily pattern, so a reservoir that empties during the morning ramp shows its refill in the
-  morning. It needs no tank size, and works for a reservoir refilled by hand.
+- **Estimated refill by.** Feed → Reservoir and the Overview's reservoir card say when the reservoir
+  is expected to reach its minimum: "Estimated refill by" where the controller refills it, "Estimated
+  refill needed by", with when the reminder comes, where it is refilled by hand. It goes by how fast
+  the level fell over the last day, refills left out, so it needs no tank size.
 - **Each zone on one valve shows its own water.** In a room where one valve waters every zone, the
-  other zones showed the first zone's water today instead of their own: GT1's two plants read 2.5
-  times what its five did, a plant, though every plant got the same shot. Each now counts the water
-  its own drippers gave. Watering itself was never affected.
-- **A reservoir refill no longer reads as Critical.** A zone waiting for its reservoir's batch,
-  another room's refill or its settings to load is shown as information, saying watering carries on
-  by itself. A hold someone set (a paused zone, a manual override, an external hold) is a warning
-  saying how it resumes, and only a fault stays Critical. GR2's batch mixing at the start of P1, with
-  automatic refills set up, read "GR2 needs attention" in red.
+  other zones showed the first zone's water today instead of their own. Each now counts what its own
+  drippers gave. Watering itself was never affected.
+- **A reservoir refill no longer reads as Critical.** A zone waiting for a batch, another room's
+  refill or its settings to load shows as information, saying watering carries on by itself. A hold
+  someone set (a paused zone, a manual override, an external hold) is a warning saying how it
+  resumes, and only a fault stays Critical.
+- **Steering mode through flower, in Help.** The Athena Handbook's steering for each stage of flower
+  and its dryback: stretch Generative, bulk Vegetative, and finish a generative dryback with
+  vegetative substrate EC, with where each zone's mode is set.
 
 ### 🔧 Technical notes
 
@@ -50,6 +49,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   ("… needs attention"). A batch that fails still raises CS-701 to CS-705, and a zone a hold leaves
   dry CS-207. The demo holds a room's watering zones while its batch runs, as the controller's
   `_batch_hold` does. `controller-health.test.ts`, and verify-dashboard's reservoir check.
+- Dashboard: Help's Steering mode through flower panel (`FlowerSteering`, `pages/help.tsx` and
+  `help.css`) lists the Athena Handbook's Irrigation Strategy Targets for flower (p. 40): stretch,
+  weeks 1-4, Generative, 40-50%; bulk, weeks 5-7, Vegetative, 30-40%; finish, weeks 8-9, Generative
+  for the dryback with vegetative substrate EC, 40-50%. verify-dashboard's help check reads its rows.
 
 ## [1.5.2] - 2026-10-24
 

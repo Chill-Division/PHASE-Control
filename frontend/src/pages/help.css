@@ -1,0 +1,60 @@
+/* Help → Steering mode through flower: three stages, each a row. */
+.flower-steering {
+  margin-top: 24px;
+}
+.flower-steering-table th[scope="row"] {
+  font-size: var(--text-sm);
+  font-weight: 650;
+  color: var(--foreground);
+  padding: 14px 20px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
+}
+.flower-steering-table tbody tr:last-child th {
+  border-bottom: 0;
+}
+.flower-steering-table td,
+.flower-steering-table th[scope="row"] {
+  vertical-align: top;
+}
+.flower-steering-table .cell-subtext {
+  font-weight: 400;
+  white-space: normal;
+}
+.flower-steering-dryback {
+  text-align: right;
+}
+.steering-pill {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  line-height: 1.6;
+}
+.steering-pill.is-vegetative {
+  /* A shade deeper than the success colour: on its tint, plain --success reads under 4.5:1. */
+  color: color-mix(in srgb, var(--success) 80%, var(--foreground));
+  background: color-mix(in srgb, var(--success) 12%, var(--surface));
+}
+.steering-pill.is-generative {
+  color: var(--warning);
+  background: var(--warning-bg);
+}
+.flower-steering-note {
+  margin: 0;
+  padding: 12px 20px 18px;
+  border-top: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
+  color: var(--muted-foreground);
+  font-size: var(--text-xs);
+  line-height: 1.6;
+}
+@media (max-width: 720px) {
+  .flower-steering-table th[scope="row"] {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+  .flower-steering-note {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+}

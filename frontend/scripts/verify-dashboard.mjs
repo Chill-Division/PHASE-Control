@@ -419,9 +419,22 @@ try {
     assert.equal(await start.count(), 0);
     assert.doesNotMatch(await page.locator(".zones-note").innerText(), /Watching only/);
   });
-  await check("help: the terms and the error codes, no second menu", async () => {
+  await check("help: the terms, steering through flower and the error codes, no second menu", async () => {
     await go("help");
     await expectVisible(page.getByRole("heading", { name: "Terms & phases", exact: true }));
+    await expectVisible(
+      page.getByRole("heading", { name: "Steering mode through flower", exact: true }),
+    );
+    // The Athena Handbook's table (p. 40): each stage of flower, its steering mode and dryback.
+    const stages = await page.locator(".flower-steering-table tbody tr").allInnerTexts();
+    assert.deepEqual(
+      stages.map((row) => row.replace(/\s+/g, " ").trim()),
+      [
+        "Stretch Weeks 1–4 Generative 40–50%",
+        "Bulk Weeks 5–7 Vegetative 30–40%",
+        "Finish Weeks 8–9 Generative for the dryback, with vegetative substrate EC 40–50%",
+      ],
+    );
     await expectVisible(page.getByRole("heading", { name: "Error codes", exact: true }));
     // Every page is in the menu: Help links to none of them.
     assert.equal(await page.locator('#main-content a[href^="#/"]').count(), 0);

@@ -14,6 +14,7 @@ import {
   severityLabel,
 } from "@/lib/error-codes";
 import type { Controller } from "@/lib/types";
+import "./help.css";
 const glossary = [
   [
     "PHASE",
@@ -64,6 +65,19 @@ const glossary = [
     "The planning curve is a schematic drawn from targets. Recorded history comes from Home Assistant Recorder. Neither an event acknowledgement nor a modeled curve proves physical delivery.",
   ],
 ];
+/** The steering each stage of flower calls for, from the Athena Handbook's Irrigation Strategy
+ * Targets (p. 40). Owner, 2026-10-26: "in the Help, to have that little steering mode table". */
+const flowerSteering = [
+  { stage: "Stretch", weeks: "1–4", mode: "Generative", dryback: "40–50%" },
+  { stage: "Bulk", weeks: "5–7", mode: "Vegetative", dryback: "30–40%" },
+  {
+    stage: "Finish",
+    weeks: "8–9",
+    mode: "Generative",
+    note: "for the dryback, with vegetative substrate EC",
+    dryback: "40–50%",
+  },
+];
 export function Help({
   controller,
   startTour,
@@ -100,8 +114,58 @@ export function Help({
           ))}
         </dl>
       </section>
+      <FlowerSteering />
       <ErrorCodes />
     </>
+  );
+}
+
+/** Which steering mode each stage of flower calls for, and its dryback (flowerSteering). */
+function FlowerSteering() {
+  return (
+    <section className="panel flower-steering" aria-labelledby="flower-steering-title">
+      <div className="panel-heading">
+        <div>
+          <h2 id="flower-steering-title">Steering mode through flower</h2>
+          <p>
+            The steering the Athena Handbook gives each stage of flower (p. 40). Set each zone's
+            mode on Today, under Steering mode.
+          </p>
+        </div>
+      </div>
+      <div className="table-scroll">
+        <table className="data-table flower-steering-table">
+          <thead>
+            <tr>
+              <th scope="col">Stage of flower</th>
+              <th scope="col">Steering mode</th>
+              <th scope="col" className="flower-steering-dryback">
+                Dryback
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {flowerSteering.map((row) => (
+              <tr key={row.stage}>
+                <th scope="row">
+                  {row.stage}
+                  <span className="cell-subtext">Weeks {row.weeks}</span>
+                </th>
+                <td>
+                  <span className={`steering-pill is-${row.mode.toLowerCase()}`}>{row.mode}</span>
+                  {row.note && <span className="cell-subtext">{row.note}</span>}
+                </td>
+                <td className="numeric flower-steering-dryback">{row.dryback}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="flower-steering-note">
+        Dryback is the night's fall from the day's peak, as a share of the peak: the way a zone's P3
+        dryback target reads. Before flower, steer Vegetative.
+      </p>
+    </section>
   );
 }
 
