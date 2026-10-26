@@ -10,7 +10,9 @@ and code-level detail for developers and AI agents working on the repo.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.6.0] - 2026-10-26
+
+Integration and controller **1.6.0**.
 
 - **Estimated refill by.** Feed → Reservoir and the Overview's reservoir card say when the reservoir
   is expected to reach its minimum: "Estimated refill by" where the controller refills it, "Estimated

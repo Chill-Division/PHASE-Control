@@ -1,4 +1,6 @@
-# Unreleased
+# 1.6.0
+
+Pair with integration 1.6.0.
 
 - Feed › Reservoir says when the reservoir will need refilling, from how fast it has gone down.
 - A zone waiting for a reservoir refill shows as information, not as a critical alert.
