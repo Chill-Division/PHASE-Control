@@ -7,7 +7,7 @@ the shot's reason says it, and ec_sizing() gives the dashboard the factor beside
 
 import pytest
 
-from crop_steering_engine import decide, ec_adjust, ec_scale, ec_sized, ec_sizing
+from crop_steering_engine import decide, ec_adjust, ec_scale, ec_sized, ec_sizing, next_shot_size
 from test_core import P, S
 
 
@@ -75,3 +75,25 @@ def test_ec_sizing_gives_the_dashboard_each_phases_factor():
     }
     # No reading: every shot goes in as set.
     assert ec_sizing(S(ec=None, ec_smooth=None), p) is None
+
+
+def test_with_ec_sizing_off_every_routine_shot_goes_in_as_set():
+    # The room's EC Shot Sizing switch off (ZoneParams.ec_sizing): GR1's probes read bulk EC, so its
+    # ramp goes in as set, 5%, and nothing is said of EC.
+    p = P(p1_initial=5, p1_incr=0.5, ec_target_p1=5, p1_target=80, field_capacity=85, ec_sizing=False)
+    _, _, fire, size, reason = decide(S(phase="P1", vwc=52, ec=0.62, shot_count=0), p)
+    assert (fire, size, reason) == (True, 5, "P1 ramp VWC 52<80")
+    topup = P(p2_shot_size=5, ec_sizing=False)
+    assert decide(S(phase="P2", vwc=40, ec=0.62), topup)[2:] == (True, 5, "P2 top-up VWC 40<45")
+    assert next_shot_size(S(phase="P1", vwc=52, ec=0.62, shot_count=2), p) == 6
+    assert ec_sizing(S(ec=0.62), p) == {
+        "ec": 0.62,
+        "P1": {"target": 5, "scale": 1.0},
+        "P2": {"target": 6, "scale": 1.0},
+    }
+
+
+def test_the_other_ec_rules_carry_on_with_ec_sizing_off():
+    # A flush at the maximum EC is not shot sizing: it fires as before.
+    _, _, fire, size, reason = decide(S(phase="P2", vwc=50, ec=10), P(ec_sizing=False))
+    assert fire and reason.kind == "flush_high_ec" and size == 9.0

@@ -94,6 +94,10 @@ class ZoneParams:
     #                                 Athena's 1-5% "additional dryback" before the first shot. None: the
     #                                 P3 dryback_target, as before (a P3-sized number that the latest-first-
     #                                 shot time always beat).
+    ec_sizing: bool = True          # ramp and maintenance shots are sized by pore EC (ec_adjust). False: they
+    #                                 go in as set, for a probe whose EC reads far from the substrate's (a
+    #                                 bulk reading against pore-water targets halves every shot). The other EC
+    #                                 rules (flushes, dilution, P1's EC check) are not this.
 
 
 @dataclass
@@ -204,10 +208,11 @@ def ec_sizing(s: ZoneSnapshot, p: ZoneParams) -> dict | None:
     ec = s.ec_settled if settled else s.ec
     if ec is None or not math.isfinite(ec):
         return None
+    sized = ec if p.ec_sizing else None  # switched off: every shot goes in as set
     return {
         "ec": round(ec, 2),
-        "P1": {"target": p.ec_target_p1, "scale": ec_scale(ec, p.ec_target_p1)},
-        "P2": {"target": p.ec_target_p2, "scale": ec_scale(ec, p.ec_target_p2)},
+        "P1": {"target": p.ec_target_p1, "scale": ec_scale(sized, p.ec_target_p1)},
+        "P2": {"target": p.ec_target_p2, "scale": ec_scale(sized, p.ec_target_p2)},
     }
 
 
@@ -229,6 +234,7 @@ def decide(s: ZoneSnapshot, p: ZoneParams):
     settled = s.ec_settled is not None and math.isfinite(s.ec_settled)
     ec = s.ec_settled if settled else s.ec
     ec_known = ec is not None and math.isfinite(ec)
+    sized_by = ec if p.ec_sizing else None  # what ec_adjust sizes a routine shot by; None: as set
 
     # ---- PHASE TRANSITIONS (checked before irrigation) ----
     if not s.lights_on and phase != "P3":
@@ -335,21 +341,21 @@ def decide(s: ZoneSnapshot, p: ZoneParams):
                     ir, kind = f"P1 ramp VWC {s.vwc:.0f}<{p1_ceiling:.0f}", "p1_ramp"
                 else:
                     ir, kind = f"P1 flush/runoff EC {ec:.1f} (at ceiling {p1_ceiling:.0f})", "p1_flush"
-                fire, size = True, ec_adjust(raw, ec, p.ec_target_p1)
-                ir += _ec_note(raw, ec, p.ec_target_p1)
+                fire, size = True, ec_adjust(raw, sized_by, p.ec_target_p1)
+                ir += _ec_note(raw, sized_by, p.ec_target_p1)
         elif phase == "P2":
             topup = s.vwc < p2_thr and s.minutes_since_shot >= p.p2_time_between_min
             if ec_known and ec >= p.max_ec - 1.0:
                 if flush_ok and ec_gap_ok:
                     fire, size, ir, kind = True, p.p2_shot_size * 1.5, f"P2 rescue flush EC {ec:.1f}", "p2_rescue"
                 elif topup:
-                    fire, size, ir, kind = True, ec_adjust(p.p2_shot_size, ec, p.ec_target_p2), f"P2 top-up VWC {s.vwc:.0f}<{p2_thr:.0f}", "p2_topup"
-                    ir += _ec_note(p.p2_shot_size, ec, p.ec_target_p2)
+                    fire, size, ir, kind = True, ec_adjust(p.p2_shot_size, sized_by, p.ec_target_p2), f"P2 top-up VWC {s.vwc:.0f}<{p2_thr:.0f}", "p2_topup"
+                    ir += _ec_note(p.p2_shot_size, sized_by, p.ec_target_p2)
             elif ec_known and p.ec_target_p2 > 0 and ec / p.ec_target_p2 > 1.2 and flush_ok and ec_gap_ok:
                 fire, size, ir, kind = True, p.p2_shot_size * 1.5, f"P2 dilute EC {ec:.1f}", "p2_dilute"
             elif topup:
-                fire, size, ir, kind = True, ec_adjust(p.p2_shot_size, ec, p.ec_target_p2), f"P2 top-up VWC {s.vwc:.0f}<{p2_thr:.0f}", "p2_topup"
-                ir += _ec_note(p.p2_shot_size, ec, p.ec_target_p2)
+                fire, size, ir, kind = True, ec_adjust(p.p2_shot_size, sized_by, p.ec_target_p2), f"P2 top-up VWC {s.vwc:.0f}<{p2_thr:.0f}", "p2_topup"
+                ir += _ec_note(p.p2_shot_size, sized_by, p.ec_target_p2)
     # A rescue, like every P3 shot, waits the P3 time between shots after the last shot: judged sooner,
     # the reading has not moved yet and rescues stack a minute apart.
     hold_gap, rescue_gap = p3_gaps(p)
@@ -398,7 +404,7 @@ def next_shot_size(s: ZoneSnapshot, p: ZoneParams) -> float:
     planning water (a reservoir refilled before it runs short), not a forecast of when it fires; EC
     corrections and flushes are left out."""
     settled = s.ec_settled is not None and math.isfinite(s.ec_settled)
-    ec = s.ec_settled if settled else s.ec
+    ec = (s.ec_settled if settled else s.ec) if p.ec_sizing else None
     if s.phase in ("P0", "P1"):
         count = s.shot_count if s.phase == "P1" else 0
         ceiling = min(p.p1_target, p.field_capacity)
