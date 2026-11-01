@@ -227,17 +227,25 @@ export function createDemo(now = Date.now()): States {
         // The controller always posts its zone status with a reason.
         { reason: "demo" },
       );
-      // What the controller publishes from crop_steering_engine.waiting_for, for the zone's phase.
+      // What the controller publishes from crop_steering_engine.waiting_for, for the zone's phase,
+      // and how pore EC sizes its shots (ec_sizing): the zone's steering mode's EC targets, below.
+      const ec = Number((2.6 + id * 0.2 + index * 0.3).toFixed(1)),
+        ecTarget = index ? 3.5 : 3;
       put(`${base}${key}waiting_for_app`, id === 1 ? "P1" : "P2", {
         at: new Date(now).toISOString(),
         conditions: demoWaiting(id === 1 ? "P1" : "P2", {
           vwc: 54 + id * 2 + index * 3,
-          ec: Number((2.6 + id * 0.2 + index * 0.3).toFixed(1)),
+          ec,
           peak: 64 + index * 2,
           trigger: 61 + index * 2,
-          ecTarget: index ? 3.5 : 3,
+          ecTarget,
           toLightsOff: minutesUntil(now, index ? 20 : 22),
         }),
+        ec_sizing: {
+          ec,
+          P1: { target: ecTarget, scale: demoEcScale(ec, ecTarget) },
+          P2: { target: ecTarget, scale: demoEcScale(ec, ecTarget) },
+        },
       });
       put(`${base}${key}daily_water_app`, (4.4 + id * 0.9 + index).toFixed(1), {
         unit_of_measurement: "L",
@@ -434,6 +442,21 @@ function takeOnSetup(states: States, beatId: string, beat: Record<string, unknow
     return { ...rest, setup_revision: want };
   }
   return { ...beat, setup_pending: "Setup change waiting (taken on while watering is off)" };
+}
+/** The factor pore EC sizes a demo zone's shots by, as the engine's ec_scale gives it. */
+function demoEcScale(ec: number, target: number) {
+  const ratio = ec / target;
+  return ratio > 1.5
+    ? 2
+    : ratio > 1.2
+      ? 1.5
+      : ratio > 1
+        ? 1.2
+        : ratio < 0.5
+          ? 0.5
+          : ratio < 0.8
+            ? 0.7
+            : 1;
 }
 /** A demo zone's waiting_for conditions, from its own numbers, as the engine would give them. */
 function demoWaiting(

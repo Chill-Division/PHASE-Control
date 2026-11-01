@@ -218,6 +218,70 @@ try {
     await openCard("P1");
     await visible(field("p1_target_vwc"));
   });
+  await check("a shot size says what the room's pore EC makes it go in at", async () => {
+    // GR1, 2 Nov 2026: the ramp was set to start at 5% and every shot went in at 2.5%, its EC 0.62
+    // against a target of 5, and nothing said so. The controller publishes how EC sizes the shots
+    // beside what the zone waits for; Today says it under each shot size.
+    const k = "crop_steering_f1_zone_1_";
+    const percent = { min: 0.5, max: 20, step: 0.5, unit_of_measurement: "%" };
+    const added = [
+      [`number.${k}p1_initial_shot_size`, 5, percent],
+      [`number.${k}p1_shot_size_increment`, 0.5, { ...percent, min: 0, step: 0.05 }],
+      [`number.${k}p2_shot_size`, 5, percent],
+      [
+        `sensor.${k}waiting_for_app`,
+        "P2",
+        {
+          at: new Date().toISOString(),
+          conditions: [
+            { rule: "p2_topup", shot: true, to: null, metric: "vwc", op: "<", value: 54, now: 55 },
+          ],
+          ec_sizing: { ec: 0.62, P1: { target: 5, scale: 0.5 }, P2: { target: 6, scale: 0.5 } },
+        },
+      ],
+    ];
+    for (const [id, state, attributes] of added) put(id, state, attributes);
+    try {
+      await page.goto(`${base}/dashboard.html?room=room:f1_#/strategy`, {
+        waitUntil: "networkidle",
+      });
+      // Already on this address, going to it again loads nothing new: the states added above need a
+      // reload.
+      await page.reload({ waitUntil: "networkidle" });
+      const said = (key) =>
+        page.locator(`[id="context-number.${k}${key}"] [data-ec-sizing]`).innerText();
+      await openCard("P1");
+      await visible(
+        page.locator(`[id="context-number.${k}p1_initial_shot_size"] [data-ec-sizing]`),
+      );
+      assert.match(
+        await said("p1_initial_shot_size"),
+        /^Root-zone EC reads 0\.62, under half its P1 target of 5, so ramp shots go in halved: the first at 2\.5%/,
+      );
+      assert.equal(
+        await said("p1_shot_size_increment"),
+        "Ramp shots go in halved while root-zone EC reads under half its P1 target, so each adds 0.25%.",
+      );
+      await openCard("P2");
+      await visible(page.locator(`[id="context-number.${k}p2_shot_size"] [data-ec-sizing]`));
+      assert.match(
+        await said("p2_shot_size"),
+        /^Root-zone EC reads 0\.62, under half its P2 target of 6, so maintenance shots go in halved: 2\.5%/,
+      );
+      // Within its targets EC leaves them as set, and nothing is said.
+      put(`sensor.${k}waiting_for_app`, "P2", {
+        ...states[`sensor.${k}waiting_for_app`].attributes,
+        at: new Date().toISOString(),
+        ec_sizing: { ec: 5.5, P1: { target: 5, scale: 1 }, P2: { target: 6, scale: 1 } },
+      });
+      await page.reload({ waitUntil: "networkidle" });
+      await openCard("P2");
+      await visible(field("p2_shot_size"));
+      assert.equal(await page.locator("[data-ec-sizing]").count(), 0);
+    } finally {
+      for (const [id] of added) delete states[id];
+    }
+  });
   await check(
     "Help shows the versions the running integration and controller report, per room",
     async () => {

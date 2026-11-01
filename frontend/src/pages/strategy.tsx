@@ -9,6 +9,7 @@ import { zoneColor } from "@/lib/room-mode";
 import { oneValveRoom } from "@/lib/model";
 import { duration } from "@/lib/day-timeline";
 import { estimatePercent, waterParameters } from "@/lib/water-delivery";
+import { ecSizedWords } from "@/lib/ec-sizing";
 import { plantText } from "@/lib/water-view";
 import type { Controller, Setting } from "@/lib/types";
 import { PlanningCurve } from "@/components/planning-curve";
@@ -338,6 +339,26 @@ export function Strategy({
         : `${number(value)}% of the day’s peak.`;
     }
     return `${number(value)}% of ${words.scaleOf}.`;
+  };
+  // Beside a shot size, the size it goes in at while pore EC scales it (ec-sizing.ts), from what the
+  // controller publishes for the zone shown: in a room on one valve the first, whose EC is the room's.
+  const ecWords = (param: string, value: number | null): string | null => {
+    const size = (shot: number) => {
+      const given = water && estimatePercent(water, shot);
+      const at = given?.effective ?? given?.requested;
+      return at
+        ? `≈ ${plantText(at.mlPerPlant)} a plant, ${duration(at.seconds * 1000)} at the drippers`
+        : null;
+    };
+    const sizing = zone?.waiting?.ecSizing;
+    const scale = param === "p2_shot_size" ? sizing?.P2.scale : sizing?.P1.scale;
+    return ecSizedWords(
+      param,
+      value,
+      sizing,
+      (v) => number(v, 2),
+      value !== null && scale ? size(value * scale) : null,
+    );
   };
   const summary = (items: Setting[]) =>
     items
@@ -793,6 +814,7 @@ export function Strategy({
                           plants && plants > 0 && typed !== null ? typed / plants : null;
                         const tag = words?.tag;
                         const said = param ? scaleWords(param, typed) : null;
+                        const ecSaid = param ? ecWords(param, typed) : null;
                         return (
                           <div
                             className={`setting-field ${draft ? "is-draft" : ""}`}
@@ -837,7 +859,13 @@ export function Strategy({
                                   aria-invalid={Boolean(error)}
                                   aria-describedby={
                                     `hint-${setting.entityId}` +
-                                    (hint || auto || order || autoNote || perPlant !== null || said
+                                    (hint ||
+                                    auto ||
+                                    order ||
+                                    autoNote ||
+                                    perPlant !== null ||
+                                    said ||
+                                    ecSaid
                                       ? ` context-${setting.entityId}`
                                       : "")
                                   }
@@ -859,11 +887,22 @@ export function Strategy({
                                       : "")}
                               </p>
                             </div>
-                            {(hint || auto || order || autoNote || perPlant !== null || said) && (
+                            {(hint ||
+                              auto ||
+                              order ||
+                              autoNote ||
+                              perPlant !== null ||
+                              said ||
+                              ecSaid) && (
                               <div className="setting-context" id={`context-${setting.entityId}`}>
                                 {said && (
                                   <p className="scale-words" data-scale-words={words?.scale}>
                                     {said}
+                                  </p>
+                                )}
+                                {ecSaid && (
+                                  <p className="setting-sensor-hint" data-ec-sizing>
+                                    {ecSaid}
                                   </p>
                                 )}
                                 {perPlant !== null && (
