@@ -1,6 +1,7 @@
 # Unreleased
 
 - Today says when the root-zone EC makes a shot go in smaller or bigger than set, and each such shot's line in the log says why.
+- A room's EC shot sizing can be turned off on Today: its shots then go in at the size set, whatever the root-zone EC reads.
 
 # 1.6.0
 
