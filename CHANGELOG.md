@@ -10,7 +10,9 @@ and code-level detail for developers and AI agents working on the repo.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.6.1] - 2026-11-02
+
+Integration and controller **1.6.1**.
 
 - **Today says when EC changes a shot's size.** The controller sizes ramp and maintenance shots by
   the root-zone EC against the phase's EC target: under half of it, a shot goes in halved; well over

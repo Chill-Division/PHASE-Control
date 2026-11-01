@@ -21,7 +21,7 @@ people who build the system:
 `tests/test_whats_new.py` checks the shape and the plain words, and that the newest section is the
 version being released.
 
-## Unreleased
+## 1.6.1 - 2026-11-02
 
 - Each shot size now says when the root-zone EC makes it go in smaller or bigger than you set it, and why.
 - Turn off EC shot sizing on Today to have shots go in at the size you set, whatever the root-zone EC reads.
