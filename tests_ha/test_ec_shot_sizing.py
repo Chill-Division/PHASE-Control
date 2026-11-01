@@ -21,3 +21,18 @@ async def test_a_new_room_sizes_its_shots_by_ec_until_it_is_switched_off(hass):
 async def test_an_upgraded_room_keeps_sizing_its_shots_by_ec(hass):
     await _upgrade(hass, "entry_2_17_wizard.json")
     assert hass.states.get(SWITCH).state == "on"
+
+
+async def test_the_controller_reads_the_switch_the_integration_makes(
+    hass, controller_for
+):
+    await _install(hass)
+    c, fake, _clock = controller_for({})
+    room = c.rooms[0]
+    assert c._params(room, 1).ec_sizing is True
+    await hass.services.async_call(
+        "switch", "turn_off", {"entity_id": SWITCH}, blocking=True
+    )
+    # What the controller reads over REST from now on (the fake is the REST view it was built on).
+    fake.set_state(SWITCH, hass.states.get(SWITCH).state)
+    assert c._params(room, 1).ec_sizing is False

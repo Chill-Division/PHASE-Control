@@ -1985,6 +1985,9 @@ class Controller:
             stacking_on=self._on(
                 f"switch.crop_steering_{room.prefix}ec_stacking_enabled", False
             ),
+            # The room's EC Shot Sizing: on, and on an integration from before the switch, the engine
+            # sizes ramp and maintenance shots by pore EC, as it always has; off, they go in as set.
+            ec_sizing=self._on(f"switch.crop_steering_{room.prefix}ec_shot_sizing", True),
             watchdog_hours=self._zone_num(room, zone, "watchdog_hours", 3),
         )
         p, warns = validate_params(raw)

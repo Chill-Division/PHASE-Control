@@ -204,3 +204,32 @@ def test_last_irrigation_publication_includes_event_local_offset_without_state_m
     assert attrs["device_class"] == "timestamp"
     assert room.state[1]["last_shot"] is event
     assert event.tzinfo is None
+
+
+@pytest.mark.parametrize("switch", [None, "on", "unavailable"])
+def test_the_rooms_ec_shot_sizing_sizes_a_shot_by_ec_until_it_is_off(rig, switch):
+    # GR1, 2 Nov 2026: its probes read bulk EC, about 0.6 against a target of 5, so every shot went in
+    # halved. The room's EC Shot Sizing switch (on, as it always was, and with an integration from
+    # before it or one not answering) sizes it so; switched off, it goes in as set.
+    c, fake, room, _ = rig
+    probe(fake, "sensor.crop_steering_vwc_zone_1", "44")
+    probe(fake, "sensor.crop_steering_ec_zone_1", "0.6")
+    if switch:
+        fake.set_state("switch.crop_steering_ec_shot_sizing", switch)
+    fake.set_state(room.enable_flag, "off")  # the decision, without watering
+    pub = c._loop_room(room, FixedDateTime.now())
+    assert pub[1]["fire"] and pub[1]["p"].ec_sizing is True
+    assert "| EC 0.6 under half the 6 target: 5% halved to 2.5%" in pub[1]["reason"]
+
+
+def test_with_the_rooms_ec_shot_sizing_off_a_shot_goes_in_as_set(rig):
+    c, fake, room, _ = rig
+    probe(fake, "sensor.crop_steering_vwc_zone_1", "44")
+    probe(fake, "sensor.crop_steering_ec_zone_1", "0.6")
+    fake.set_state("switch.crop_steering_ec_shot_sizing", "off")
+    fake.set_state(room.enable_flag, "off")
+    pub = c._loop_room(room, FixedDateTime.now())
+    assert pub[1]["fire"] and pub[1]["p"].ec_sizing is False
+    assert pub[1]["reason"] == "P2 top-up VWC 44<45"
+    sizing = fake.sets["sensor.crop_steering_zone_1_waiting_for_app"][1]["ec_sizing"]
+    assert (sizing["P1"]["scale"], sizing["P2"]["scale"]) == (1.0, 1.0)
