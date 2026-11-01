@@ -87,6 +87,14 @@ def test_auto_setpoints_is_opt_in(switch_module):
     assert entity.entity_id == "switch.crop_steering_f1_auto_setpoints"
 
 
+def test_ec_shot_sizing_is_on_until_switched_off(switch_module):
+    # Shots followed root-zone EC before the switch existed: a room keeps that until someone turns
+    # it off (GR1, 2 Nov 2026: a probe reading bulk EC halved every shot).
+    entity = _make(switch_module, "ec_shot_sizing", prefix="gr1_")
+    assert entity._attr_is_on is True
+    assert entity.entity_id == "switch.crop_steering_gr1_ec_shot_sizing"
+
+
 def _f1_entry():
     return ha_stubs.FakeEntry(
         data={
