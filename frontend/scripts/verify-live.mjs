@@ -282,6 +282,36 @@ try {
       for (const [id] of added) delete states[id];
     }
   });
+  await check("the room's EC shot sizing says it is on, and turns off after a review", async () => {
+    // Off, ramp and maintenance shots go in as set: GR1's probes read bulk EC and halved them all.
+    const id = "switch.crop_steering_f1_ec_shot_sizing";
+    put(id, "on");
+    const before = calls.length;
+    try {
+      await page.goto(`${base}/dashboard.html?room=room:f1_#/strategy`, {
+        waitUntil: "networkidle",
+      });
+      await page.reload({ waitUntil: "networkidle" });
+      const control = page.getByRole("group", { name: "Flower 1 EC shot sizing", exact: true });
+      await visible(control.getByText("EC shot sizing on", { exact: true }));
+      await control.getByRole("button", { name: "Turn EC shot sizing off…", exact: true }).click();
+      const dialog = page.getByRole("dialog");
+      await visible(
+        dialog.getByText(/^Ramp and maintenance shots go in at the size they are set to/),
+      );
+      await dialog.getByRole("button", { name: "Apply 1 change", exact: true }).click();
+      await dialog.waitFor({ state: "hidden" });
+      assert.deepEqual(
+        calls.slice(before).map((call) => [call.path, call.entity_id]),
+        [["/api/services/switch/turn_off", id]],
+      );
+      assert.equal(states[id].state, "off");
+      await visible(control.getByText("EC shot sizing off", { exact: true }));
+    } finally {
+      delete states[id];
+      calls.splice(before); // the checks after this one count the writes they make from none
+    }
+  });
   await check(
     "Help shows the versions the running integration and controller report, per room",
     async () => {

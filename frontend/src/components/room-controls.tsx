@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Droplets, Layers, Power, Sparkles } from "lucide-react";
+import { Droplets, Layers, Power, Ruler, Sparkles } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ReviewDialog, Status } from "@/components/dashboard";
@@ -297,6 +297,61 @@ export function EcStackingControl({ controller }: { controller: Controller }) {
           enabled
             ? "No new moves. A move already made today stays until lights-on, when each zone's maintenance trigger is back where it is set."
             : "In P2 the controller moves each zone's maintenance trigger by up to a point, at most every 30 minutes, to steer its settled substrate EC toward its P2 EC target: down while EC is under 90% of it, so less water lets EC build, and up while it is over 110%, so more water dilutes it. Never by more than a fifth of the trigger, and each grow-day starts from the trigger as set."
+        }
+      />
+    </>
+  );
+}
+
+/** Room-level EC shot sizing On/Off: on, the controller sizes ramp and maintenance shots by
+ * root-zone EC against the phase's EC target; off, they go in as set. Owner, 2 Nov 2026: GR1's probes
+ * read bulk EC, about 0.6 against a target of 5, and every shot set to 5% went in at 2.5%. Hidden
+ * without the switch. */
+export function EcShotSizingControl({ controller }: { controller: Controller }) {
+  const [review, setReview] = useState(false);
+  const { entityId, enabled } = controller.room.ecShotSizing;
+  if (!entityId) return null;
+  const name = controller.room.room.name;
+  return (
+    <>
+      <div className="room-power" role="group" aria-label={`${name} EC shot sizing`}>
+        <Status
+          enabled={enabled === true ? true : null}
+          label={
+            enabled === true
+              ? "EC shot sizing on"
+              : enabled === false
+                ? "EC shot sizing off"
+                : "EC shot sizing unavailable"
+          }
+        />
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={!writable(controller, entityId)}
+          onClick={() => setReview(true)}
+        >
+          <Ruler size={15} />
+          {enabled ? "Turn EC shot sizing off…" : "Turn EC shot sizing on…"}
+        </Button>
+      </div>
+      <ReviewDialog
+        open={review}
+        onOpenChange={setReview}
+        controller={controller}
+        title={enabled ? "Turn EC shot sizing off?" : "Turn EC shot sizing on?"}
+        items={[
+          {
+            change: { entityId, value: !enabled },
+            label: `${name} EC shot sizing`,
+            before: enabled ? "On" : "Off",
+            after: enabled ? "Off" : "On",
+          },
+        ]}
+        note={
+          enabled
+            ? "Ramp and maintenance shots go in at the size they are set to, whatever the root-zone EC reads. For probes whose EC reads far from the substrate's, such as bulk EC against pore-water targets. The EC flushes, dilution shots and the ramp's EC check carry on."
+            : "The controller sizes ramp and maintenance shots by the root-zone EC against the phase's EC target: under half of it, halved; under 0.8 times it, 70%; over it, 1.2 times; over 1.2 times it, 1.5 times; over 1.5 times it, doubled, to dilute. Each shot size on Today says what it goes in at."
         }
       />
     </>

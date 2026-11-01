@@ -240,6 +240,27 @@ describe("room model", () => {
     const minimum = view.settings.find((s) => s.entityId.endsWith("zone_1_p1_minimum_shots"));
     expect(minimum).toMatchObject({ label: "Minimum P1 shots", group: "P1 · Ramp-up", zoneId: 1 });
   });
+  it("offers EC shot sizing, which the controller reads, and hides it without the switch", () => {
+    // GR1, 2 Nov 2026: probes reading bulk EC halved every shot; off, they go in as set.
+    const states = fixture();
+    const room = discoverRooms(states).find((r) => r.prefix === "")!;
+    expect(buildRoom(states, room).ecShotSizing).toEqual({ entityId: null, enabled: null });
+    states["switch.crop_steering_ec_shot_sizing"] = entity(
+      "switch.crop_steering_ec_shot_sizing",
+      "on",
+    );
+    const view = buildRoom(states, room);
+    expect(view.ecShotSizing).toEqual({
+      entityId: "switch.crop_steering_ec_shot_sizing",
+      enabled: true,
+    });
+    expect(
+      validateChange(view, states, {
+        entityId: "switch.crop_steering_ec_shot_sizing",
+        value: false,
+      }),
+    ).toBeNull();
+  });
   it("surfaces the engine hardware latch and room-filters the shared activity feed", () => {
     const states = fixture();
     states["sensor.crop_steering_ai_heartbeat"] = entity(

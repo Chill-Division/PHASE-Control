@@ -120,6 +120,10 @@ export interface RoomView {
   autoSetpoints: { entityId: string | null; enabled: boolean | null };
   /** The room's EC stacking switch: on, P2 moves each zone's trigger toward its P2 EC target. */
   ecStacking: { entityId: string | null; enabled: boolean | null };
+  /** The room's EC Shot Sizing switch: on, ramp and maintenance shots are sized by root-zone EC
+   * against the phase's EC target; off, they go in as set. entityId null on an integration without
+   * it, which sizes them by EC. */
+  ecShotSizing: { entityId: string | null; enabled: boolean | null };
   /** The room's Automatic nutrient batches switch; entityId null on an integration without it. */
   autoBatches: { entityId: string | null; enabled: boolean | null };
   /** Whether the controller's vitals notification says what each zone will do next; entityId null

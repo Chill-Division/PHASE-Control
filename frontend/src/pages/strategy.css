@@ -74,6 +74,16 @@
 .strategy-modes-gap {
   flex: 1;
 }
+/* The room's switches stay together: on a line too short for them beside the steering mode they
+   wrap as one group, to the right, not one of them on a line of its own. */
+.strategy-room-switches {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  margin-left: auto;
+}
 .steering-choice {
   display: inline-flex;
   align-items: center;
@@ -392,6 +402,10 @@
   }
   .strategy-modes-gap {
     display: none;
+  }
+  .strategy-room-switches {
+    justify-content: flex-start;
+    margin-left: 0;
   }
   .strategy-page .draft-bar {
     bottom: 96px;
