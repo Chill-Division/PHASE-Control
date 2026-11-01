@@ -24,6 +24,7 @@ version being released.
 ## Unreleased
 
 - Each shot size now says when the root-zone EC makes it go in smaller or bigger than you set it, and why.
+- Turn off EC shot sizing on Today to have shots go in at the size you set, whatever the root-zone EC reads.
 
 ## 1.6.0 - 2026-10-26
 

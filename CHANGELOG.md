@@ -18,6 +18,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   in at 2.5%. The first P1 shot, each P1 shot's step and the P2 shot size now say what they go in at
   while EC sizes them, and each such shot's line in the log and Today's events says the size it was
   set to and why.
+- **A switch to stop EC changing shot sizes.** EC shot sizing, beside EC stacking on Today, is on as
+  shots always were. Off, ramp and maintenance shots go in at the size set, for probes whose EC
+  reads far from the substrate's, such as bulk EC against pore-water targets, which halves every
+  shot. The EC flushes, dilution shots and the ramp's EC check carry on either way.
 
 ### 🔧 Technical notes
 
@@ -34,6 +38,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   under the first P1 shot, each P1 shot's step and the P2 shot size, with the millilitres a plant and
   the time at the drippers of the size that goes in. The demo publishes it as the engine would.
   `ec-sizing.test.ts`, `waiting-for.test.ts`, and verify-live's check of the notes.
+- Integration: room switch `switch.crop_steering_<prefix>ec_shot_sizing`, "EC Shot Sizing (shots
+  scaled by root-zone EC)", on by default and on an upgraded room. `tests_ha/test_ec_shot_sizing.py`
+  proves it on a fresh and an upgraded install, and that the controller reads it.
+- Engine: `ZoneParams.ec_sizing` (default True). False: `decide()` and `next_shot_size` size routine
+  shots by no EC (as set, with no EC note), and `ec_sizing()` gives each phase's factor as 1. The
+  flushes, dilution shots and P1's EC check are unchanged.
+- Controller: `_params` reads the switch into `ec_sizing`, on when it is missing or not answering.
+- Dashboard: `EcShotSizingControl` beside EC stacking on Today, switched after a review
+  (`room.ecShotSizing`); hidden without the switch. `model.test.ts`, and verify-live's check that it
+  turns off.
 
 ## [1.6.0] - 2026-10-26
 

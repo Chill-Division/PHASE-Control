@@ -43,6 +43,14 @@ BASE_SWITCH_DESCRIPTIONS = [
         name="EC Stacking Enabled",
         icon="mdi:chemistry-bottle",
     ),
+    # ON: the controller sizes ramp and maintenance shots by root-zone EC against the phase's EC
+    # target (halved under half of it, up to doubled over it, to dilute). OFF: they go in as set,
+    # for a probe whose EC reads far from the substrate's. On, as it always was, until switched off.
+    SwitchEntityDescription(
+        key="ec_shot_sizing",
+        name="EC Shot Sizing (shots scaled by root-zone EC)",
+        icon="mdi:resize",
+    ),
     # Opt-in. ON lets the controller mix a nutrient batch by itself when the reservoir reads almost
     # empty: fill, mix and dose (feed.py). "Mix a Batch Now" works either way. Off until chosen.
     SwitchEntityDescription(
@@ -163,6 +171,9 @@ class CropSteeringSwitch(SwitchEntity, RestoreEntity):
             )
         elif description.key == "notify_predictions":
             self._attr_is_on = True  # the vitals say what comes next until switched off
+        elif description.key == "ec_shot_sizing":
+            # Shots follow EC, as they always have, until someone turns this off.
+            self._attr_is_on = True
         elif "zone_" in description.key and "_enabled" in description.key:
             self._attr_is_on = True  # Zones enabled by default
         else:

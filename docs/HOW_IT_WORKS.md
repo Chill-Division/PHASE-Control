@@ -200,7 +200,10 @@ When a zone's probe reads EC, EC shapes the watering:
   a ramp shot and the P2 target for a maintenance shot: under half of it, halved; under 0.8 times it,
   70%; from 0.8 times to the target, as set; over it, 1.2 times; over 1.2 times it, 1.5 times; over 1.5
   times it, doubled. Today says it under each shot size, with the size it goes in at, and each such
-  shot's line in the controller's log and Today's events says the size it was set to and why.
+  shot's line in the controller's log and Today's events says the size it was set to and why. The
+  room's **EC shot sizing** switch (on Today, beside EC stacking) turns this off: shots then go in as
+  set, for probes whose EC reads far from the substrate's, such as bulk EC against pore-water targets,
+  which halves every shot. The other EC rules below carry on.
 - **P1 waits for EC.** The ramp hands over only once EC is within 15% of the P1 target.
 - **Diluting shots.** In P2, EC more than 20% over target fires a larger shot to bring it down,
   when the feed is weaker than the substrate and there is room for the water. The feed's EC is the

@@ -24,6 +24,7 @@ import {
   AutoBadge,
   AutoSetpointsControl,
   AutoZoneChip,
+  EcShotSizingControl,
   EcStackingControl,
 } from "@/components/room-controls";
 import { SettingHelp } from "@/components/setting-help";
@@ -562,8 +563,11 @@ export function Strategy({
           </label>
         )}
         <span className="strategy-modes-gap" />
-        <AutoSetpointsControl controller={controller} />
-        <EcStackingControl controller={controller} />
+        <div className="strategy-room-switches">
+          <AutoSetpointsControl controller={controller} />
+          <EcStackingControl controller={controller} />
+          <EcShotSizingControl controller={controller} />
+        </div>
       </div>
       {saved && (
         <div className="success-banner" role="status">

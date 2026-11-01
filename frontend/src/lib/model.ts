@@ -559,6 +559,7 @@ export function buildRoom(states: States, room: Room): RoomView {
   const stackingSwitch = room.id
     ? resolve(states, room, "switch", "ec_stacking_enabled")
     : undefined;
+  const sizingSwitch = room.id ? resolve(states, room, "switch", "ec_shot_sizing") : undefined;
   const batchSwitch = room.id ? resolve(states, room, "switch", "auto_batches") : undefined;
   const predictSwitch = room.id ? resolve(states, room, "switch", "notify_predictions") : undefined;
   const waterSelect = room.id ? resolve(states, room, "select", "water_today_view") : undefined;
@@ -924,6 +925,10 @@ export function buildRoom(states: States, room: Room): RoomView {
       entityId: stackingSwitch?.entity_id ?? null,
       enabled: boolean(stackingSwitch),
     },
+    ecShotSizing: {
+      entityId: sizingSwitch?.entity_id ?? null,
+      enabled: boolean(sizingSwitch),
+    },
     autoBatches: {
       entityId: batchSwitch?.entity_id ?? null,
       enabled: boolean(batchSwitch),
@@ -1186,6 +1191,7 @@ export function validateChange(room: RoomView, states: States, change: Change): 
     room.roomActiveEntity,
     room.autoSetpoints.entityId,
     room.ecStacking.entityId,
+    room.ecShotSizing.entityId,
     room.autoBatches.entityId,
     room.notifyPredictions.entityId,
     ...room.zones.flatMap((z) => [
