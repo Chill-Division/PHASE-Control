@@ -1,3 +1,4 @@
+import { readEcSizing, type EcSizing } from "./ec-sizing";
 import type { EntityState } from "./types";
 
 /** One condition that would move a zone next, as the controller publishes it on
@@ -24,6 +25,8 @@ export interface Waiting {
   /** When the controller worked it out: a wait ends `in_min` after this. */
   at: number;
   conditions: WaitingCondition[];
+  /** How pore EC sizes the zone's shots now, published beside them; null without an EC reading. */
+  ecSizing: EcSizing | null;
 }
 
 /** A controller that stopped publishing has moved on without saying so: show nothing, not a stale
@@ -46,7 +49,9 @@ export function readWaiting(
   const conditions = entity.attributes.conditions;
   if (!Array.isArray(conditions)) return null;
   const valid = conditions.filter(isCondition);
-  return valid.length ? { at, conditions: valid } : null;
+  return valid.length
+    ? { at, conditions: valid, ecSizing: readEcSizing(entity.attributes.ec_sizing) }
+    : null;
 }
 
 export interface WaitingFormat {

@@ -39,6 +39,7 @@ from crop_steering_engine import (
     EC_SETTLE_MIN,
     Reason,
     decide,
+    ec_sizing,
     next_shot_size,
     waiting_for,
     ZoneParams,
@@ -3187,8 +3188,9 @@ class Controller:
     @staticmethod
     def _publish_waiting_for(room, zone, snap, p, now):
         """What would move the zone next (crop_steering_engine.waiting_for), for the dashboard's zone
-        card and grow-day line. No snapshot (no probe, or the room is off): an empty list, so an old
-        one never lingers. A wait's clock time is `at` plus its in_min."""
+        card and grow-day line, and how pore EC sizes its shots now (ec_sizing), for the shot sizes on
+        Today. No snapshot (no probe, or the room is off): an empty list and no sizing, so an old one
+        never lingers. A wait's clock time is `at` plus its in_min."""
         conditions = waiting_for(snap, p) if snap is not None else []
         # Kept for the vitals notification's "Next:" lines (_maybe_notify).
         if getattr(room, "_waiting", None) is None:
@@ -3199,6 +3201,7 @@ class Controller:
             snap.phase if snap is not None else "none",
             {
                 "conditions": conditions,
+                "ec_sizing": ec_sizing(snap, p) if snap is not None and p is not None else None,
                 "at": now.astimezone().isoformat(timespec="seconds"),
                 "friendly_name": f"Zone {zone} waiting for (controller)",
                 "engine": "crop-steering-controller",

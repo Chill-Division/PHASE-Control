@@ -10,11 +10,16 @@ const format = {
 const waiting = (...conditions: Partial<WaitingCondition>[]): Waiting => ({
   at: AT,
   conditions: conditions.map((item) => ({ shot: false, to: null, rule: "", ...item })),
+  ecSizing: null,
 });
-const sensor = (at: string, conditions: unknown = [{ rule: "p2_topup" }]): EntityState => ({
+const sensor = (
+  at: string,
+  conditions: unknown = [{ rule: "p2_topup" }],
+  extra: Record<string, unknown> = {},
+): EntityState => ({
   entity_id: "sensor.crop_steering_zone_1_waiting_for_app",
   state: "P2",
-  attributes: { at, conditions },
+  attributes: { at, conditions, ...extra },
 });
 
 describe("reading what a zone waits for", () => {
@@ -26,6 +31,15 @@ describe("reading what a zone waits for", () => {
     expect(readWaiting(sensor(at, []), AT)).toBeNull(); // no probe, or the room is off
     expect(readWaiting(sensor("never"), AT)).toBeNull();
     expect(readWaiting(undefined, AT)).toBeNull();
+  });
+  it("takes how pore EC sizes the zone's shots, published beside it", () => {
+    const at = new Date(AT).toISOString();
+    const ec_sizing = { ec: 0.62, P1: { target: 5, scale: 0.5 }, P2: { target: 6, scale: 0.5 } };
+    expect(readWaiting(sensor(at, undefined, { ec_sizing }), AT)?.ecSizing).toEqual(ec_sizing);
+    // No EC reading, or a controller from before it said: no sizing, the list as before.
+    expect(readWaiting(sensor(at, undefined, { ec_sizing: null }), AT)?.ecSizing).toBeNull();
+    expect(readWaiting(sensor(at), AT)?.ecSizing).toBeNull();
+    expect(readWaiting(sensor(at, undefined, { ec_sizing: { ec: 1 } }), AT)?.ecSizing).toBeNull();
   });
   it("takes it only for the phase shown beside it", () => {
     const at = new Date(AT).toISOString();

@@ -215,6 +215,18 @@ _SHOTS = {
     ),
 }
 _EC_UNKNOWN = "EC unknown: base VWC watering; salt protection unverified"
+# decide()'s note on a shot pore EC sized (crop_steering_engine.ec_sized): the size it was set to goes in
+# bigger or smaller, and the log says from what and why.
+_EC_SIZED = re.compile(
+    r"EC (\S+) (under half|under 0\.8x|over 1\.5x|over 1\.2x|over) the (\S+) target: (\S+)% (\w+) to (\S+)%"
+)
+_EC_WHERE = {
+    "under half": "under half",
+    "under 0.8x": "under 0.8 times",
+    "over 1.5x": "over 1.5 times",
+    "over 1.2x": "over 1.2 times",
+    "over": "over",
+}
 
 
 def shot(reason):
@@ -223,6 +235,10 @@ def shot(reason):
     what, pattern, why = _SHOTS.get(getattr(reason, "kind", None), ("shot", None, None))
     found = re.search(pattern, text) if pattern else None
     said = why(found) if found else "; ".join(_rule(part) for part in _segments(text)) or text
+    sized = _EC_SIZED.search(text)
+    if sized:
+        ec, where, target, size, done, _now = sized.groups()
+        said += f"; {done} from {size}% because root-zone EC {ec} is {_EC_WHERE[where]} its {target} target"
     if _EC_UNKNOWN in text:
         said += "; EC unknown, watering by moisture alone"
     return what, said
@@ -266,11 +282,14 @@ def hold(reason):
 
 def _segments(text):
     """decide()'s reason in its parts, without the transition (said on its own line) and the EC
-    note (said once)."""
+    notes (said once)."""
     return [
         part
         for part in str(text or "").split(" | ")
-        if part and part != _EC_UNKNOWN and not _is_transition(part)
+        if part
+        and part != _EC_UNKNOWN
+        and not _EC_SIZED.fullmatch(part)
+        and not _is_transition(part)
     ]
 
 

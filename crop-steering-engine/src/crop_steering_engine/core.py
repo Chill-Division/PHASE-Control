@@ -144,22 +144,71 @@ def p3_hold_level(s: ZoneSnapshot, p: ZoneParams) -> float | None:
     return s.peak_vwc * (1.0 - p.dryback_target / 100.0) if s.peak_vwc > 0 else None
 
 
-def ec_adjust(size: float, ec: float | None, target: float) -> float:
-    """Scale a shot by pore-EC vs target: high EC -> bigger (dilute), low EC -> smaller (conserve)."""
+def ec_scale(ec: float | None, target: float) -> float:
+    """PURE. The factor ec_adjust sizes a shot by: pore EC against its phase's EC target. 1.0 without a
+    usable reading or target, and from 0.8 to 1 times the target."""
     if ec is None or not math.isfinite(ec) or target <= 0:
-        return size
+        return 1.0
     r = ec / target
     if r > 1.5:
-        return size * 2.0
+        return 2.0
     if r > 1.2:
-        return size * 1.5
+        return 1.5
     if r > 1.0:
-        return size * 1.2
+        return 1.2
     if r < 0.5:
-        return size * 0.5
+        return 0.5
     if r < 0.8:
-        return size * 0.7
-    return size
+        return 0.7
+    return 1.0
+
+
+def ec_adjust(size: float, ec: float | None, target: float) -> float:
+    """Scale a shot by pore-EC vs target: high EC -> bigger (dilute), low EC -> smaller (conserve)."""
+    return size * ec_scale(ec, target)
+
+
+# How decide() says a shot EC sized (ec_sized), by its factor: where EC is against the target, and what
+# that did to the shot. log_words puts it in plain words; a grower set the size and sees another go in.
+EC_SIZED = {
+    2.0: ("over 1.5x", "doubled"),
+    1.5: ("over 1.2x", "raised"),
+    1.2: ("over", "raised"),
+    0.7: ("under 0.8x", "cut"),
+    0.5: ("under half", "halved"),
+}
+
+
+def ec_sized(size: float, ec: float | None, target: float) -> str:
+    """PURE. decide()'s note on a shot set to `size` that EC sized (ec_adjust), as
+    "EC 0.62 under half the 5 target: 5% halved to 2.5%"; "" when it goes in as set."""
+    factor = ec_scale(ec, target)
+    if factor == 1.0:
+        return ""
+    where, done = EC_SIZED[factor]
+    return f"EC {round(ec, 2):g} {where} the {target:g} target: {size:g}% {done} to {round(size * factor, 1):g}%"
+
+
+def _ec_note(size: float, ec: float | None, target: float) -> str:
+    """ec_sized as a segment of decide()'s reason, after the rule that fired: " | EC ...", or ""."""
+    note = ec_sized(size, ec, target)
+    return f" | {note}" if note else ""
+
+
+def ec_sizing(s: ZoneSnapshot, p: ZoneParams) -> dict | None:
+    """PURE. How pore EC sizes this zone's routine shots now (ec_adjust), for the dashboard beside the
+    sizes they are set to: the reading decide() uses (the settled one when there is one) and, for the
+    ramp (P1) and maintenance (P2) shots, their EC target and the factor it gives. None without a
+    usable reading: every shot then goes in as set."""
+    settled = s.ec_settled is not None and math.isfinite(s.ec_settled)
+    ec = s.ec_settled if settled else s.ec
+    if ec is None or not math.isfinite(ec):
+        return None
+    return {
+        "ec": round(ec, 2),
+        "P1": {"target": p.ec_target_p1, "scale": ec_scale(ec, p.ec_target_p1)},
+        "P2": {"target": p.ec_target_p2, "scale": ec_scale(ec, p.ec_target_p2)},
+    }
 
 
 def decide(s: ZoneSnapshot, p: ZoneParams):
@@ -287,6 +336,7 @@ def decide(s: ZoneSnapshot, p: ZoneParams):
                 else:
                     ir, kind = f"P1 flush/runoff EC {ec:.1f} (at ceiling {p1_ceiling:.0f})", "p1_flush"
                 fire, size = True, ec_adjust(raw, ec, p.ec_target_p1)
+                ir += _ec_note(raw, ec, p.ec_target_p1)
         elif phase == "P2":
             topup = s.vwc < p2_thr and s.minutes_since_shot >= p.p2_time_between_min
             if ec_known and ec >= p.max_ec - 1.0:
@@ -294,10 +344,12 @@ def decide(s: ZoneSnapshot, p: ZoneParams):
                     fire, size, ir, kind = True, p.p2_shot_size * 1.5, f"P2 rescue flush EC {ec:.1f}", "p2_rescue"
                 elif topup:
                     fire, size, ir, kind = True, ec_adjust(p.p2_shot_size, ec, p.ec_target_p2), f"P2 top-up VWC {s.vwc:.0f}<{p2_thr:.0f}", "p2_topup"
+                    ir += _ec_note(p.p2_shot_size, ec, p.ec_target_p2)
             elif ec_known and p.ec_target_p2 > 0 and ec / p.ec_target_p2 > 1.2 and flush_ok and ec_gap_ok:
                 fire, size, ir, kind = True, p.p2_shot_size * 1.5, f"P2 dilute EC {ec:.1f}", "p2_dilute"
             elif topup:
                 fire, size, ir, kind = True, ec_adjust(p.p2_shot_size, ec, p.ec_target_p2), f"P2 top-up VWC {s.vwc:.0f}<{p2_thr:.0f}", "p2_topup"
+                ir += _ec_note(p.p2_shot_size, ec, p.ec_target_p2)
     # A rescue, like every P3 shot, waits the P3 time between shots after the last shot: judged sooner,
     # the reading has not moved yet and rescues stack a minute apart.
     hold_gap, rescue_gap = p3_gaps(p)
