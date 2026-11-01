@@ -13,6 +13,9 @@ from .core import (
     ZoneParams,
     ZoneSnapshot,
     ec_adjust,
+    ec_scale,
+    ec_sized,
+    ec_sizing,
     decide,
     next_shot_size,
     waiting_for,
@@ -28,7 +31,7 @@ from .core import (
 
 __all__ = [
     "CAP_EXEMPT", "EC_SETTLE_MIN", "Reason",
-    "PHASES", "ZoneParams", "ZoneSnapshot", "ec_adjust", "decide", "next_shot_size", "waiting_for", "pick_sibling",
+    "PHASES", "ZoneParams", "ZoneSnapshot", "ec_adjust", "ec_scale", "ec_sized", "ec_sizing", "decide", "next_shot_size", "waiting_for", "pick_sibling",
     "feed_grace_ok", "cross_zone_outliers", "validate_params", "detect_vmax",
     "zone_safety_status", "system_safety_status", "zone_status_label",
 ]
