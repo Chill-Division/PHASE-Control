@@ -21,6 +21,10 @@ people who build the system:
 `tests/test_whats_new.py` checks the shape and the plain words, and that the newest section is the
 version being released.
 
+## Unreleased
+
+- Each shot size now says when the root-zone EC makes it go in smaller or bigger than you set it, and why.
+
 ## 1.6.0 - 2026-10-26
 
 - See when your reservoir will need refilling, estimated from how fast it went down over the last day.

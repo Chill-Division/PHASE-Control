@@ -196,7 +196,11 @@ When a zone's probe reads EC, EC shapes the watering:
 
 - **Shot size follows EC.** Substrate EC well over the phase's target makes shots bigger (up to
   double, to dilute); well under it, smaller (down to half). Athena: "Decrease Substrate EC: Increase
-  shot size"; "Increase Substrate EC: Decrease shot size" (p. 38).
+  shot size"; "Increase Substrate EC: Decrease shot size" (p. 38). The steps, against the P1 target for
+  a ramp shot and the P2 target for a maintenance shot: under half of it, halved; under 0.8 times it,
+  70%; from 0.8 times to the target, as set; over it, 1.2 times; over 1.2 times it, 1.5 times; over 1.5
+  times it, doubled. Today says it under each shot size, with the size it goes in at, and each such
+  shot's line in the controller's log and Today's events says the size it was set to and why.
 - **P1 waits for EC.** The ramp hands over only once EC is within 15% of the P1 target.
 - **Diluting shots.** In P2, EC more than 20% over target fires a larger shot to bring it down,
   when the feed is weaker than the substrate and there is room for the water. The feed's EC is the

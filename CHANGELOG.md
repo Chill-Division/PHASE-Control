@@ -10,6 +10,31 @@ and code-level detail for developers and AI agents working on the repo.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+- **Today says when EC changes a shot's size.** The controller sizes ramp and maintenance shots by
+  the root-zone EC against the phase's EC target: under half of it, a shot goes in halved; well over
+  it, bigger, to dilute. Nothing said so: a room whose ramp was set to start at 5% saw every shot go
+  in at 2.5%. The first P1 shot, each P1 shot's step and the P2 shot size now say what they go in at
+  while EC sizes them, and each such shot's line in the log and Today's events says the size it was
+  set to and why.
+
+### 🔧 Technical notes
+
+- Engine: `ec_scale(ec, target)` is the factor `ec_adjust` sizes a shot by (unchanged tiers).
+  `decide()` adds `ec_sized()`'s note to a P1 ramp or flush shot's reason and a P2 top-up's when EC
+  changes its size (`… | EC 0.62 under half the 5 target: 5% halved to 2.5%`); a shot that goes in as
+  set keeps its reason as before. `ec_sizing(snapshot, params)` gives the reading it sizes by and each
+  phase's target and factor. `crop-steering-engine/tests/test_ec_sizing.py`.
+- Controller: `_publish_waiting_for` adds `ec_sizing` to `zone_N_waiting_for_app` (`null` without a
+  probe or with the room off; a one-valve room's other zones get the first zone's). `log_words.shot`
+  puts the note in plain words: `halved from 5% because root-zone EC 0.62 is under half its 5
+  target`. `test_log_words.py`, `test_waiting_for_published.py`.
+- Dashboard: `lib/ec-sizing.ts` reads it (`readWaiting` carries it as `Waiting.ecSizing`) and words it
+  under the first P1 shot, each P1 shot's step and the P2 shot size, with the millilitres a plant and
+  the time at the drippers of the size that goes in. The demo publishes it as the engine would.
+  `ec-sizing.test.ts`, `waiting-for.test.ts`, and verify-live's check of the notes.
+
 ## [1.6.0] - 2026-10-26
 
 Integration and controller **1.6.0**.
