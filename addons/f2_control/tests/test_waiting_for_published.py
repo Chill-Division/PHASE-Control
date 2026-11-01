@@ -20,7 +20,21 @@ def test_an_off_room_clears_them():
     c.loop_once(datetime(2026, 9, 23, 12, 0))
     for zone in (1, 2):
         state, attrs = fake.sets[f"sensor.crop_steering_zone_{zone}_waiting_for_app"]
-        assert (state, attrs["conditions"]) == ("none", [])
+        assert (state, attrs["conditions"], attrs["ec_sizing"]) == ("none", [], None)
+
+
+def test_how_pore_ec_sizes_the_zones_shots_is_published_beside_it():
+    # GR1, 2 Nov 2026: shots set to 5% went in at 2.5%, the room's EC 0.62 against a target of 5, and
+    # nothing on the dashboard said so. Today shows it beside the sizes from this.
+    c, fake = _room()
+    fake.set_state("sensor.crop_steering_ec_zone_1", "1.2")
+    c.loop_once(datetime(2026, 9, 23, 12, 0))
+    assert fake.sets["sensor.crop_steering_zone_1_waiting_for_app"][1]["ec_sizing"] == {
+        "ec": 1.2,
+        "P1": {"target": 5.0, "scale": 0.5},
+        "P2": {"target": 6.0, "scale": 0.5},
+    }
+    assert fake.sets["sensor.crop_steering_zone_2_waiting_for_app"][1]["ec_sizing"] is None  # no probe
 
 
 def test_a_zone_moved_to_another_phase_this_minute_says_what_the_new_one_waits_for():

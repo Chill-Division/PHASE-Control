@@ -111,6 +111,32 @@ def test_a_phase_change_says_why(snap, words):
                 "VWC 40% under the 45% maintenance trigger; EC unknown, watering by moisture alone",
             ),
         ),
+        # A shot pore EC sized says the size it was set to, and why (GR1, 2 Nov 2026: every 5% ramp
+        # shot went in at 2.5% and nothing said so).
+        (
+            S(phase="P1", vwc=50, ec=2),
+            (
+                "ramp shot",
+                "VWC 50% under the 60% peak target; halved from 2% because root-zone EC 2 is under "
+                "half its 5 target",
+            ),
+        ),
+        (
+            S(phase="P2", vwc=40, ec=4.5),
+            (
+                "maintenance shot",
+                "VWC 40% under the 45% maintenance trigger; cut from 5% because root-zone EC 4.5 is "
+                "under 0.8 times its 6 target",
+            ),
+        ),
+        (
+            S(phase="P2", vwc=40, ec=6.6),
+            (
+                "maintenance shot",
+                "VWC 40% under the 45% maintenance trigger; raised from 5% because root-zone EC 6.6 "
+                "is over its 6 target",
+            ),
+        ),
     ],
 )
 def test_a_shot_says_what_it_is_and_why(snap, said):
