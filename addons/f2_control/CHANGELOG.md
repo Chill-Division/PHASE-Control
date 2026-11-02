@@ -1,4 +1,6 @@
-# Unreleased
+# 1.6.2
+
+Pair with integration 1.6.2.
 
 - One room refills at a time: a refill waits while another room's reservoir takes fresh water, so two batches no longer share the supply and come out too strong.
 - Settings → General → Refills lets a room with its own water supply refill alongside other rooms.

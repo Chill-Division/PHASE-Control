@@ -10,7 +10,9 @@ and code-level detail for developers and AI agents working on the repo.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.6.2] - 2026-11-03
+
+Integration and controller **1.6.2**.
 
 - **One room refills at a time.** Two rooms whose refills came due in the same minute filled their
   reservoirs at once from the one water supply. A fill is timed, so each got less water than its doses
