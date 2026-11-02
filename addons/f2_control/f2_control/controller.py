@@ -2303,6 +2303,17 @@ class Controller:
                 return f"waiting for {name}'s reservoir refill ({words})"
         return None
 
+    def _fill_wait(self, room):
+        """Why this room's refill waits, in words, or None: another room's reservoir is taking fresh
+        water. The rooms share the supply, and two fills at once each get less water in their fill time
+        than their doses are mixed for (owner, 3 Nov 2026: GR1 and GR2 refilled in the same minute, and
+        both came out too strong). A refill due, or asked for, starts once that room's fresh water stops."""
+        for other in self.rooms:
+            if other is not room and other.batch["step"] != "idle" and other.batch.get("fill_end") is not None:
+                name = getattr(other, "room_name", None) or other.slug
+                return f"{name}'s reservoir is taking fresh water, and one room fills at a time"
+        return None
+
     def _test_shot(self, room, zone, now):
         """A new press of the zone's Test Shot button: this pass's decision for the zone, a TEST_SHOT_S
         shot sized from its flow, or None. It then goes through every gate a shot does but a held plan
@@ -2576,12 +2587,19 @@ class Controller:
             if not batch["armed"]:
                 batch["armed"] = True  # the next time it runs short may start a batch
                 self._save_state()
+        wait = self._fill_wait(room)
+        if not wait:
+            room._fill_wait_said = None
         requested = forced = False
         pressed = ha_get(f"button.crop_steering_{room.prefix}mix_batch")[0]
         if pressed not in (None, "", "unavailable") and pressed != batch["last_request"]:
             # The button's state is when it was last pressed. The first one this controller sees is a
             # starting point, not a request: it may be from before the controller knew the button.
             requested = batch["last_request"] is not None and pressed != "unknown"
+            if requested and wait:
+                # Not dealt with yet: it starts once the other room's fresh water stops, if that is
+                # within BATCH_REQUEST_S of the press, as any press.
+                return self._fill_waits(room, now, wait)
             batch["last_request"] = pressed
             self._save_state()
             at = _local(pressed)
@@ -2599,6 +2617,9 @@ class Controller:
             batch["low_seen"] = 0
         if not (requested or auto):
             return
+        if wait:
+            # Due while another room fills: it stays due, and starts at the first pass after.
+            return self._fill_waits(room, now, wait)
         why = self._batch_refusal(room, res, plan) or self._fill_overflow(room, plan, requested, forced)
         if why:
             batch["low_seen"] = 0
@@ -2626,6 +2647,12 @@ class Controller:
         if until is None or at is None or until.tzinfo is None or at.tzinfo is None:
             return False
         return 0 < (until - at).total_seconds() <= MIX_FORCE_S
+
+    def _fill_waits(self, room, now, wait):
+        """Say once, in the log, that this room's refill waits for another room's fill."""
+        if getattr(room, "_fill_wait_said", None) != wait:
+            room._fill_wait_said = wait
+            self._batch_note(room, now, f"reservoir refill waits: {wait}")
 
     def _refill_why(self, room):
         """Why an automatic refill starts, in words: the level and what the next round needs."""
@@ -2984,7 +3011,7 @@ class Controller:
                 "auto": self._on(f"switch.crop_steering_{room.prefix}auto_batches", False),
                 "armed": batch["armed"],
                 "last": {**batch["last"], "at": _shown(batch["last"].get("at"))} if batch["last"] else None,
-                "blocked": None if running else self._batch_refusal(room, res, plan or None),
+                "blocked": None if running else self._batch_refusal(room, res, plan or None) or self._fill_wait(room),
                 "updated": _shown(now),
             },
         )

@@ -434,6 +434,132 @@ def test_an_automatic_refill_starts_after_three_passes_due_and_waits_until_one_i
     assert room.batch["armed"]
 
 
+def _filling_room(c, name="GR2"):
+    """Another room whose reservoir is taking fresh water: its batch filling, its fill a minute from
+    its end."""
+    other = controller.Room("gr2", "gr2_", {1: {}}, {"pump": None, "mainline": None, "valves": {1: "switch.gr2_v1"}},
+                            "input_boolean.gr2", 10, 22)
+    other.room_name = name
+    other.batch.update(step="filling", fill_end=(_Clock.current + timedelta(seconds=60)).isoformat())
+    c.rooms.append(other)
+    return other
+
+
+WAITS = "reservoir refill waits: GR2's reservoir is taking fresh water, and one room fills at a time"
+
+
+def test_a_refill_due_while_another_room_takes_fresh_water_waits_and_starts_once_it_stops():
+    # Owner, 3 Nov 2026: GR1's refill came due in the minute GR2's started, both filled at once from
+    # the one supply, and each got less water than its doses were mixed for.
+    c, fake, room = _room(pct=4.0, auto="on")
+    other = _filling_room(c)
+    for _ in range(5):
+        _tick(c, room)
+    assert room.batch["step"] == "idle" and _switched(fake) == []
+    assert [line for line in c._activity if "refill waits" in line] == [f"14:00 {WAITS}"]  # said once
+    other.batch.update(step="mixing", fill_end=None)  # its fresh water stopped: the pump mixes
+    _tick(c, room)
+    assert room.batch["step"] == "filling"
+    assert _switched(fake) == [(FRESH, "turn_on")]
+
+
+def test_a_refill_asked_for_while_another_room_takes_fresh_water_starts_once_it_stops():
+    c, fake, room = _room()
+    other = _filling_room(c)
+    _tick(c, room)  # the button as first seen: never pressed
+    _press(c, fake, room)
+    _tick(c, room)
+    assert room.batch["step"] == "idle" and _switched(fake) == []
+    assert any(WAITS in line for line in c._activity)
+    _later(30)
+    other.batch.update(step="idle", fill_end=None)  # done
+    _tick(c, room)
+    assert room.batch["step"] == "filling"
+    assert "asked for" in c._activity[0]
+
+
+def test_a_refill_asked_for_waits_no_longer_than_any_press_is_acted_on():
+    c, fake, room = _room()
+    other = _filling_room(c)
+    _tick(c, room)
+    _press(c, fake, room)
+    _later(controller.BATCH_REQUEST_S + 60)
+    other.batch.update(step="idle", fill_end=None)
+    _tick(c, room)
+    assert room.batch["step"] == "idle" and _switched(fake) == []
+    assert any("too long ago" in line for line in c._activity)
+
+
+def test_a_room_whose_reservoir_only_mixes_does_not_hold_another_rooms_refill():
+    c, fake, room = _room(pct=4.0, auto="on")
+    other = _filling_room(c)
+    other.batch.update(step="mixing", fill_end=None)
+    for _ in range(3):
+        _tick(c, room)
+    assert room.batch["step"] == "filling"
+
+
+def test_the_status_says_a_refill_waits_for_another_rooms_fill():
+    c, fake, room = _room()
+    _filling_room(c)
+    _tick(c, room)
+    assert fake.sets[STATUS][1]["blocked"] == (
+        "GR2's reservoir is taking fresh water, and one room fills at a time"
+    )
+
+
+def _two_rooms():
+    """GR1 and GR2, each with its own reservoir, dosers and pump, both under their 5% minimum with
+    automatic refills on, filled from the one water supply."""
+    states = {}
+    for px, name in (("", "GR1"), ("gr2_", "GR2")):
+        kill = f"input_boolean.{px}kill"
+        res = {
+            "reservoir_distance_sensor": f"sensor.{px}res_distance",
+            "fresh_water_switch": f"switch.{px}fresh",
+            "recirc_switch": f"switch.{px}recirc",
+            "doser_1_switch": f"switch.{px}doser_1",
+            "doser_2_switch": f"switch.{px}doser_2",
+        }
+        hw = {"pump": f"switch.{px}pump", "mainline": f"switch.{px}main", "valves": {"1": f"switch.{px}v1"}}
+        states[f"sensor.crop_steering_{px}engine_config"] = (
+            "ok", _desc(prefix=px, slug=px.rstrip("_") or "default", room_name=name, enable_flag=kill, **hw, **res)
+        )
+        states[kill] = ("on", {})
+        states[res["reservoir_distance_sensor"]] = (mm(4.0), {"unit_of_measurement": "mm"})
+        states[f"sensor.crop_steering_{px}feed_plan"] = ("Flower", dict(FLOWER))
+        states[f"switch.crop_steering_{px}auto_batches"] = ("on", {})
+        states[f"button.crop_steering_{px}mix_batch"] = ("unknown", {})
+        states[f"number.crop_steering_{px}zone_1_substrate_volume"] = ("3.2", {})
+        states[f"number.crop_steering_{px}zone_1_plant_count"] = ("40", {})
+        for entity in (*res.values(), hw["pump"], hw["mainline"], hw["valves"]["1"]):
+            if entity != res["reservoir_distance_sensor"]:
+                states[entity] = ("off", {})
+    c, fake = _build({"num_zones": 1, "enable_flag": "input_boolean.kill"}, states=states)
+    return c, fake
+
+
+def test_two_rooms_due_in_the_same_pass_refill_one_after_the_other():
+    c, fake = _two_rooms()
+    assert sorted(getattr(r, "room_name", r.slug) for r in c.rooms) == ["GR1", "GR2"]
+    for _ in range(3):
+        for room in c.rooms:  # as a pass does, first thing
+            _tick(c, room)
+    first, second = sorted(c.rooms, key=lambda r: r.batch["step"] == "idle")
+    assert (first.batch["step"], second.batch["step"]) == ("filling", "idle")
+    fresh = [entity for entity, svc in _switched(fake) if svc == "turn_on"]
+    assert fresh == [first.batch["switches"]["fresh"]]  # one room's fresh water, not both
+    # The first room fills: its level rises, its steps run, and its fresh water stops at the fill's end.
+    fake.set_state(first.hw["reservoir"]["distance"], mm(88.0), {"unit_of_measurement": "mm"})
+    while first.batch.get("fill_end") is not None:
+        _step_on(c, first)
+        _tick(c, second)
+        if first.batch.get("fill_end") is not None:
+            assert second.batch["step"] == "idle"
+    _tick(c, second)
+    assert second.batch["step"] == "filling"
+
+
 def test_one_low_reading_starts_nothing():
     c, fake, room = _room(pct=60.0, auto="on")
     _tick(c, room)
