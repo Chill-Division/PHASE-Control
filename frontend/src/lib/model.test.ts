@@ -261,6 +261,27 @@ describe("room model", () => {
       }),
     ).toBeNull();
   });
+  it("offers refilling one reservoir at a time, which the controller reads", () => {
+    // Owner, 3 Nov 2026: two rooms filled from the one water supply at once.
+    const states = fixture();
+    const room = discoverRooms(states).find((r) => r.prefix === "")!;
+    expect(buildRoom(states, room).refillOneAtATime).toEqual({ entityId: null, enabled: null });
+    states["switch.crop_steering_refill_one_at_a_time"] = entity(
+      "switch.crop_steering_refill_one_at_a_time",
+      "on",
+    );
+    const view = buildRoom(states, room);
+    expect(view.refillOneAtATime).toEqual({
+      entityId: "switch.crop_steering_refill_one_at_a_time",
+      enabled: true,
+    });
+    expect(
+      validateChange(view, states, {
+        entityId: "switch.crop_steering_refill_one_at_a_time",
+        value: false,
+      }),
+    ).toBeNull();
+  });
   it("surfaces the engine hardware latch and room-filters the shared activity feed", () => {
     const states = fixture();
     states["sensor.crop_steering_ai_heartbeat"] = entity(

@@ -126,6 +126,10 @@ export interface RoomView {
   ecShotSizing: { entityId: string | null; enabled: boolean | null };
   /** The room's Automatic nutrient batches switch; entityId null on an integration without it. */
   autoBatches: { entityId: string | null; enabled: boolean | null };
+  /** The room's Refill One Reservoir at a Time switch: on, its reservoir never takes fresh water
+   * while another room's does; off, it fills alongside rooms set the same way. entityId null on an
+   * integration without it, whose controller keeps every refill apart. */
+  refillOneAtATime: { entityId: string | null; enabled: boolean | null };
   /** Whether the controller's vitals notification says what each zone will do next; entityId null
    * on an integration without the switch (the controller then includes it). */
   notifyPredictions: { entityId: string | null; enabled: boolean | null };

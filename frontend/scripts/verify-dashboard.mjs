@@ -2016,6 +2016,28 @@ try {
     );
     await axe("settings notifications");
   });
+  await check("settings: a room's reservoir refills one at a time, or alongside other rooms", async () => {
+    // Owner, 3 Nov 2026: GR1 and GR2 filled from the one water supply at once, and both batches came
+    // out too strong. Flower 2 can refill; Flower 1, with no reservoir, has nothing to choose.
+    await go("settings");
+    const group = page.getByRole("group", { name: "Refill Flower 2’s reservoir" });
+    await expectVisible(group);
+    const option = (name) => group.getByRole("button", { name, exact: true });
+    assert.equal(await option("One at a time").getAttribute("aria-pressed"), "true");
+    await option("Alongside other rooms").click();
+    await page.waitForFunction(() =>
+      [...document.querySelectorAll('[aria-pressed="true"]')].some((b) =>
+        b.textContent.includes("Alongside other rooms"),
+      ),
+    );
+    await option("One at a time").click();
+    await page.waitForFunction(() =>
+      [...document.querySelectorAll('[aria-pressed="true"]')].some((b) =>
+        b.textContent.includes("One at a time"),
+      ),
+    );
+    await axe("settings refills");
+  });
   await check("settings: the rooms are listed in the order chosen there, everywhere", async () => {
     // Owner, 2026-10-22: GR1 was set up after GR2, and was listed second with no way to move it.
     await go("settings");

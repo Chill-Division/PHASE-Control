@@ -561,6 +561,7 @@ export function buildRoom(states: States, room: Room): RoomView {
     : undefined;
   const sizingSwitch = room.id ? resolve(states, room, "switch", "ec_shot_sizing") : undefined;
   const batchSwitch = room.id ? resolve(states, room, "switch", "auto_batches") : undefined;
+  const aloneSwitch = room.id ? resolve(states, room, "switch", "refill_one_at_a_time") : undefined;
   const predictSwitch = room.id ? resolve(states, room, "switch", "notify_predictions") : undefined;
   const waterSelect = room.id ? resolve(states, room, "select", "water_today_view") : undefined;
   const zones: Zone[] = activeIds.map((id) => {
@@ -933,6 +934,10 @@ export function buildRoom(states: States, room: Room): RoomView {
       entityId: batchSwitch?.entity_id ?? null,
       enabled: boolean(batchSwitch),
     },
+    refillOneAtATime: {
+      entityId: aloneSwitch?.entity_id ?? null,
+      enabled: boolean(aloneSwitch),
+    },
     notifyPredictions: {
       entityId: predictSwitch?.entity_id ?? null,
       enabled: boolean(predictSwitch),
@@ -1193,6 +1198,7 @@ export function validateChange(room: RoomView, states: States, change: Change): 
     room.ecStacking.entityId,
     room.ecShotSizing.entityId,
     room.autoBatches.entityId,
+    room.refillOneAtATime.entityId,
     room.notifyPredictions.entityId,
     ...room.zones.flatMap((z) => [
       z.enabledEntity,
