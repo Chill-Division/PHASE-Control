@@ -560,6 +560,23 @@ def test_two_rooms_due_in_the_same_pass_refill_one_after_the_other():
     assert second.batch["step"] == "filling"
 
 
+@pytest.mark.parametrize(
+    "here, there, together",
+    [("off", "off", True), ("on", "off", False), ("off", "on", False), ("unavailable", "off", False)],
+)
+def test_two_rooms_fill_together_only_when_both_are_allowed_to(here, there, together):
+    # Each room's Refill One Reservoir at a Time switch: either one on keeps them apart, and one that
+    # does not answer counts as on.
+    c, fake, room = _room(pct=4.0, auto="on")
+    other = _filling_room(c)
+    fake.set_state("switch.crop_steering_refill_one_at_a_time", here)
+    fake.set_state("switch.crop_steering_gr2_refill_one_at_a_time", there)
+    for _ in range(3):
+        _tick(c, room)
+    assert (room.batch["step"] == "filling") is together
+    assert other.batch["step"] == "filling"
+
+
 def test_one_low_reading_starts_nothing():
     c, fake, room = _room(pct=60.0, auto="on")
     _tick(c, room)
