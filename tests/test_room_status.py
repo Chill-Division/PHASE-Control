@@ -87,6 +87,14 @@ def test_auto_setpoints_is_opt_in(switch_module):
     assert entity.entity_id == "switch.crop_steering_f1_auto_setpoints"
 
 
+def test_one_refill_at_a_time_is_on_until_switched_off(switch_module):
+    # Owner, 3 Nov 2026: GR1 and GR2 filled from the one supply at once, and both batches came out too
+    # strong. A room fills alone unless someone allows it alongside the others.
+    entity = _make(switch_module, "refill_one_at_a_time", prefix="gr1_")
+    assert entity._attr_is_on is True
+    assert entity.entity_id == "switch.crop_steering_gr1_refill_one_at_a_time"
+
+
 def test_ec_shot_sizing_is_on_until_switched_off(switch_module):
     # Shots followed root-zone EC before the switch existed: a room keeps that until someone turns
     # it off (GR1, 2 Nov 2026: a probe reading bulk EC halved every shot).
