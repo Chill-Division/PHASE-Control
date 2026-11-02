@@ -24,6 +24,7 @@ version being released.
 ## Unreleased
 
 - Rooms take turns to refill their reservoirs, so two refills no longer share the water supply and come out too strong.
+- Rooms with their own water supply can refill at the same time: choose it in Settings, under Refills.
 
 ## 1.6.1 - 2026-11-02
 

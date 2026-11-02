@@ -17,6 +17,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   were mixed for, and both batches came out too strong. A refill that comes due, or is asked for,
   while another room's reservoir is taking fresh water now waits until that fresh water stops, then
   starts. The log says so once, and the Reservoir page says why a batch cannot start meanwhile.
+- **Refills: one at a time, or alongside other rooms.** Settings → General → Refills chooses, for a
+  room that can refill: **One at a time**, the default, or **Alongside other rooms**, for rooms with
+  their own water supply. Two rooms fill together only when both are set alongside.
 
 ### 🔧 Technical notes
 
@@ -27,6 +30,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `batch_status` `blocked` says it while no other reason does. A room whose reservoir only mixes or
   doses holds no other room's refill. `test_nutrient_batch.py`: two rooms due in the same pass refill
   one after the other, and the waits for a refill due, one asked for and one asked for too long ago.
+- Integration: room switch `switch.crop_steering_<prefix>refill_one_at_a_time`, "Refill One Reservoir
+  at a Time", on by default and on an upgraded room (`tests_ha/test_refill_one_at_a_time.py`).
+- Controller: `_fill_wait` keeps a refill waiting only when either room's switch is on
+  (`_fills_alone`: on when missing or not answering).
+- Dashboard: Settings → General → Refills (`room.refillOneAtATime`), for a room that can refill
+  (`canRefill`) when there is more than one room; written at once, as Notifications is. The demo has
+  it on. `model.test.ts`, and verify-dashboard's settings check.
 
 ## [1.6.1] - 2026-11-02
 
