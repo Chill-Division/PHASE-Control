@@ -21,6 +21,10 @@ people who build the system:
 `tests/test_whats_new.py` checks the shape and the plain words, and that the newest section is the
 version being released.
 
+## Unreleased
+
+- Rooms take turns to refill their reservoirs, so two refills no longer share the water supply and come out too strong.
+
 ## 1.6.1 - 2026-11-02
 
 - Each shot size now says when the root-zone EC makes it go in smaller or bigger than you set it, and why.

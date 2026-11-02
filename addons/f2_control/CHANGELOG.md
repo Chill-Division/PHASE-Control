@@ -1,3 +1,7 @@
+# Unreleased
+
+- One room refills at a time: a refill waits while another room's reservoir takes fresh water, so two batches no longer share the supply and come out too strong.
+
 # 1.6.1
 
 Pair with integration 1.6.1.

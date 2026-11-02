@@ -298,6 +298,10 @@ With the reservoir's level set up, a refill is planned before the room's next ro
 take it under its minimum, so no shot takes it under; if a refill cannot happen, watering waits.
 Without automatic refills, a reminder says when to refill it by hand.
 
+Rooms take turns for fresh water. They share the supply, and a fill is timed, so two at once would
+each get less water than their doses are mixed for. A refill that comes due, or is asked for, while
+another room's reservoir is filling waits until that room's fresh water stops.
+
 ## Common questions
 
 **Why didn't a zone reach its overnight dryback target?**

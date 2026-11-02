@@ -10,6 +10,24 @@ and code-level detail for developers and AI agents working on the repo.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+- **One room refills at a time.** Two rooms whose refills came due in the same minute filled their
+  reservoirs at once from the one water supply. A fill is timed, so each got less water than its doses
+  were mixed for, and both batches came out too strong. A refill that comes due, or is asked for,
+  while another room's reservoir is taking fresh water now waits until that fresh water stops, then
+  starts. The log says so once, and the Reservoir page says why a batch cannot start meanwhile.
+
+### 🔧 Technical notes
+
+- Controller: `_fill_wait(room)` names another room whose batch is running its fresh water (a step
+  other than idle, with `fill_end` set). `_batch_idle` then leaves a Mix a Batch Now press unread, so
+  it starts once that fresh water stops (within `BATCH_REQUEST_S` of the press, as any press), and
+  keeps a refill due counting, so it starts at the first pass after; `_fill_waits` logs it once.
+  `batch_status` `blocked` says it while no other reason does. A room whose reservoir only mixes or
+  doses holds no other room's refill. `test_nutrient_batch.py`: two rooms due in the same pass refill
+  one after the other, and the waits for a refill due, one asked for and one asked for too long ago.
+
 ## [1.6.1] - 2026-11-02
 
 Integration and controller **1.6.1**.
