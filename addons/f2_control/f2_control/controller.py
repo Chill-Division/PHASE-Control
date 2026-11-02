@@ -2307,12 +2307,21 @@ class Controller:
         """Why this room's refill waits, in words, or None: another room's reservoir is taking fresh
         water. The rooms share the supply, and two fills at once each get less water in their fill time
         than their doses are mixed for (owner, 3 Nov 2026: GR1 and GR2 refilled in the same minute, and
-        both came out too strong). A refill due, or asked for, starts once that room's fresh water stops."""
+        both came out too strong). A refill due, or asked for, starts once that room's fresh water stops.
+        Two rooms fill together only when both are allowed to (their Refill One Reservoir at a Time
+        switches off): either one set to one at a time keeps them apart."""
+        alone = self._fills_alone(room)
         for other in self.rooms:
             if other is not room and other.batch["step"] != "idle" and other.batch.get("fill_end") is not None:
-                name = getattr(other, "room_name", None) or other.slug
-                return f"{name}'s reservoir is taking fresh water, and one room fills at a time"
+                if alone or self._fills_alone(other):
+                    name = getattr(other, "room_name", None) or other.slug
+                    return f"{name}'s reservoir is taking fresh water, and one room fills at a time"
         return None
+
+    def _fills_alone(self, room):
+        """The room's Refill One Reservoir at a Time switch: on, and on an integration from before it or
+        one not answering."""
+        return self._on(f"switch.crop_steering_{room.prefix}refill_one_at_a_time", True)
 
     def _test_shot(self, room, zone, now):
         """A new press of the zone's Test Shot button: this pass's decision for the zone, a TEST_SHOT_S

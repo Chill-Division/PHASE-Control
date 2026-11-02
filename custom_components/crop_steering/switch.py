@@ -58,6 +58,14 @@ BASE_SWITCH_DESCRIPTIONS = [
         name="Automatic Nutrient Batches",
         icon="mdi:beaker-sync-outline",
     ),
+    # ON: the room's reservoir never takes fresh water while another room's does (rooms sharing a
+    # supply: two timed fills at once each get less water than their doses are mixed for). OFF: it
+    # fills alongside rooms set the same way. On until switched off.
+    SwitchEntityDescription(
+        key="refill_one_at_a_time",
+        name="Refill One Reservoir at a Time",
+        icon="mdi:water-sync",
+    ),
     # ON: the controller's vitals notification says, under each zone, what it will do next (the
     # dashboard's "Next:"). On until switched off.
     SwitchEntityDescription(
@@ -171,6 +179,9 @@ class CropSteeringSwitch(SwitchEntity, RestoreEntity):
             )
         elif description.key == "notify_predictions":
             self._attr_is_on = True  # the vitals say what comes next until switched off
+        elif description.key == "refill_one_at_a_time":
+            # One fill at a time from a shared supply, until someone allows it alongside others.
+            self._attr_is_on = True
         elif description.key == "ec_shot_sizing":
             # Shots follow EC, as they always have, until someone turns this off.
             self._attr_is_on = True

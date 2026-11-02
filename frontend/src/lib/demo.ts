@@ -172,6 +172,7 @@ export function createDemo(now = Date.now()): States {
     put(`switch.crop_steering_${prefix}auto_setpoints`, index ? "off" : "on");
     put(`switch.crop_steering_${prefix}ec_stacking_enabled`, "off");
     put(`switch.crop_steering_${prefix}ec_shot_sizing`, "on");
+    put(`switch.crop_steering_${prefix}refill_one_at_a_time`, "on");
     // How Water today reads in the room (Settings → Appearance): each zone's total until chosen.
     put(`select.crop_steering_${prefix}water_today_view`, "Zone total", {
       options: ["Zone total", "Per plant"],

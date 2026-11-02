@@ -300,7 +300,9 @@ Without automatic refills, a reminder says when to refill it by hand.
 
 Rooms take turns for fresh water. They share the supply, and a fill is timed, so two at once would
 each get less water than their doses are mixed for. A refill that comes due, or is asked for, while
-another room's reservoir is filling waits until that room's fresh water stops.
+another room's reservoir is filling waits until that room's fresh water stops. Rooms with their own
+supply can fill together: two rooms do once both are set to **Alongside other rooms** in Settings →
+General → Refills.
 
 ## Common questions
 

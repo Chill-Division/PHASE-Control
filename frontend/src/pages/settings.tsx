@@ -2,8 +2,10 @@ import { useState } from "react";
 import {
   ArrowUpRight,
   Check,
+  Columns2,
   Droplets,
   EyeOff,
+  ListOrdered,
   LoaderCircle,
   Moon,
   Sprout,
@@ -28,6 +30,8 @@ import type { Controller } from "@/lib/types";
 import { errorText } from "@/lib/utils";
 import { RoomPower } from "@/components/room-controls";
 import { RoomOrder } from "@/components/room-order";
+import { canRefill } from "@/lib/feed";
+import { descriptor } from "@/lib/model";
 import type { ThemePreference, ThemeSource } from "@/lib/ha-theme";
 import { defaultRoomChoice, setDefaultRoomChoice } from "@/lib/default-room";
 import { useWaterView, type WaterView } from "@/lib/water-view";
@@ -83,6 +87,27 @@ export function Settings({
       setPredictError(errorText(error));
     } finally {
       setPredictBusy(false);
+    }
+  }
+  // Owner, 3 Nov 2026: GR1 and GR2 filled from the one water supply at once, and both batches came out
+  // too strong. Each room that can refill says whether it fills alone or alongside other rooms.
+  const alone = controller.room.refillOneAtATime;
+  const refills =
+    controller.rooms.length > 1 &&
+    canRefill(descriptor(controller.states, controller.room.room)?.attributes ?? {});
+  const [aloneBusy, setAloneBusy] = useState(false);
+  const [aloneError, setAloneError] = useState("");
+  async function chooseAlone(one: boolean) {
+    if (!alone.entityId || alone.enabled === one) return;
+    setAloneBusy(true);
+    setAloneError("");
+    try {
+      const result = await controller.write([{ entityId: alone.entityId, value: one }]);
+      if (result.failed.length) setAloneError(result.failed.map((f) => f.reason).join(" "));
+    } catch (error) {
+      setAloneError(errorText(error));
+    } finally {
+      setAloneBusy(false);
     }
   }
   const [base, setBase] = useState("");
@@ -364,6 +389,59 @@ export function Settings({
             </p>
           </div>
         </section>
+        {refills && (
+          <section className="panel settings-section">
+            <div className="settings-label">
+              <h2>Refills</h2>
+              <p>
+                How {controller.room.room.name}&rsquo;s reservoir refills beside the other
+                rooms&rsquo;.
+              </p>
+            </div>
+            <div>
+              <h3 id="refill-alone-label">Refill {controller.room.room.name}&rsquo;s reservoir</h3>
+              <div
+                className="theme-options water-view-options"
+                role="group"
+                aria-labelledby="refill-alone-label"
+              >
+                {(
+                  [
+                    { value: true, label: "One at a time", icon: ListOrdered },
+                    { value: false, label: "Alongside other rooms", icon: Columns2 },
+                  ] as const
+                ).map((option) => (
+                  <button
+                    key={option.label}
+                    className={alone.enabled === option.value ? "chosen" : ""}
+                    aria-pressed={alone.enabled === option.value}
+                    disabled={
+                      !alone.entityId ||
+                      alone.enabled === null ||
+                      aloneBusy ||
+                      !["live", "demo"].includes(controller.connection)
+                    }
+                    onClick={() => void chooseAlone(option.value)}
+                  >
+                    <option.icon size={20} />
+                    <span>{option.label}</span>
+                    {alone.enabled === option.value && <Check size={16} />}
+                  </button>
+                ))}
+              </div>
+              {aloneError && (
+                <p className="small error-text" role="alert">
+                  {aloneError}
+                </p>
+              )}
+              <p className="small muted mt-3">
+                {alone.entityId
+                  ? `One at a time: ${controller.room.room.name}'s reservoir never takes fresh water while another room's does, and a refill due waits for the other's fill to end. Rooms that share a water supply need it: two fills at once each get less water than their doses are mixed for, and come out too strong. Alongside: it fills at the same time as other rooms set the same way.`
+                  : "This needs the updated PHASE Control integration. Until then the controller refills one reservoir at a time."}
+              </p>
+            </div>
+          </section>
+        )}
       </div>
       {controller.demo && (
         <Dialog open={resetDemo} onOpenChange={setResetDemo}>
