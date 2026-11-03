@@ -10,6 +10,31 @@ and code-level detail for developers and AI agents working on the repo.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+- **A probe that holds still stays in a one-valve room's reading.** In a room whose one valve waters
+  every zone, a zone whose moisture hadn't changed for 20 minutes left the room's reading, and the
+  room's moisture jumped to the other zones'. On a quiet night a probe can hold still for an hour or
+  more, and those jumps passed for a dryback: a room left its morning dryback early, or set its
+  overnight line from a 100% reading. Such a zone now stays in the room's reading for up to 2 hours.
+  A reading of 100%, the top of the scale, and one under the rescue level still leave after 20
+  minutes. The notification that the reading hasn't changed comes when it always did and says the
+  reading is still in use, and the zone's card shows it for as long as the controller uses it.
+
+### 🔧 Technical notes
+
+- Controller: `STILL_KEEP_MIN = 120`. `_group_readings` reads each zone's moisture with that bound
+  through `_read_aged` (`_read_sensor`'s reading and its age in minutes; `_read_sensor` now wraps it)
+  and returns the zones kept though unchanged for more than 20 minutes (`still`). One at 100% or under
+  zone 1's `p3_emergency_vwc_threshold` is out after 20 minutes as before, and EC keeps its 20 minutes.
+  `_report_unread_zones` raises CS-101 for a `still` zone after the same `BLIND_GRACE_MIN`, saying the
+  reading stays in for 2 hours. A room with a valve for each zone is unchanged. `test_one_valve_room.py`.
+- Dashboard: in a one-valve room a zone's moisture is current for up to 2 hours while the controller
+  reports and its `zone_N_safety_status` `vwc` (the reading it steered by) is a number
+  (`review-regressions.test.ts`).
+- Docs: CS-101 in `docs/error-codes.json` and `ERROR_CODES.md`, the one-valve section of
+  `USER_GUIDE.md`, and the CS-101 row of `troubleshooting.md`.
+
 ## [1.6.2] - 2026-11-03
 
 Integration and controller **1.6.2**.

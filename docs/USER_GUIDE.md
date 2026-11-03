@@ -176,6 +176,8 @@ Some rooms have no valve for each zone: the pump and one valve (a fertigation va
 - Pausing a zone, ending its manual override or moving it to another phase does so for all of them, and so does how a zone's probes are read.
 - Coming up and the clock say each shot once, for all zones, and a test shot waters them all.
 
+A zone whose probe can't be read leaves the room's reading until it reads again. One whose moisture hasn't changed for 20 minutes stays in it for up to 2 hours, because a quiet night can hold a probe still for an hour or more; one at 100% or under the rescue level leaves after 20 minutes, as it would on a valve of its own.
+
 Under any other plumbing, two zones mapped to one valve hold the room (CS-202) rather than open that valve once for each zone.
 
 ### Tests
