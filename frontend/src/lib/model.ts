@@ -322,6 +322,9 @@ function readingMetric(
   const result = metric(entity, label, unit);
   return telemetryIssue(entity, maxAgeS, now) ? { ...result, value: null } : result;
 }
+/** How long a one-valve room keeps a zone's moisture that has stopped changing: the controller's
+ * STILL_KEEP_MIN. */
+const STILL_KEEP_S = 2 * 60 * 60;
 function group(key: string) {
   if (/^p0_/.test(key)) return PHASE_GROUPS[0];
   if (/^p1_/.test(key)) return PHASE_GROUPS[1];
@@ -564,6 +567,7 @@ export function buildRoom(states: States, room: Room): RoomView {
   const aloneSwitch = room.id ? resolve(states, room, "switch", "refill_one_at_a_time") : undefined;
   const predictSwitch = room.id ? resolve(states, room, "switch", "notify_predictions") : undefined;
   const waterSelect = room.id ? resolve(states, room, "select", "water_today_view") : undefined;
+  const oneValve = oneValveRoom(states, room);
   const zones: Zone[] = activeIds.map((id) => {
     const z = `zone_${id}_`;
     const phase = resolve(states, room, "sensor", `${z}phase`);
@@ -573,6 +577,14 @@ export function buildRoom(states: States, room: Room): RoomView {
     const enabled = resolve(states, room, "switch", `${z}enabled`);
     const override = resolve(states, room, "switch", `${z}manual_override`);
     const status = resolve(states, room, "sensor", `${z}status`, `${z}safety_status`);
+    // A one-valve room keeps a zone's moisture that has stopped changing for up to two hours (not
+    // one at 100% or under the rescue level): while the controller reports, a reading it says it
+    // steered by is current.
+    const steered = resolve(states, room, "sensor", `${z}safety_status`);
+    const vwcAgeS =
+      oneValve && live && typeof steered?.attributes.vwc === "number"
+        ? Math.max(maxAgeS, STILL_KEEP_S)
+        : maxAgeS;
     const mappedValve =
       valves && typeof valves === "object" && !Array.isArray(valves)
         ? (valves as Record<string, unknown>)[String(id)]
@@ -642,7 +654,7 @@ export function buildRoom(states: States, room: Room): RoomView {
         now,
       ),
       phase: readable(phase) ? phase!.state : "Unavailable",
-      vwc: readingMetric(vwcSensor, "VWC", "%", maxAgeS, now),
+      vwc: readingMetric(vwcSensor, "VWC", "%", vwcAgeS, now),
       ec: readingMetric(ecSensor, "EC", "mS/cm", maxAgeS, now),
       probes: {
         vwc: readProbes(states, vwcSensor, resolve(states, room, "select", `${z}vwc_method`)),
