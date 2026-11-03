@@ -267,6 +267,79 @@ def test_a_still_probe_on_its_own_valve_is_out_after_20_minutes_as_before(monkey
     assert pub[2]["vwc"] is None and pub[2]["blind"]
 
 
+def gone(fake, zone):
+    fake.set_state(f"sensor.crop_steering_vwc_zone_{zone}", "unavailable")
+
+
+def own_peaks(room):
+    return [room.state[z]["own_peak"] for z in ZONES]
+
+
+def test_the_rooms_peak_is_of_the_zones_in_its_reading(monkeypatch):
+    # GT1, 3 Nov 2026: GT1-AT read 100% while GT1-LMC was out, the room's reading was GT1-AT's alone,
+    # and its 100% stayed the day's peak: the night was held to a 60% line instead of about 52%.
+    c, fake, room = _room(monkeypatch)
+    fake.set_state("select.crop_steering_zone_1_vwc_method", "Lowest")
+    for zone, vwc in zip(ZONES, (87, 86, 88)):
+        probe(fake, zone, vwc)
+    c._loop_room(room, Clock.now())
+    assert room.state[1]["peak"] == 86 and own_peaks(room) == [87, 86, 88]
+    probe(fake, 1, 100)
+    gone(fake, 2)
+    gone(fake, 3)
+    c._loop_room(room, Clock.now())
+    assert room.state[1]["peak"] == 100  # the room reads zone 1 alone
+    probe(fake, 2, 86)
+    probe(fake, 3, 88)
+    c._loop_room(room, Clock.now())
+    assert room.state[1]["peak"] == 86 and own_peaks(room) == [100, 86, 88]
+    assert {room.state[z]["peak"] for z in ZONES} == {86}  # every zone says the room's
+
+
+def test_a_zone_leaving_the_reading_makes_no_dryback(monkeypatch):
+    # GR1, 2 Nov 2026: a zone leaving the room's average dropped it by more than the 3% P0 waits for,
+    # and P0 ended early.
+    c, fake, room = _room(monkeypatch)
+    for zone in ZONES:
+        room.state[zone].update(phase="P0", last_phase_change=Clock(2026, 10, 22, 13, 50))
+    for zone, vwc in zip(ZONES, (60, 66, 72)):
+        probe(fake, zone, vwc)
+    c._loop_room(room, Clock.now())
+    gone(fake, 3)  # the average falls from 66 to 63
+    c._loop_room(room, Clock.now())
+    assert room.state[1]["phase"] == "P0" and room.state[1]["peak"] == 63
+    for zone, vwc in zip(ZONES, (58, 64, 70)):  # every zone two points down: 3% of the 66 peak
+        probe(fake, zone, vwc)
+    c._loop_room(room, Clock.now())
+    assert room.state[1]["phase"] == "P1"
+
+
+def test_an_upgraded_room_keeps_the_peak_it_had(monkeypatch):
+    """UPGRADE IN PLACE: a state file from before each zone kept its own peak has the room's alone."""
+    c, fake, room = _room(monkeypatch)
+    for zone, vwc in zip(ZONES, (80, 81, 82)):
+        room.state[zone].update(peak=90.0, own_peak=None)
+        probe(fake, zone, vwc)
+    c._loop_room(room, Clock.now())
+    assert room.state[1]["peak"] == 90 and own_peaks(room) == [90, 90, 90]
+
+
+def test_a_new_day_starts_each_zones_own_peak_again(monkeypatch):
+    c, fake, room = _room(monkeypatch)
+    for zone in ZONES:
+        room.state[zone].update(phase="P3", peak=90.0, own_peak=90.0)
+    for zone, vwc in zip(ZONES, (60, 61, 62)):
+        probe(fake, zone, vwc)
+    room._was_lights_on = False  # the lights have just come on
+    c._loop_room(room, Clock.now())
+    assert room.state[1]["phase"] == "P0"
+    assert room.state[1]["peak"] == 61 and own_peaks(room) == [60, 61, 62]
+    room.state[1].update(phase="P2", peak=90.0)
+    fake.set_state("select.crop_steering_zone_2_set_phase", "P0")  # P0 picked by hand, on any zone
+    c._loop_room(room, Clock.now())
+    assert room.state[1]["peak"] == 61 and own_peaks(room) == [60, 61, 62]
+
+
 @pytest.mark.parametrize("plumbing", [None, "pump_valves"])
 def test_two_zones_on_one_valve_without_the_layout_are_held_not_watered_twice(monkeypatch, plumbing):
     c, fake, room = _room(monkeypatch, plumbing=plumbing,

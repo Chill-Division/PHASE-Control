@@ -327,6 +327,30 @@ def test_the_anchor_flag_round_trips_and_junk_is_tolerated(tmp_path):
     )  # invalid metadata cannot establish that an old timestamp was an anchor
 
 
+def test_a_file_from_before_each_zones_own_peak_loads_without_it(tmp_path):
+    """A one-valve room's zones keep their own peaks (_group_peak). An older file has
+    none: each zone loads with None, which the first pass fills with the room's peak.
+    Junk loads as None too."""
+    p = tmp_path / "state.json"
+    zones = {str(z): {"phase": "P3", "peak": 88.0} for z in (1, 2)}
+    p.write_text(json.dumps({"default": zones}), encoding="utf-8")
+    c = _make([1, 2], p)
+    c._load_state()
+    st = c.rooms[0].state
+    assert [st[z]["own_peak"] for z in (1, 2)] == [None, None] and st[1]["peak"] == 88.0
+    st[1]["own_peak"], st[2]["own_peak"] = 100.0, 87.0
+    c._save_state()
+    again = _make([1, 2], p)
+    again._load_state()
+    assert [again.rooms[0].state[z]["own_peak"] for z in (1, 2)] == [100.0, 87.0]
+    saved = json.loads(p.read_text(encoding="utf-8"))["default"]
+    saved["1"]["own_peak"], saved["2"]["own_peak"] = "lots", float("nan")
+    p.write_text(json.dumps({"default": saved}), encoding="utf-8")
+    third = _make([1, 2], p)
+    third._load_state()
+    assert [third.rooms[0].state[z]["own_peak"] for z in (1, 2)] == [None, None]
+
+
 # ---------------------------------------------------------------------------
 # The Cloudflare judge (removed after 2.24.0) kept its own keys in each zone's learned state.
 # ---------------------------------------------------------------------------
