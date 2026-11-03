@@ -255,6 +255,9 @@ def test_a_still_zone_is_said_when_it_would_have_been_out_as_long(monkeypatch):
     assert "stayed at 56% for 40 minutes" in said(2)[0]
     assert "this reading stays in the room's until it has stayed the same for 2 hours" in said(2)[0]
     assert "until it reads again they are watered on the others' readings" in said(3)[0]
+    # Their EC has kept changing: each probe is probably still working.
+    assert "probably still working and the moisture just steady" in said(2)[0]
+    assert "100% is the top of its scale" in said(3)[0]
 
 
 def test_a_still_probe_on_its_own_valve_is_out_after_20_minutes_as_before(monkeypatch):

@@ -203,11 +203,11 @@ DEFAULT_ROOM_NAMES = ("default", "crop steering", "crop steering system", "phase
 _PROBE_ALERTS = {
     "CS-101": (
         "moisture reading hasn't changed",
-        "This is normal for a cube with no plant in it: nothing is drinking, so the number "
-        "doesn't move. With a plant in it, check the probe is still in its cube: one pulled out "
-        "reads steady too. Watering goes back to normal by itself once the reading changes (this "
-        "notification stays until you dismiss it); in an empty room, switching Room Active off "
-        "stops these notifications.",
+        "This is normal for a cube with no plant in it, and on a quiet night: little is drunk, so "
+        "the number doesn't move. With a plant in it, check the probe is still in its cube: one "
+        "pulled out reads steady too. Watering goes back to normal by itself once the reading "
+        "changes (this notification stays until you dismiss it); in an empty room, switching Room "
+        "Active off stops these notifications.",
     ),
     "CS-102": (
         "moisture sensor not reporting",
@@ -220,6 +220,23 @@ _PROBE_ALERTS = {
         "in %.",
     ),
 }
+# What to do about a moisture reading that hasn't changed (CS-101) while the zone's EC has, so the probe
+# is probably still working (Controller._unchanged): at 100%, the top of its scale, or below it.
+_WORKING_ADVICE = {
+    "top": "Check the probe isn't sitting in water or run-off, and that it is calibrated for this "
+    "substrate. Watering goes back to normal by itself once the reading changes (this notification "
+    "stays until you dismiss it).",
+    "steady": "This is normal for a cube with no plant in it or one too small to drink much, and on a "
+    "quiet night: little is drunk, so the number doesn't move. Watering goes back to normal by itself "
+    "once the reading changes (this notification stays until you dismiss it); in an empty room, "
+    "switching Room Active off stops these notifications.",
+}
+
+
+def _probe_why(code, sentence, advice=None):
+    """What Controller._unreadable says: (code, sentence, advice), the code's own advice unless another
+    fits better."""
+    return code, sentence, advice or _PROBE_ALERTS[code][1]
 
 # What follows a shot cancelled before its water started (CS-302, CS-303, CS-304): _execute_shot's
 # error cleanup switches off everything the shot may have opened and latches a hardware hold unless
@@ -2146,7 +2163,9 @@ class Controller:
             if out_min < BLIND_GRACE_MIN:
                 continue
             looking = self._fused_id(room.prefix, "vwc", zone, room.zones[zone].get("vwc"))
-            code, what = self._unreadable(looking)
+            code, what, advice = self._unreadable(
+                looking, ec_entity=self._fused_id(room.prefix, "ec", zone, room.zones[zone].get("ec"))
+            )
             plan = (
                 "One valve waters this room's zones together, and this reading stays in the room's until "
                 f"it has stayed the same for {STILL_KEEP_MIN // 60} hours; after that they are watered on "
@@ -2159,7 +2178,7 @@ class Controller:
                 f"blind_{room.slug}_z{zone}",
                 code,
                 _PROBE_ALERTS[code][0],
-                f"{what} {plan} {_PROBE_ALERTS[code][1]}\n\nSensor: {looking}",
+                f"{what} {plan} {advice}\n\nSensor: {looking}",
                 room=room,
                 zone=zone,
             )
@@ -3525,39 +3544,64 @@ class Controller:
             ha_call(dom, svc, title=title, message=message)
         return True
 
-    def _unreadable(self, entity, lo=0.0, hi=100.0, max_age_min=20):
-        """Why `_read_sensor` found no usable moisture reading at `entity`, as (code, sentence).
-        The same tests in the same order, on one more read of the entity."""
+    def _unreadable(self, entity, lo=0.0, hi=100.0, max_age_min=20, ec_entity=None):
+        """Why `_read_sensor` found no usable moisture reading at `entity`, as (code, sentence, advice).
+        The same tests in the same order, on one more read of the entity. A reading that hasn't changed
+        is said with what the zone's EC (`ec_entity`) did meanwhile (_unchanged)."""
         v, _attrs, lu = ha_get(entity)
         if v is None:
-            return "CS-102", "This zone's moisture sensor can't be found in Home Assistant, so the controller has no reading to steer by."
+            return _probe_why("CS-102", "This zone's moisture sensor can't be found in Home Assistant, so the controller has no reading to steer by.")
         if v in ("unknown", "unavailable", ""):
-            return "CS-102", f"This zone's moisture sensor reads '{v or 'empty'}', so the controller has no reading to steer by."
+            return _probe_why("CS-102", f"This zone's moisture sensor reads '{v or 'empty'}', so the controller has no reading to steer by.")
         try:
             f = float(v)
         except (TypeError, ValueError):
-            return "CS-102", f"This zone's moisture sensor reads '{v}', which isn't a number, so the controller has no reading to steer by."
+            return _probe_why("CS-102", f"This zone's moisture sensor reads '{v}', which isn't a number, so the controller has no reading to steer by.")
         if not math.isfinite(f) or f < lo or f > hi:
-            return "CS-103", f"This zone's moisture sensor reads {v}, which can't be a moisture reading ({lo:g}–{hi:g}%), so the controller ignores it."
+            return _probe_why("CS-103", f"This zone's moisture sensor reads {v}, which can't be a moisture reading ({lo:g}–{hi:g}%), so the controller ignores it.")
         try:
             ts = datetime.fromisoformat(str(lu).replace("Z", "+00:00"))
             age_min = (datetime.now(timezone.utc) - ts).total_seconds() / 60.0
         except (ValueError, TypeError, OverflowError):
             ts = age_min = None
         if age_min is not None and age_min > max_age_min:
-            age = f"{age_min:.0f} minutes" if age_min < 120 else f"{age_min / 60:.1f} hours"
-            return "CS-101", (
-                f"This zone's moisture reading has stayed at {f:g}% for {age}, so the controller "
-                "can't tell a working probe from one that has stopped or been pulled out."
-            )
+            return self._unchanged(f, age_min, hi, max_age_min, ec_entity)
         if age_min is not None and age_min < -1.0:  # _read_sensor: age < -60 s
-            return "CS-102", (
+            return _probe_why("CS-102", (
                 f"This zone's moisture reading is stamped {-age_min:.0f} minutes in the future, so "
                 "the controller can't trust it: Home Assistant's clock and this app's clock disagree."
-            )
+            ))
         if age_min is None:
-            return "CS-102", "This zone's moisture sensor has no valid time for its last reading, so the controller has no reading to steer by."
-        return "CS-102", "This zone's moisture sensor had no usable reading a moment ago, so the controller had nothing to steer by."
+            return _probe_why("CS-102", "This zone's moisture sensor has no valid time for its last reading, so the controller has no reading to steer by.")
+        return _probe_why("CS-102", "This zone's moisture sensor had no usable reading a moment ago, so the controller had nothing to steer by.")
+
+    def _unchanged(self, f, age_min, top, max_age_min, ec_entity):
+        """CS-101 for a moisture reading of `f` that has stayed the same for `age_min` minutes, said with
+        what the zone's EC did meanwhile. Moisture and EC come from one probe in most rooms, so an EC that
+        has changed within `max_age_min` says that probe is probably still working: its moisture is
+        steady, or stuck at `top`, the top of its scale (GT1-AT, 3 Nov 2026: 100% for over an hour, said
+        as a probe that might have stopped). An EC that has stayed the same too is said as well."""
+        age = f"{age_min:.0f} minutes" if age_min < 120 else f"{age_min / 60:.1f} hours"
+        stayed = f"This zone's moisture reading has stayed at {f:g}% for {age}"
+        ec, ec_min = (
+            self._read_aged(ec_entity, lo=0, hi=20, max_age_min=max_age_min) if ec_entity else (None, None)
+        )
+        if ec is not None and f >= top:
+            return _probe_why("CS-101", (
+                f"{stayed}, but its EC has kept changing, so the probe is probably still working: "
+                f"{f:g}% is the top of its scale, which a probe reads sitting in water, or reading wetter "
+                "than it was calibrated for."
+            ), _WORKING_ADVICE["top"])
+        if ec is not None:
+            return _probe_why("CS-101", (
+                f"{stayed}, but its EC has kept changing, so the probe is probably still working and "
+                "the moisture just steady."
+            ), _WORKING_ADVICE["steady"])
+        also = ", and so has its EC" if ec_min is not None and ec_min > max_age_min else ""
+        return _probe_why("CS-101", (
+            f"{stayed}{also}, so the controller can't tell a working probe from one that has stopped or "
+            "been pulled out."
+        ))
 
     def _water_usage(self, room, zone, now):
         """Recorded controller delivery over this grow-day and the previous six.
@@ -5012,12 +5056,14 @@ class Controller:
             # reminder so a dead probe can't sit unnoticed (the silent-freeze lesson). Why it
             # is unusable is read every tick, so a changed cause replaces the card's diagnosis.
             looking = self._fused_id(room.prefix, "vwc", zone, room.zones[zone].get("vwc"))
-            code, what = self._unreadable(looking)
+            code, what, advice = self._unreadable(
+                looking, ec_entity=self._fused_id(room.prefix, "ec", zone, room.zones[zone].get("ec"))
+            )
             self._alert(
                 f"blind_{room.slug}_z{zone}",
                 code,
                 _PROBE_ALERTS[code][0],
-                f"{what} {plan} {_PROBE_ALERTS[code][1]}\n\nSensor: {looking}",
+                f"{what} {plan} {advice}\n\nSensor: {looking}",
                 room=room,
                 zone=zone,
             )
