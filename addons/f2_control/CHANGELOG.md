@@ -1,6 +1,7 @@
 # Unreleased
 
 - In a room whose one valve waters every zone, a probe whose reading holds still stays in the room's reading for up to 2 hours, so the room's moisture no longer jumps when a quiet probe drops out.
+- A one-valve room's peak is made from each zone's own highest reading, so a zone dropping out no longer leaves a peak, or a dryback, behind.
 
 # 1.6.2
 
