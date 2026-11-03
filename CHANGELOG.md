@@ -27,6 +27,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   of the day, and the room's peak is those of the zones in its reading, made one as their readings
   are (the lowest of them, on Lowest). The reading and the peak it dries back from are now always of
   the same zones, so a zone dropping out or coming back no longer looks like a dryback.
+- **A moisture reading that hasn't changed says what its EC did.** The notification for a reading
+  that has stayed the same (CS-101) always said the controller couldn't tell a working probe from one
+  that had stopped. Moisture and EC come from one probe in most rooms, so it now looks at the zone's
+  EC too. If that kept changing, the probe is probably still working, and the notification says
+  so: at 100% it says that is the top of the probe's scale, which a probe sitting in water reads, and
+  what to check; lower, that the moisture is probably just steady. If the EC hasn't changed
+  either, it says that too.
 
 ### 🔧 Technical notes
 
@@ -47,6 +54,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (a file from before it) starts from the room's peak, so an upgraded room keeps it. `_restart_own_peaks`
   starts them again at P0, the engine's and one picked by hand. `test_one_valve_room.py`,
   `tests/test_state_migration.py`.
+- Controller: `_unreadable` takes the zone's fused EC (`ec_entity`) and returns (code, sentence,
+  advice) (`_probe_why`). `_unchanged` words CS-101: an EC changed within the same 20 minutes is a
+  probe probably working, steady (`_WORKING_ADVICE["steady"]`) or at 100% the top of its scale
+  (`["top"]`); an EC unchanged too adds ", and so has its EC"; no EC reads as before. The code, its
+  title and its repeat window are unchanged, so an EC that changes now and then cannot re-raise it.
+  CS-101's own advice adds a quiet night. `test_error_codes.py`, `test_one_valve_room.py`.
+- Docs: CS-101 in `docs/error-codes.json` and `ERROR_CODES.md`.
 
 ## [1.6.2] - 2026-11-03
 

@@ -25,6 +25,7 @@ version being released.
 
 - In a room with one valve for every zone, a probe that reads the same for a while on a quiet night no longer makes the room's moisture jump.
 - In a room with one valve for every zone, the day's peak no longer jumps when a probe drops out, so the dryback counts from the right number.
+- A moisture reading that hasn't changed now says whether the probe is probably still working, and what to check when it reads 100%.
 
 ## 1.6.2 - 2026-11-03
 
