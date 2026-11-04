@@ -10,6 +10,30 @@ and code-level detail for developers and AI agents working on the repo.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+- **A room without a moisture reading says so.** When a room's probes read nothing, it is watered on
+  a timer, a shot every 90 minutes, or with the shots of a zone whose probe works. Between those
+  shots its line on the Overview said "Holding: all zones in band", beside a warning that the
+  readings were unavailable, and Coming up said nothing more was expected before lights-on. Now the
+  line says No moisture reading, in amber: which zones, how they are watered meanwhile and when the
+  next timer shot is. Coming up lists that shot, each zone's card gives its time, and the room's line
+  shows at the top of every other page too.
+
+### 🔧 Technical notes
+
+- Controller: `current_decision` gains `blind`, the zones without a moisture reading that are
+  neither watered nor held this pass, worded by `_no_reading_words` (on a timer and when its next
+  shot is, or whose shots it takes). Its state takes the first of them before "Holding — all zones
+  in band". A zone watered on a timer publishes its next timer shot on `zone_N_waiting_for_app` in
+  its own phase (rule `blind_timer`, `in_min`, `every_min`), its one-valve followers the same, and
+  `next_text` words it for the log and the vitals. `test_no_reading_line.py`.
+- Dashboard: `roomStatus` says a decision's `blind` entries as "No moisture reading" in a new amber
+  `warning` tone (the Overview's line, the rooms column, the room chips and the status lines on
+  other pages). `waitingText` and Coming up's `controllerShot` take the `blind_timer` rule.
+  `controller-health.test.ts`, `coming-up.test.ts`, `waiting-for.test.ts`.
+- Docs: CS-102 in `docs/error-codes.json` and `ERROR_CODES.md`, and `USER_GUIDE.md`.
+
 ## [1.6.3] - 2026-11-04
 
 Integration and controller **1.6.3**.

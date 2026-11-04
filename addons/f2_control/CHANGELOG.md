@@ -1,3 +1,7 @@
+# Unreleased
+
+- A room whose probes read nothing says so, and when its next timer shot is, instead of "Holding — all zones in band" between its timer shots.
+
 # 1.6.3
 
 Pair with integration 1.6.3.
