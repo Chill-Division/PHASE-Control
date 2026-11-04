@@ -369,6 +369,10 @@ def next_text(conditions, at):
     def more(count, word):
         return f"{count} more {word}{'' if count == 1 else 's'}"
 
+    timer = find("blind_timer")
+    if timer:  # no moisture reading: watered on a timer
+        due = when(timer)
+        return f"timer shot {'at ' + due if due else 'due'}, then one every {_num(timer.get('every_min'))} min"
     timeout = find("p0_timeout")
     if timeout:
         # Whichever moisture level drying reaches first: the trigger, or the P3 dryback's level.
@@ -3316,19 +3320,27 @@ class Controller:
         )
 
     @staticmethod
-    def _publish_waiting_for(room, zone, snap, p, now):
+    def _publish_waiting_for(room, zone, snap, p, now, timer=None):
         """What would move the zone next (crop_steering_engine.waiting_for), for the dashboard's zone
         card and grow-day line, and how pore EC sizes its shots now (ec_sizing), for the shot sizes on
         Today. No snapshot (no probe, or the room is off): an empty list and no sizing, so an old one
-        never lingers. A wait's clock time is `at` plus its in_min."""
-        conditions = waiting_for(snap, p) if snap is not None else []
+        never lingers, unless the zone is watered on a timer for want of a reading (`timer`: the
+        minutes to its next timer shot, and to each after it): then that shot, in the zone's phase.
+        A wait's clock time is `at` plus its in_min."""
+        if snap is not None:
+            conditions = waiting_for(snap, p)
+        elif timer is not None:
+            conditions = [{"rule": "blind_timer", "shot": True, "to": None,
+                           "in_min": round(max(0.0, timer[0]), 1), "every_min": timer[1]}]
+        else:
+            conditions = []
         # Kept for the vitals notification's "Next:" lines (_maybe_notify).
         if getattr(room, "_waiting", None) is None:
             room._waiting = {}
         room._waiting[zone] = (conditions, now)
         ha_set(
             f"sensor.crop_steering_{room.prefix}zone_{zone}_waiting_for_app",
-            snap.phase if snap is not None else "none",
+            snap.phase if snap is not None else room.state[zone]["phase"] if timer is not None else "none",
             {
                 "conditions": conditions,
                 "ec_sizing": ec_sizing(snap, p) if snap is not None and p is not None else None,
@@ -3337,6 +3349,19 @@ class Controller:
                 "engine": "crop-steering-controller",
             },
         )
+
+    @staticmethod
+    def _no_reading_words(room, zone, d):
+        """A zone without a moisture reading that is neither watered nor held this pass, for the room's
+        decision: how it is watered meanwhile, with another zone's shots or on a timer, and when."""
+        if getattr(d["reason"], "kind", None) in ("blind_copy", "blind_copy_rescue"):
+            return f"no moisture reading: watered with {d['reason'].split()[1]}'s shots"
+        conditions, at = (getattr(room, "_waiting", None) or {}).get(zone, ([], None))
+        timer = next((c for c in conditions if c.get("rule") == "blind_timer"), None)
+        if timer is None or at is None:
+            return "no moisture reading"
+        return (f"no moisture reading: watered on a timer, the next shot at "
+                f"{(at + timedelta(minutes=timer['in_min'])):%H:%M}, then one every {_num(timer['every_min'])} min")
 
     def _publish_room_off(self, room, now):
         """An OFF room still reports in, so the dashboard shows why it is idle and the integration
@@ -3354,7 +3379,7 @@ class Controller:
             ha_set(f"sensor.crop_steering_{px}app_status", "room_off",
                    {"engine": "crop-steering-controller", "updated": now.isoformat()})
             ha_set(f"sensor.crop_steering_{px}current_decision", "Room off - nothing growing",
-                   {"fired": [], "blocked": []})
+                   {"fired": [], "blocked": [], "blind": []})
             self._heartbeat(room, now, self._hardware_fault_block(room), room_active=False)
         except Exception as e:
             log("publish failed", room.slug, e)
@@ -5015,15 +5040,21 @@ class Controller:
                 self._auto_tick(room, zone, snap, p, lights_on, now)
             except Exception as e:
                 log("auto setpoints error", room.slug, zone, e)
+        timers = {}  # a zone without a reading and no other zone's shots to take: its timer shots
         for zone, p in blind:
             st = room.state[zone]
-            self._publish_waiting_for(room, zone, None, p, now)  # no probe: nothing to compare
-            waiting[zone] = (None, p)
             # A dead probe must NOT freeze the daily cycle: still honour the time-based
             # phase forces (lights-off -> P3, P3 -> P0 at the new photoperiod). Only the
             # VWC-driven transitions are paused while blind.
             self._blind_time_transition(room, zone, now, lights_on, lights_just_on)
             out_min = (now - room._blind_since[zone]).total_seconds() / 60.0
+            # No probe, nothing to compare: what it waits for is its next timer shot, once the grace
+            # is over and the time between them has gone (none when it takes another zone's shots).
+            mss = self._minutes_since_shot(st, now)
+            timers[zone] = None if healthy else (
+                max(BLIND_GRACE_MIN - out_min, self.blind_fallback_min - mss), self.blind_fallback_min)
+            self._publish_waiting_for(room, zone, None, p, now, timer=timers[zone])
+            waiting[zone] = (None, p)
             if out_min < BLIND_GRACE_MIN:
                 # 25 Sep 2026: the probes read unknown for a minute, and a timer shot fired at once.
                 decisions[zone] = (False, 0.0, Reason(
@@ -5041,7 +5072,6 @@ class Controller:
                     f"{self._zone_title(room, sib)}, whose probe is working."
                 )
             else:
-                mss = self._minutes_since_shot(st, now)
                 decisions[zone] = (
                     mss >= self.blind_fallback_min,
                     p.p2_shot_size,
@@ -5081,7 +5111,7 @@ class Controller:
                 if group[0] in decisions:
                     decisions[zone] = decisions[group[0]]
                 if group[0] in waiting:
-                    self._publish_waiting_for(room, zone, *waiting[group[0]], now)
+                    self._publish_waiting_for(room, zone, *waiting[group[0]], now, timer=timers.get(group[0]))
         if room._beat is None or not room._beat[1]:
             self._report_before_acting(room, decisions, snaps, now)
         pub = {}
@@ -5316,14 +5346,21 @@ class Controller:
                 for z, d in sorted(pub.items())
                 if d["block"] or "BLOCK" in d["reason"]
             ]
+            # GT1, 4 Nov 2026: probes renamed by a firmware update read nothing for hours, and the room
+            # said "all zones in band" between its timer shots. A zone without a reading is never in band.
+            blind = [
+                f"Z{z} {d['phase']} {self._no_reading_words(room, z, d)}"
+                for z, d in sorted(pub.items())
+                if d["blind"] and not d["fire"] and not d["block"] and "BLOCK" not in d["reason"]
+            ]
             ha_set(
                 f"sensor.crop_steering_{px}current_decision",
                 (
                     fired[0]
                     if fired
-                    else (held[0] if held else "Holding — all zones in band")
+                    else held[0] if held else blind[0] if blind else "Holding — all zones in band"
                 )[:255],
-                {"fired": fired, "blocked": held},
+                {"fired": fired, "blocked": held, "blind": blind},
             )
             tag = "" if px == "" else f"{room.slug} "
             for ln in fired + held:
