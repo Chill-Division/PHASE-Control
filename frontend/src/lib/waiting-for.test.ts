@@ -128,6 +128,16 @@ describe("saying what a zone waits for", () => {
     });
     expect(waitingText(above, format)).toBe("shot when VWC < 70% (now 72%)");
   });
+  it("no moisture reading: the next timer shot, in any phase", () => {
+    // The controller's next_text says the same (test_no_reading_line.py).
+    const timer = { rule: "blind_timer", shot: true, every_min: 90 };
+    expect(waitingText(waiting({ ...timer, in_min: 90 }), format)).toBe(
+      "timer shot at 09:06, then one every 90 min",
+    );
+    expect(waitingText(waiting({ ...timer, in_min: 0 }), format)).toBe(
+      "timer shot due, then one every 90 min",
+    );
+  });
   it("P3: the rescue level and lights-on", () => {
     const p3 = waiting(
       { rule: "p3_emergency", shot: true, metric: "vwc", op: "<", value: 60, now: 84.1 },

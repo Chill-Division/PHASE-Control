@@ -1128,12 +1128,58 @@ export function roomStatus(states: States, room: Room, now = Date.now()): RoomSt
       blocked.join(" · ") || "The controller reports an error. Check its log.",
     );
   if (blocked.length) return say("holding", "Holding", blocked.join(" · "));
+  // GT1, 4 Nov 2026: renamed probes read nothing for hours, and between its timer shots the room said
+  // "all zones in band". A zone without a reading is never in band.
+  const blind = entries("blind");
+  if (blind.length)
+    return say("warning", "No moisture reading", noReadingWords(states, room, blind, now));
   return say(
     "holding",
     "Holding",
     readable(decision)
       ? decision!.state.replace(/^Holding\s*[—-]\s*/, "")
       : "No decision reported yet.",
+  );
+}
+
+/** The room's zones without a moisture reading, from the controller's decision ("Z<zone> <phase> no
+ * moisture reading…"): who, how they are watered meanwhile (on a timer, its next shot from what the
+ * zone waits for; or with another zone's shots), and where to look. */
+function noReadingWords(states: States, room: Room, blind: string[], now: number): string {
+  const names = descriptor(states, room)?.attributes.zone_names as
+    Record<string, unknown> | undefined;
+  const name = (id: string) => {
+    const value = names?.[id];
+    return typeof value === "string" && value.trim() ? value.trim() : `Zone ${id}`;
+  };
+  const said = blind.flatMap((entry) => {
+    const hit = /^Z(\d+) \S+ (.*)$/.exec(entry);
+    return hit ? [{ id: hit[1], text: hit[2] }] : [];
+  });
+  if (!said.length) return blind.join(" · ");
+  const ids = [...new Set(said.map((item) => item.id))];
+  const one = ids.length === 1;
+  const who = one
+    ? name(ids[0])
+    : `${ids.slice(0, -1).map(name).join(", ")} and ${name(ids.at(-1)!)}`;
+  const copied = /watered with Z(\d+)'s shots/.exec(said[0].text)?.[1];
+  const waiting = readWaiting(
+    resolve(states, room, "sensor", `zone_${said[0].id}_waiting_for_app`),
+    now,
+  );
+  const timer = waiting?.conditions.find((item) => item.rule === "blind_timer");
+  const next = timer?.in_min
+    ? `the next shot at ${new Date(waiting!.at + timer.in_min * 60_000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
+    : "a shot is due";
+  const how = copied
+    ? `watered with ${name(copied)}'s shots`
+    : timer
+      ? `watered on a timer: ${next}, then one every ${timer.every_min ?? 90} minutes`
+      : null;
+  return (
+    `${who} ${one ? "has" : "have"} no moisture reading` +
+    (how ? `, so ${one ? "it's" : "they're"} ${how}` : "") +
+    `. Check ${one ? "its probe" : "their probes"}, and in Settings → Rooms & hardware which ${one ? "sensor it reads" : "sensors they read"}.`
   );
 }
 

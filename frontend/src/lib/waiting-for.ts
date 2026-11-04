@@ -20,6 +20,8 @@ export interface WaitingCondition {
   dryback?: number;
   /** p3_hold: that peak, the day's highest reading. */
   peak?: number;
+  /** blind_timer: a zone without a moisture reading, watered on a timer: how often its shots come. */
+  every_min?: number;
 }
 export interface Waiting {
   /** When the controller worked it out: a wait ends `in_min` after this. */
@@ -74,6 +76,13 @@ export function waitingText(waiting: Waiting, format: WaitingFormat): string {
     `${label} ${SIGN[item.op ?? ""] ?? item.op} ${n(item.value ?? NaN)}${unit}`;
   const now = (item: WaitingCondition, unit: string) =>
     item.now === null || item.now === undefined ? "" : `now ${n(item.now)}${unit}`;
+
+  // No moisture reading: watered on a timer (the controller's next_text says the same).
+  const timer = find("blind_timer");
+  if (timer) {
+    const at = when(timer);
+    return `timer shot ${at ? `at ${at}` : "due"}, then one every ${n(timer.every_min ?? NaN)} min`;
+  }
 
   const timeout = find("p0_timeout");
   if (timeout) {
