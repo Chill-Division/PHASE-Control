@@ -7,7 +7,7 @@ targets and every shot: the controller decides once, on all their readings toget
 one shot on every zone. Two zones on one valve without that were watered once for each zone that
 wanted water, every zone getting that many times the water while each counted one shot.
 """
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 import pytest
 
@@ -68,6 +68,13 @@ def probe(fake, zone, vwc, ec=3.0):
     stamp = Clock.now(timezone.utc).isoformat()
     fake.set_state(f"sensor.crop_steering_vwc_zone_{zone}", str(vwc), last_updated=stamp)
     fake.set_state(f"sensor.crop_steering_ec_zone_{zone}", str(ec), last_updated=stamp)
+
+
+def still(fake, zone, vwc, minutes):
+    """A zone whose moisture has read `vwc` for `minutes`, its EC as fresh as ever."""
+    probe(fake, zone, vwc)
+    stamp = (Clock.now(timezone.utc) - timedelta(minutes=minutes)).isoformat()
+    fake.set_state(f"sensor.crop_steering_vwc_zone_{zone}", str(vwc), last_updated=stamp)
 
 
 def opened(fake):
@@ -196,6 +203,68 @@ def test_a_zone_whose_probe_cannot_be_read_is_said_and_the_others_water(monkeypa
     said = [d for dom, svc, d in fake.calls
             if (dom, svc) == ("persistent_notification", "create") and d["notification_id"].endswith("blind_default_z2")]
     assert said and "watered on the others' readings" in said[0]["message"]
+
+
+def test_a_zone_whose_moisture_has_stopped_changing_stays_in_the_rooms_reading(monkeypatch):
+    # GR1, 30 Oct 2026: on a quiet night its probes held still for up to 80 minutes, each left the
+    # room's reading after 20, and the room's moisture jumped to the others'.
+    c, fake, room = _room(monkeypatch)
+    group = c._valve_group(room)
+    probe(fake, 1, 50)
+    still(fake, 2, 44, minutes=80)
+    probe(fake, 3, 62)
+    vwc, _ec, own, kept = c._group_readings(room, group)
+    assert (vwc, own[2][0], kept) == (52, 44, {2})  # 56 without it
+    fake.set_state("select.crop_steering_zone_1_vwc_method", "Lowest")
+    c._loop_room(room, Clock.now())
+    assert opened(fake) == [PUMP, VALVE]  # the room reads its 44 %, under the 45 % trigger
+    still(fake, 2, 44, minutes=121)  # two hours the same: out, as a probe that can't be read
+    vwc, _ec, own, kept = c._group_readings(room, group)
+    assert (vwc, own[2][0], kept) == (50, None, set())
+
+
+@pytest.mark.parametrize("reading", [100, 41])
+def test_a_still_100_or_one_under_the_rescue_level_leaves_after_20_minutes(monkeypatch, reading):
+    """100% is the top of the scale, which a probe sitting in water reads; under the rescue level a
+    reading that never moves would fire rescue shots, which no daily limit stops."""
+    c, fake, room = _room(monkeypatch)
+    fake.set_state("number.crop_steering_p3_emergency_vwc_threshold", "42")
+    group = c._valve_group(room)
+    probe(fake, 1, 50)
+    probe(fake, 3, 62)
+    still(fake, 2, reading, minutes=19)
+    assert c._group_readings(room, group)[2][2][0] == reading  # changed 19 minutes ago: in
+    still(fake, 2, reading, minutes=21)
+    vwc, _ec, own, kept = c._group_readings(room, group)
+    assert (vwc, own[2][0], kept) == (56, None, set())
+
+
+def test_a_still_zone_is_said_when_it_would_have_been_out_as_long(monkeypatch):
+    monkeypatch.setattr(controller, "BLIND_GRACE_MIN", 0)
+    c, fake, room = _room(monkeypatch)
+    probe(fake, 1, 50)
+    still(fake, 2, 56, minutes=40)
+    still(fake, 3, 100, minutes=40)
+
+    def said(zone):
+        return [d["message"] for dom, svc, d in fake.calls if (dom, svc) == ("persistent_notification", "create")
+                and d["notification_id"].endswith(f"blind_default_z{zone}")]
+
+    pub = c._loop_room(room, Clock.now())
+    assert pub[2]["vwc"] == 56 and pub[3]["vwc"] is None
+    assert "stayed at 56% for 40 minutes" in said(2)[0]
+    assert "this reading stays in the room's until it has stayed the same for 2 hours" in said(2)[0]
+    assert "until it reads again they are watered on the others' readings" in said(3)[0]
+
+
+def test_a_still_probe_on_its_own_valve_is_out_after_20_minutes_as_before(monkeypatch):
+    c, fake, room = _room(monkeypatch, plumbing="pump_valves",
+                          valves={str(z): f"switch.v{z}" for z in ZONES})
+    for zone in ZONES:
+        probe(fake, zone, 50)
+    still(fake, 2, 50, minutes=21)
+    pub = c._loop_room(room, Clock.now())
+    assert pub[2]["vwc"] is None and pub[2]["blind"]
 
 
 @pytest.mark.parametrize("plumbing", [None, "pump_valves"])

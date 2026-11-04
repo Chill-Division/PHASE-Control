@@ -437,6 +437,14 @@ PLUMBING_LAYOUTS = {
 # fertigation valve for three zones). The zones keep their own probes and readings, and share one phase,
 # one set of targets and every shot (_valve_group).
 ONE_VALVE_LAYOUTS = frozenset({"pump_one_valve"})
+# How long a one-valve room keeps a zone's moisture that has stopped changing, in minutes. A reading that
+# has stayed the same for 20 minutes is not steered by (_read_sensor), and in a one-valve room its zone
+# left the room's reading, which jumped to the others': GR1's probes held still for up to 80 minutes on
+# quiet nights (30 Oct 2026) and the jumps passed for drybacks, and GT1's 100% made the day's peak while
+# its other zone was out (3 Nov). Two readings still leave after 20 minutes (_group_readings): 100%, the
+# top of the scale, which a probe sitting in water reads, and one under the room's rescue level, which
+# would fire rescue shots that no daily limit stops.
+STILL_KEEP_MIN = 120
 
 
 def combine_readings(values, method="Average"):
@@ -1814,31 +1822,36 @@ class Controller:
         return str(v).lower() in ON_STATES
 
     def _read_sensor(self, entity, lo=0.0, hi=200.0, max_age_min=20, to_ms_cm=False):
+        return self._read_aged(entity, lo, hi, max_age_min, to_ms_cm)[0]
+
+    def _read_aged(self, entity, lo=0.0, hi=200.0, max_age_min=20, to_ms_cm=False):
+        """`_read_sensor`'s reading, and the minutes since it last changed: (value, minutes). The value
+        is None where `_read_sensor` finds none, the minutes None without a valid time."""
         v, attrs, lu = ha_get(entity)
         if v in (None, "unknown", "unavailable", ""):
-            return None
+            return None, None
         try:
             f = float(v)
         except Exception:
-            return None
+            return None, None
         if to_ms_cm:  # an EC probe in uS/cm (micro sign, Greek mu or plain "u") is a thousandth of that in mS/cm
             unit = str((attrs or {}).get("unit_of_measurement") or "").lower().replace(" ", "")
             if unit in ("µs/cm", "μs/cm", "us/cm"):
                 f /= 1000.0
         if not math.isfinite(f) or f < lo or f > hi:
-            return None
+            return None, None
         try:
             if not lu:
-                return None
+                return None, None
             ts = datetime.fromisoformat(str(lu).replace("Z", "+00:00"))
             if ts.tzinfo is None:
-                return None
+                return None, None
             age = (datetime.now(timezone.utc) - ts).total_seconds()
-            if age < -60.0 or age > max_age_min * 60.0:
-                return None
         except (ValueError, TypeError, OverflowError):
-            return None
-        return f
+            return None, None
+        if age < -60.0 or age > max_age_min * 60.0:
+            return None, age / 60.0
+        return f, age / 60.0
 
     def _veg(self, room, zone):
         v, _, _ = ha_get(f"select.crop_steering_{room.prefix}zone_{zone}_steering_mode")
@@ -2024,24 +2037,35 @@ class Controller:
         return sorted(room.zones)
 
     def _group_readings(self, room, group):
-        """A one-valve room's one moisture reading and one EC -> (vwc, ec, own): its zones' readings
+        """A one-valve room's one moisture reading and one EC -> (vwc, ec, own, still): its zones' readings
         made one the way its first zone makes its own probes one (that zone's moisture or EC method),
-        and each zone's own (vwc, ec), None where it can't be read."""
-        own = {
-            zone: tuple(
-                self._read_sensor(
-                    self._fused_id(room.prefix, metric, zone, room.zones[zone].get(metric)), lo=0, hi=hi
-                )
-                for metric, hi in (("vwc", 100), ("ec", 20))
+        each zone's own (vwc, ec), None where it can't be read, and the zones whose moisture is in though
+        it has stayed the same for more than 20 minutes (STILL_KEEP_MIN)."""
+        own, still, rescue = {}, set(), None
+        for zone in group:
+            vwc, minutes = self._read_aged(
+                self._fused_id(room.prefix, "vwc", zone, room.zones[zone].get("vwc")),
+                lo=0,
+                hi=100,
+                max_age_min=STILL_KEEP_MIN,
             )
-            for zone in group
-        }
+            if vwc is not None and minutes > 20:
+                if rescue is None:
+                    rescue = self._zone_num(room, group[0], "p3_emergency_vwc_threshold", 40)
+                if vwc >= 100 or vwc < rescue:
+                    vwc = None
+                else:
+                    still.add(zone)
+            ec = self._read_sensor(
+                self._fused_id(room.prefix, "ec", zone, room.zones[zone].get("ec")), lo=0, hi=20
+            )
+            own[zone] = (vwc, ec)
         made = []
         for index, metric in enumerate(("vwc", "ec")):
             method = ha_get(f"select.crop_steering_{room.prefix}zone_{group[0]}_{metric}_method")[0]
             values = [read[index] for read in own.values() if read[index] is not None]
             made.append(combine_readings(values, method or "Average"))
-        return made[0], made[1], own
+        return made[0], made[1], own, still
 
     # What a one-valve room's other zones take on from its first zone's pass (_valve_group): the phase
     # and the day it is in, its shot count and its EC steer, so each says what the room does. Not its
@@ -2067,14 +2091,15 @@ class Controller:
         if changed:
             self._save_state()
 
-    def _report_unread_zones(self, room, own, now):
+    def _report_unread_zones(self, room, own, still, now):
         """A one-valve room is watered on the readings its zones give: one zone's probe that can't be
-        read leaves the room's reading and is said, as any dead probe is. With none readable the first
-        zone's pass is blind, and says so itself."""
+        read leaves the room's reading and is said, as any dead probe is. One kept though its reading
+        hasn't changed (`still`, STILL_KEEP_MIN) is said when it would have been out as long. With none
+        readable the first zone's pass is blind, and says so itself."""
         since = room.__dict__.setdefault("_unread_since", {})
         unread = [zone for zone, (vwc, _ec) in own.items() if vwc is None]
         for zone in own:
-            if zone not in unread or len(unread) == len(own):
+            if (zone not in unread and zone not in still) or len(unread) == len(own):
                 since.pop(zone, None)
                 continue
             out_min = (now - since.setdefault(zone, now)).total_seconds() / 60.0
@@ -2082,12 +2107,19 @@ class Controller:
                 continue
             looking = self._fused_id(room.prefix, "vwc", zone, room.zones[zone].get("vwc"))
             code, what = self._unreadable(looking)
+            plan = (
+                "One valve waters this room's zones together, and this reading stays in the room's until "
+                f"it has stayed the same for {STILL_KEEP_MIN // 60} hours; after that they are watered on "
+                "the others' readings."
+                if zone in still
+                else "One valve waters this room's zones together, so until it reads again they are "
+                "watered on the others' readings."
+            )
             self._alert(
                 f"blind_{room.slug}_z{zone}",
                 code,
                 _PROBE_ALERTS[code][0],
-                f"{what} One valve waters this room's zones together, so until it reads again they are "
-                f"watered on the others' readings. {_PROBE_ALERTS[code][1]}\n\nSensor: {looking}",
+                f"{what} {plan} {_PROBE_ALERTS[code][1]}\n\nSensor: {looking}",
                 room=room,
                 zone=zone,
             )
@@ -4802,9 +4834,9 @@ class Controller:
         if group:
             for zone in group[1:]:  # a phase picked on any of them moves them all
                 self._apply_phase_request(room, zone, room.state[group[0]], now)
-            vwc, ec, own = self._group_readings(room, group)
+            vwc, ec, own, still = self._group_readings(room, group)
             readings = (vwc, ec)
-            self._report_unread_zones(room, own, now)
+            self._report_unread_zones(room, own, still, now)
         for zone in room.zones:
             st = room.state[zone]
             if zone in followers:

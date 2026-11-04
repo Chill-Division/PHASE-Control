@@ -1,3 +1,7 @@
+# Unreleased
+
+- In a room whose one valve waters every zone, a probe whose reading holds still stays in the room's reading for up to 2 hours, so the room's moisture no longer jumps when a quiet probe drops out.
+
 # 1.6.2
 
 Pair with integration 1.6.2.

@@ -21,6 +21,10 @@ people who build the system:
 `tests/test_whats_new.py` checks the shape and the plain words, and that the newest section is the
 version being released.
 
+## Unreleased
+
+- In a room with one valve for every zone, a probe that reads the same for a while on a quiet night no longer makes the room's moisture jump.
+
 ## 1.6.2 - 2026-11-03
 
 - Rooms take turns to refill their reservoirs, so two refills no longer share the water supply and come out too strong.

@@ -43,10 +43,11 @@
       "title": "Moisture reading hasn't changed",
       "source": "notification",
       "severity": "warning",
-      "meaning": "The zone's moisture reading has stayed exactly the same for more than 20 minutes. A working probe in a cube with a plant drinking from it moves all the time, so the controller cannot tell this one from a probe that has stopped updating or been pulled out, and does not steer by it.",
-      "watering": "Carries on without the probe while the engine is on. If another zone in the room has a working probe, this zone gets the same shots as that zone; otherwise it gets one shot every 90 minutes (the app's blind_fallback_min option), within its daily water limit. Phase changes that go by moisture wait until the reading moves.",
+      "meaning": "The zone's moisture reading has stayed exactly the same for more than 20 minutes. A working probe in a cube with a plant drinking from it moves all the time, so the controller cannot tell this one from a probe that has stopped updating or been pulled out. It does not steer by it, except for up to 2 hours in a room whose one valve waters every zone.",
+      "watering": "Carries on without the probe while the engine is on. If another zone in the room has a working probe, this zone gets the same shots as that zone; otherwise it gets one shot every 90 minutes (the app's blind_fallback_min option), within its daily water limit. Phase changes that go by moisture wait until the reading moves. In a room whose one valve waters every zone, the reading stays in the room's for up to 2 hours, then the room is watered on its other zones' readings; a reading of 100%, or one under the rescue level, leaves after 20 minutes.",
       "causes": [
         "No plant in the cube, or a plant too small to drink much yet: nothing takes water out, so the number never moves. Expected on a bench test or a new install.",
+        "A quiet night: with the lights off the plants drink little, and a probe can read the same for an hour or more.",
         "The probe has been pulled out of the cube, or is lying in a tray.",
         "The cube is soaked and the probe is pinned at its highest reading.",
         "The probe's own integration has stopped updating and keeps showing its last value."

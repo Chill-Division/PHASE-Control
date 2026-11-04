@@ -90,4 +90,28 @@ describe("adapter review regressions", () => {
     states["sensor.crop_steering_ai_heartbeat"].attributes.max_sensor_age_s = 60;
     expect(buildRoom(states, room).zones[0].vwc.value).toBeNull();
   });
+
+  it("keeps a still moisture reading current in a one-valve room while the controller steers by it", () => {
+    const states = createDemo();
+    const room = discoverRooms(states)[0];
+    const ago = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString();
+    const steered = (vwc: number | null) => {
+      const id = "sensor.crop_steering_zone_1_safety_status";
+      states[id] = { entity_id: id, state: "ok", attributes: { vwc }, last_updated: ago(0) };
+    };
+    const vwc = () => buildRoom(states, room).zones[0].vwc.value;
+    states["sensor.crop_steering_vwc_zone_1"].last_updated = ago(40);
+    steered(56);
+    expect(vwc()).toBeNull(); // on its own valve: out after 20 minutes, as before
+    states["sensor.crop_steering_engine_config"].attributes.plumbing = "pump_one_valve";
+    expect(vwc()).toBe(56);
+    steered(null); // the controller doesn't steer by it (at 100%, or under the rescue level)
+    expect(vwc()).toBeNull();
+    steered(56);
+    states["sensor.crop_steering_vwc_zone_1"].last_updated = ago(121); // two hours the same
+    expect(vwc()).toBeNull();
+    states["sensor.crop_steering_vwc_zone_1"].last_updated = ago(40);
+    states["sensor.crop_steering_ai_heartbeat"].last_updated = ago(60); // the controller stopped
+    expect(vwc()).toBeNull();
+  });
 });
