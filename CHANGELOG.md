@@ -20,6 +20,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   A reading of 100%, the top of the scale, and one under the rescue level still leave after 20
   minutes. The notification that the reading hasn't changed comes when it always did and says the
   reading is still in use, and the zone's card shows it for as long as the controller uses it.
+- **A one-valve room's peak comes from its zones' own.** The day's peak, which the morning dryback
+  and the overnight line count from, was the room's highest reading. A zone leaving the reading left
+  its peak behind: a probe read 100% while another zone was out, the 100% stayed the day's peak, and
+  the night was held to a 60% line where about 52% was right. Each zone now keeps its own highest reading
+  of the day, and the room's peak is those of the zones in its reading, made one as their readings
+  are (the lowest of them, on Lowest). The reading and the peak it dries back from are now always of
+  the same zones, so a zone dropping out or coming back no longer looks like a dryback.
 
 ### 🔧 Technical notes
 
@@ -34,6 +41,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`review-regressions.test.ts`).
 - Docs: CS-101 in `docs/error-codes.json` and `ERROR_CODES.md`, the one-valve section of
   `USER_GUIDE.md`, and the CS-101 row of `troubleshooting.md`.
+- Controller: per-zone state `own_peak` (None in `_fresh_zone`, loaded when a finite number, saved).
+  `_group_peak` raises each zone's `own_peak` to its reading every pass and sets the first zone's
+  `peak` to those of the zones with a reading, combined with zone 1's `vwc_method`; a zone with none
+  (a file from before it) starts from the room's peak, so an upgraded room keeps it. `_restart_own_peaks`
+  starts them again at P0, the engine's and one picked by hand. `test_one_valve_room.py`,
+  `tests/test_state_migration.py`.
 
 ## [1.6.2] - 2026-11-03
 

@@ -1062,6 +1062,9 @@ class Controller:
         return {
             "phase": "P2",
             "peak": 0.0,
+            # In a one-valve room, this zone's own highest moisture of the room's day (_group_peak);
+            # None until it has one: a file from before it, or a zone just added.
+            "own_peak": None,
             "win": [],
             "last_shot": None,
             # True while `last_shot` is only the moment the room was switched on (the timers count
@@ -1109,6 +1112,12 @@ class Controller:
             settled = float(d.get("ec_settled"))
             if math.isfinite(settled):
                 s["ec_settled"] = settled
+        except (TypeError, ValueError):
+            pass
+        try:
+            own_peak = float(d.get("own_peak"))
+            if math.isfinite(own_peak):
+                s["own_peak"] = own_peak
         except (TypeError, ValueError):
             pass
         if isinstance(d.get("last_shot_is_anchor"), bool):
@@ -1568,6 +1577,7 @@ class Controller:
         return {
             "phase": s.get("phase"),
             "peak": s.get("peak"),
+            "own_peak": s.get("own_peak"),
             "shots": s.get("shots"),
             "daily_vol": s.get("daily_vol"),
             "water_history": s.get("water_history"),
@@ -2066,6 +2076,36 @@ class Controller:
             values = [read[index] for read in own.values() if read[index] is not None]
             made.append(combine_readings(values, method or "Average"))
         return made[0], made[1], own, still
+
+    def _group_peak(self, room, group, own):
+        """A one-valve room's peak, from its zones' own: each zone keeps its own highest moisture of the
+        room's day (`own_peak`), and the room's peak is those of the zones in its reading this pass, made
+        one as their readings are (the first zone's moisture method), so the reading and the peak it
+        dries back from are of the same zones. Taken from the room's reading, a zone that left it left a
+        peak behind (GT1, 3 Nov 2026: GT1-AT's 100% made the day's peak while GT1-LMC was out, and the
+        night was held to a 60% line instead of about 52%), and one leaving or coming back made a
+        dryback that wasn't there (GR1, 2 Nov: P0 ended early)."""
+        lead = room.state[group[0]]
+        peaks = []
+        for zone in group:
+            st = room.state[zone]
+            if st.get("own_peak") is None:  # a file from before it: the room's peak so far
+                st["own_peak"] = float(lead.get("peak") or 0.0)
+            vwc = own[zone][0]
+            if vwc is not None:
+                st["own_peak"] = max(st["own_peak"], vwc)
+                peaks.append(st["own_peak"])
+        method = ha_get(f"select.crop_steering_{room.prefix}zone_{group[0]}_vwc_method")[0]
+        peak = combine_readings(peaks, method or "Average")
+        if peak is not None:
+            lead["peak"] = peak
+
+    def _restart_own_peaks(self, room, own=None):
+        """A new day for a one-valve room's peak: each zone's own starts again from its reading now (`own`,
+        _group_readings), or from the next one it gives."""
+        for zone in self._valve_group(room) or ():
+            vwc = (own or {}).get(zone, (None, None))[0]
+            room.state[zone]["own_peak"] = vwc if vwc is not None else 0.0
 
     # What a one-valve room's other zones take on from its first zone's pass (_valve_group): the phase
     # and the day it is in, its shot count and its EC steer, so each says what the room does. Not its
@@ -4736,6 +4776,7 @@ class Controller:
             return
         if wanted == "P0":
             st["peak"] = 0.0
+            self._restart_own_peaks(room)
         if wanted == "P1":
             st["shots"] = 0
         st["phase"], st["last_phase_change"] = wanted, now
@@ -4836,6 +4877,7 @@ class Controller:
                 self._apply_phase_request(room, zone, room.state[group[0]], now)
             vwc, ec, own, still = self._group_readings(room, group)
             readings = (vwc, ec)
+            self._group_peak(room, group, own)
             self._report_unread_zones(room, own, still, now)
         for zone in room.zones:
             st = room.state[zone]
@@ -4883,6 +4925,8 @@ class Controller:
                 self._say(room, zone, f"{st['phase']} → {new_phase}: {log_words.transition(reason)}")
                 if new_phase == "P0":
                     st["daily_vol"], st["shots"], st["peak"] = 0.0, 0, snap.vwc
+                    if group:
+                        self._restart_own_peaks(room, own)
                     st["ec_offset"], st["last_ec_steer"] = 0.0, None
                     st["last_daily_reset"] = self._grow_day_start(room, now)
                     room._vmax_wetup[zone] = []  # fresh wet-up curve for today's ramp
