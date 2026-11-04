@@ -10,7 +10,9 @@ and code-level detail for developers and AI agents working on the repo.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.6.3] - 2026-11-04
+
+Integration and controller **1.6.3**.
 
 - **A probe that holds still stays in a one-valve room's reading.** In a room whose one valve waters
   every zone, a zone whose moisture hadn't changed for 20 minutes left the room's reading, and the
