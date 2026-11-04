@@ -2466,12 +2466,7 @@ class Controller:
         level = f"the reservoir reads {reading['pct']:.0f}%"
         why = (f"{level}, and this shot would take it under its {reading['min']:g}% minimum" if per_pct
                else f"{level}, under its {reading['min']:g}% minimum")
-        if not self._on(f"switch.crop_steering_{room.prefix}auto_batches", False):
-            cannot = "automatic refills are off"
-        elif not room.batch["armed"]:
-            cannot = "the last refill did not raise it"
-        else:
-            cannot = self._batch_refusal(room, room.hw["reservoir"], reading["plan"])
+        cannot = self._refill_cannot(room)
         if cannot is None:
             return f"waiting for a reservoir refill: {why}"
         self._alert(
@@ -2484,6 +2479,25 @@ class Controller:
             room=room,
         )
         return f"reservoir too low: {why} ({cannot})"
+
+    def _refill_cannot(self, room):
+        """Why the reservoir can't be refilled by itself now, or None: automatic refills off, the last
+        refill not raising it, or a batch that can't start (_batch_refusal)."""
+        if not self._on(f"switch.crop_steering_{room.prefix}auto_batches", False):
+            return "automatic refills are off"
+        if not room.batch["armed"]:
+            return "the last refill did not raise it"
+        return self._batch_refusal(room, room.hw["reservoir"], room._res["plan"])
+
+    def _watering_held(self, room):
+        """The room's shots wait for its reservoir with nothing to refill it by itself: why, and why it
+        can't refill ({"why", "cannot"}), or None. From the moment its next round of shots would take it
+        under its minimum (_refill_due), not only once a shot comes due and waits (CS-704): GT1, 4 Nov
+        2026, at 4% for hours with nothing on the dashboard but its line, Holding."""
+        if self._refill_due(room) is not True:
+            return None
+        cannot = self._refill_cannot(room)
+        return {"why": self._refill_why(room), "cannot": cannot} if cannot else None
 
     def _plan_next_round(self, room, snaps, params):
         """Litres the room's next round of shots takes from its reservoir: every zone's next routine
@@ -3116,6 +3130,8 @@ class Controller:
                 "armed": batch["armed"],
                 "last": {**batch["last"], "at": _shown(batch["last"].get("at"))} if batch["last"] else None,
                 "blocked": None if running else self._batch_refusal(room, res, plan or None) or self._fill_wait(room),
+                # watering waits for the reservoir with nothing to refill it by itself (CS-704)
+                "watering_held": None if running else self._watering_held(room),
                 "updated": _shown(now),
             },
         )
