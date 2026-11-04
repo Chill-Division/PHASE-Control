@@ -67,6 +67,9 @@ export interface BatchStatus {
   last: LastBatch | null;
   /** Why no batch could start now, or null. */
   blocked: string | null;
+  /** Watering waits for the reservoir with nothing to refill it by itself: why, and why it can't
+   * refill. Null when it doesn't, and from an older controller, which didn't say. */
+  wateringHeld: { why: string; cannot: string } | null;
   updated: number | null;
 }
 
@@ -83,6 +86,12 @@ export const STEP_LABELS: Record<BatchStep, string> = {
 const finite = (value: unknown) =>
   typeof value === "number" && Number.isFinite(value) ? value : null;
 const text = (value: unknown) => (typeof value === "string" && value ? value : null);
+const held = (value: unknown) => {
+  const item = value && typeof value === "object" ? (value as Record<string, unknown>) : null;
+  const why = text(item?.why),
+    cannot = text(item?.cannot);
+  return why && cannot ? { why, cannot } : null;
+};
 const time = (value: unknown) => {
   const at = typeof value === "string" ? Date.parse(value) : NaN;
   return Number.isFinite(at) ? at : null;
@@ -165,6 +174,7 @@ export function readBatchStatus(states: States, prefix: string): BatchStatus | n
         }
       : null,
     blocked: text(a.blocked),
+    wateringHeld: held(a.watering_held),
     updated: time(a.updated),
   };
 }

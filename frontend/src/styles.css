@@ -103,6 +103,9 @@
   --tone-good-line: #cde5d2;
   --tone-paused-bg: #eef1f4;
   --tone-paused-ink: #33404c;
+  /* The edge of a card that is the room's problem right now: Home Assistant's warning orange, a
+     shade darker on a light theme so it keeps 3:1 against the card and the page. */
+  --attention: #e65100;
   --good: #2e7d32;
   --schedule: #3b3a7a;
   --schedule-bg: #ebeaf6;
@@ -151,6 +154,7 @@
   --tone-good-line: #22512f;
   --tone-paused-bg: #232b33;
   --tone-paused-ink: #c4ccd4;
+  --attention: #ff9800;
   --good: #81c995;
   --schedule: #b4b1f2;
   --schedule-bg: #25243d;

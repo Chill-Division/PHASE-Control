@@ -1,5 +1,5 @@
 import { useId } from "react";
-import { Settings2 } from "lucide-react";
+import { Settings2, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Pill } from "@/components/mini-visuals";
 import type { Controller } from "@/lib/types";
@@ -7,6 +7,7 @@ import { tankTelemetry, type TankReading } from "@/lib/tank-telemetry";
 import { TankLevelChart } from "./tank-level-chart";
 import { refillByText, useRefillBy } from "./refill-estimate";
 import { refillByWords } from "@/lib/refill-estimate";
+import { reservoirHold } from "@/lib/model";
 import "./tank-status.css";
 
 export function TankStatus({
@@ -18,6 +19,8 @@ export function TankStatus({
 }) {
   const tank = tankTelemetry(controller.states, controller.room.room);
   const refill = tank.refill;
+  // Watering waits for it with nothing to refill it by itself: the reservoir is the room's problem.
+  const held = reservoirHold(controller.states, controller.room.room) !== null;
   const clipId = useId();
   const connected = ["live", "demo"].includes(controller.connection);
   const value = (r: TankReading, digits = 1) =>
@@ -35,7 +38,12 @@ export function TankStatus({
   // The drawing's inside runs from y=119 (empty) to y=1 (full): 1.18 units per percent.
   const surface = level === null ? null : 119 - level * 1.18;
   return (
-    <section className="panel tank-panel" aria-label="Tank and pump status" data-tank-status>
+    <section
+      className="panel tank-panel"
+      aria-label="Tank and pump status"
+      data-tank-status
+      data-held={held || undefined}
+    >
       <div className="panel-heading">
         <h2>Tank & pump</h2>
         {!connected && <span className="tank-stale">Disconnected · last received</span>}
@@ -74,10 +82,17 @@ export function TankStatus({
               {tank.level.issue || "full"}
             </text>
           </svg>
-          {soon && (
-            <Pill tone="warn" dot data-refill-soon>
-              Refill soon
+          {held ? (
+            <Pill tone="warn" data-watering-held>
+              <TriangleAlert size={12} aria-hidden="true" />
+              Watering held
             </Pill>
+          ) : (
+            soon && (
+              <Pill tone="warn" dot data-refill-soon>
+                Refill soon
+              </Pill>
+            )
           )}
         </div>
         <TankLevelChart controller={controller} source={tank.source} current={level} />
@@ -154,6 +169,8 @@ export function ReservoirSummary({
   const min = source?.minPct ?? null;
   const refillBy = useRefillBy(controller, source, level);
   const mapped = !!(tank.level.entityId || tank.pump.entityId || refill);
+  // GT1, 4 Nov 2026: watering waited for it at 4% all evening, and this card looked as it always does.
+  const held = reservoirHold(controller.states, controller.room.room) !== null;
   if (!mapped)
     return (
       <section
@@ -192,7 +209,12 @@ export function ReservoirSummary({
     remind !== null && `reminder at ${Math.round(remind)}%`,
   ].filter(Boolean);
   return (
-    <section className="card reservoir-summary" aria-labelledby="reservoir-title" data-tank-status>
+    <section
+      className="card reservoir-summary"
+      aria-labelledby="reservoir-title"
+      data-tank-status
+      data-held={held || undefined}
+    >
       <div
         className="reservoir-vessel"
         role="img"
@@ -219,10 +241,17 @@ export function ReservoirSummary({
               {connected ? "" : " · last known"}
             </span>
           )}
-          {soon && (
-            <span className="tone-badge" data-tone="warning" data-refill-soon>
-              Refill soon
+          {held ? (
+            <span className="tone-badge" data-tone="warning" data-watering-held>
+              <TriangleAlert size={12} aria-hidden="true" />
+              Watering held
             </span>
+          ) : (
+            soon && (
+              <span className="tone-badge" data-tone="warning" data-refill-soon>
+                Refill soon
+              </span>
+            )
           )}
         </span>
         <span className="reservoir-level">

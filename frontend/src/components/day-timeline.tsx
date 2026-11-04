@@ -624,7 +624,9 @@ export function useLanes(
             ? "zone scheduling is paused"
             : pausedMate
               ? `${pausedMate.name} is paused, and one valve waters every zone`
-              : null;
+              : room.reservoirHold
+                ? "the reservoir is too low"
+                : null;
     const ramp = phase === "P1" ? phaseTarget("p1_target_vwc") : null;
     const ceiling = ramp === null ? null : Math.min(ramp, read(zone, "field_capacity") ?? Infinity);
     const held = blocks.at(-1)?.open ? blocks.at(-1)! : null;

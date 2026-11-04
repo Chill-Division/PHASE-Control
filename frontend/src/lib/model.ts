@@ -26,6 +26,7 @@ import {
   setHoldWords,
 } from "./controller-health";
 import { BATCH_SWITCH_KEYS } from "./feed";
+import { readBatchStatus } from "./feed-status";
 import { oneValve } from "./plumbing";
 import { readProbes, readingTile } from "./probes";
 
@@ -752,6 +753,7 @@ export function buildRoom(states: States, room: Room): RoomView {
     string,
     { kind: "sensors" | "waiting" | "held" | "status"; detail: string; zones: Zone[] }
   >();
+  const roomHold = room.id ? reservoirHold(states, room) : null;
   for (const zone of zones) {
     const waiting = /^Waiting: (.*)$/.exec(zone.status)?.[1];
     const held = /^Blocked: (.*)$/.exec(zone.status)?.[1];
@@ -786,6 +788,9 @@ export function buildRoom(states: States, room: Room): RoomView {
               ? { kind: "status" as const, detail: zone.status }
               : null;
     if (!problem) continue;
+    // The reservoir's hold is the room's, said once below.
+    if (problem.kind === "status" && roomHold && /^Blocked: reservoir too low/.test(zone.status))
+      continue;
     const key = `${problem.kind}\n${problem.detail}`;
     problems.set(key, { ...problem, zones: [...(problems.get(key)?.zones ?? []), zone] });
   }
@@ -824,6 +829,14 @@ export function buildRoom(states: States, room: Room): RoomView {
       severity: "critical",
       title: "Watering stopped: a pump or valve didn’t switch off (CS-301)",
       detail: `${hardwareFaultWords(heartbeat.attributes.hardware_fault)}. Switch watering off and check it at the device and in Home Assistant: once every pump and valve reads off, the hold clears within a minute. Then switch watering back on.`,
+    });
+  // Said once for the room, not on each zone it holds: its zones' "needs attention" are left out above.
+  if (roomHold)
+    alerts.unshift({
+      id: `${room.id}-reservoir-held`,
+      severity: "warning",
+      title: "Watering held: the reservoir is too low (CS-704)",
+      detail: reservoirHoldWords(roomHold),
     });
   if (strategyEngaged)
     alerts.unshift({
@@ -929,6 +942,7 @@ export function buildRoom(states: States, room: Room): RoomView {
       : alerts.filter((alert) => alert.id === `${room.id}-hardware-fault`)
     ).sort((a, b) => SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity]),
     roomActive,
+    reservoirHold: roomHold,
     roomActiveEntity: activeSwitch?.entity_id ?? null,
     autoSetpoints: {
       entityId: autoSwitch?.entity_id ?? null,
@@ -988,6 +1002,28 @@ export function setupWait(states: States, room: Room, now = Date.now()): string 
   return typeof pending === "string" && /every pump and valve/.test(pending)
     ? "once every pump and valve in the room reads off"
     : "within a minute";
+}
+
+/** Watering waits for the room's reservoir with nothing to refill it by itself (CS-704): why, and why
+ * it can't refill; null when it doesn't. The controller says so on its batch status from the moment
+ * the next round of shots would take the reservoir under its minimum; an older one only in its
+ * decision, once a shot comes due and waits ("reservoir too low: <why> (<cannot>)"). */
+export function reservoirHold(states: States, room: Room): { why: string; cannot: string } | null {
+  const held = readBatchStatus(states, room.prefix)?.wateringHeld;
+  if (held) return held;
+  const blocked = resolve(states, room, "sensor", "current_decision")?.attributes.blocked;
+  const entry = Array.isArray(blocked)
+    ? blocked.find(
+        (item): item is string => typeof item === "string" && / reservoir too low: /.test(item),
+      )
+    : undefined;
+  const hit = entry && /reservoir too low: (.*) \(([^()]*)\)$/.exec(entry);
+  return hit ? { why: hit[1], cannot: hit[2] } : null;
+}
+
+/** A reservoir hold in words: the level, why it can't refill, and what to do. */
+export function reservoirHoldWords(hold: { why: string; cannot: string }): string {
+  return `${hold.why.charAt(0).toUpperCase()}${hold.why.slice(1)}. It can't refill by itself: ${hold.cannot}. Watering waits until it's refilled, by hand or with a test refill (Settings → Rooms & hardware → Tests), and carries on by itself once it reads enough.`;
 }
 
 /** One line per room from what the controller publishes: watering, holding and why, not watering
@@ -1127,6 +1163,13 @@ export function roomStatus(states: States, room: Room, now = Date.now()): RoomSt
       "Not watering",
       blocked.join(" · ") || "The controller reports an error. Check its log.",
     );
+  // GT1, 4 Nov 2026: at 4% with automatic refills off, its line said "Holding" all evening.
+  const hold = reservoirHold(states, room);
+  if (hold)
+    return say("stopped", "Not watering", reservoirHoldWords(hold), {
+      label: "Feed",
+      route: "reservoir",
+    });
   if (blocked.length) return say("holding", "Holding", blocked.join(" · "));
   // GT1, 4 Nov 2026: renamed probes read nothing for hours, and between its timer shots the room said
   // "all zones in band". A zone without a reading is never in band.
