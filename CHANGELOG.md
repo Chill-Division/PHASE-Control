@@ -19,6 +19,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   line says No moisture reading, in amber: which zones, how they are watered meanwhile and when the
   next timer shot is. Coming up lists that shot, each zone's card gives its time, and the room's line
   shows at the top of every other page too.
+- **A reservoir that holds watering says so.** With automatic refills off, a reservoir under its
+  minimum holds every shot, which the controller's notification said only once a shot came due and
+  waited, and the dashboard said only as "Holding" on the room's line. From the moment the room's
+  next round of shots would take the reservoir under its minimum, with nothing to refill it by
+  itself, the room's line now reads Not watering with what to do, Needs you lists it as a warning,
+  and the Reservoir card, and the tank card on Feed, turn orange and say Watering held.
 
 ### 🔧 Technical notes
 
@@ -33,6 +39,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   other pages). `waitingText` and Coming up's `controllerShot` take the `blind_timer` rule.
   `controller-health.test.ts`, `coming-up.test.ts`, `waiting-for.test.ts`.
 - Docs: CS-102 in `docs/error-codes.json` and `ERROR_CODES.md`, and `USER_GUIDE.md`.
+- Controller: the batch status publishes `watering_held` (`{"why", "cannot"}` or null) every pass,
+  from `_watering_held`: the next round of shots would take the reservoir under its minimum
+  (`_refill_due`) and it can't refill by itself (`_refill_cannot`, which `_reservoir_block` now uses
+  too). CS-704 still comes once a shot waits. `test_nutrient_batch.py`.
+- Dashboard: `reservoirHold` reads it, or an older controller's "reservoir too low" decision.
+  `roomStatus` says Not watering with a link to Feed, `buildRoom` raises one warning for the room in
+  place of each held zone's "needs attention", and `ReservoirSummary` and `TankStatus` take
+  `data-held`: a border in `--attention`, Home Assistant's warning orange (a shade darker on a light
+  theme, for 3:1 against the card and the page), and a Watering held badge in it with a warning
+  sign. `controller-health.test.ts`.
+- Docs: CS-704 in `docs/error-codes.json` and `ERROR_CODES.md`, and `USER_GUIDE.md`.
 
 ## [1.6.3] - 2026-11-04
 

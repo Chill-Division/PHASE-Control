@@ -24,6 +24,7 @@ version being released.
 ## Unreleased
 
 - A room whose probes read nothing now says so in amber, with when its next timer shot is, instead of saying all its zones are in band.
+- When the reservoir is too low to water and nothing will refill it, the dashboard says watering is held and the Reservoir card turns orange.
 
 ## 1.6.3 - 2026-11-04
 

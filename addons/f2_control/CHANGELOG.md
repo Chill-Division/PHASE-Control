@@ -1,6 +1,7 @@
 # Unreleased
 
 - A room whose probes read nothing says so, and when its next timer shot is, instead of "Holding — all zones in band" between its timer shots.
+- The batch status says when watering waits for the reservoir with nothing to refill it by itself, from the moment the next round of shots would take it under its minimum, so the dashboard can say so before a shot waits.
 
 # 1.6.3
 
