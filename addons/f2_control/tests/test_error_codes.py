@@ -33,7 +33,10 @@ def _alerts(states, options=OPTIONS):
                if (dom, svc) == ("persistent_notification", "create")}
 
 
-def _probe_alert(value, *, last_updated=None, names=None, room_name=None, both=False):
+def _probe_alert(value, *, last_updated=None, names=None, room_name=None, both=False, ec=True,
+                 ec_updated=None):
+    """Zone 2's probe notification (zone 1's probe the same with `both`). Each zone's EC reads 3.1 and
+    has just changed, or changed at `ec_updated`; with `ec` False the zones have no EC."""
     states = _room(2)
     if names:
         states[DESCRIPTOR][1]["zone_names"] = names
@@ -45,11 +48,16 @@ def _probe_alert(value, *, last_updated=None, names=None, room_name=None, both=F
             states.pop(entity)
         else:
             states[entity] = (value, {"unit_of_measurement": "%"})
+        if not ec:
+            states.pop(f"sensor.crop_steering_ec_zone_{zone}")
     c, fake = _build(dict(OPTIONS), states=states)
-    if last_updated is not None:
-        for zone in (1, 2) if both else (2,):
+    for zone in (1, 2) if both else (2,):
+        if last_updated is not None:
             fake.set_state(f"sensor.crop_steering_vwc_zone_{zone}", value,
                            {"unit_of_measurement": "%"}, last_updated=last_updated)
+        if ec and ec_updated is not None:
+            fake.set_state(f"sensor.crop_steering_ec_zone_{zone}", "3.1",
+                           {"unit_of_measurement": "mS/cm"}, last_updated=ec_updated)
     c.loop_once(NOW)
     alerts = {d["notification_id"]: d for dom, svc, d in fake.calls
               if (dom, svc) == ("persistent_notification", "create")}
@@ -69,6 +77,38 @@ def test_a_reading_that_has_not_moved_is_not_called_a_dead_probe():
     assert "dead" not in alert["title"] + message
     assert message.endswith(FOOTER.format("CS-101"))
     assert "Sensor: sensor.crop_steering_vwc_zone_2" in message  # the id, kept as a detail line
+
+
+STALE_47 = (datetime.now(timezone.utc) - timedelta(minutes=47)).isoformat()
+
+
+def test_a_still_reading_whose_ec_kept_changing_says_the_probe_is_probably_working():
+    """Moisture and EC come from one probe in most rooms: an EC still changing says it answers."""
+    message = _probe_alert("31.2", last_updated=STALE_47, both=True)["message"]
+    assert ("stayed at 31.2% for 47 minutes, but its EC has kept changing, so the probe is "
+            "probably still working and the moisture just steady.") in message
+    assert "no plant in it" in message and "pulled out" not in message
+
+
+def test_a_still_100_whose_ec_kept_changing_is_the_top_of_its_scale():
+    # GT1-AT, 3 Nov 2026: 100% for over an hour, said as a probe that might have stopped.
+    message = _probe_alert("100", last_updated=STALE_47, both=True)["message"]
+    assert ("stayed at 100% for 47 minutes, but its EC has kept changing, so the probe is probably "
+            "still working: 100% is the top of its scale, which a probe reads sitting in water") in message
+    assert "isn't sitting in water or run-off" in message and "no plant in it" not in message
+
+
+def test_a_still_reading_whose_ec_stayed_the_same_too_says_so():
+    message = _probe_alert("31.2", last_updated=STALE_47, both=True, ec_updated=STALE_47)["message"]
+    assert ("stayed at 31.2% for 47 minutes, and so has its EC, so the controller can't tell a working "
+            "probe from one that has stopped or been pulled out.") in message
+    assert "one pulled out reads steady too" in message
+
+
+def test_a_still_reading_with_no_ec_to_tell_by_is_said_as_before():
+    message = _probe_alert("31.2", last_updated=STALE_47, both=True, ec=False)["message"]
+    assert ("stayed at 31.2% for 47 minutes, so the controller can't tell a working probe from one "
+            "that has stopped or been pulled out.") in message
 
 
 def test_a_sensor_that_is_not_reporting_says_so():

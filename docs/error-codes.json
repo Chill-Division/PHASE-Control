@@ -43,7 +43,7 @@
       "title": "Moisture reading hasn't changed",
       "source": "notification",
       "severity": "warning",
-      "meaning": "The zone's moisture reading has stayed exactly the same for more than 20 minutes. A working probe in a cube with a plant drinking from it moves all the time, so the controller cannot tell this one from a probe that has stopped updating or been pulled out. It does not steer by it, except for up to 2 hours in a room whose one valve waters every zone.",
+      "meaning": "The zone's moisture reading has stayed exactly the same for more than 20 minutes. A working probe in a cube with a plant drinking from it moves all the time, so the controller cannot tell this one from a probe that has stopped updating or been pulled out. It does not steer by it, except for up to 2 hours in a room whose one valve waters every zone. The notification says what the zone's EC did meanwhile: moisture and EC come from one probe in most rooms, so an EC that kept changing means the probe is probably still working, its moisture steady or, at 100%, stuck at the top of its scale.",
       "watering": "Carries on without the probe while the engine is on. If another zone in the room has a working probe, this zone gets the same shots as that zone; otherwise it gets one shot every 90 minutes (the app's blind_fallback_min option), within its daily water limit. Phase changes that go by moisture wait until the reading moves. In a room whose one valve waters every zone, the reading stays in the room's for up to 2 hours, then the room is watered on its other zones' readings; a reading of 100%, or one under the rescue level, leaves after 20 minutes.",
       "causes": [
         "No plant in the cube, or a plant too small to drink much yet: nothing takes water out, so the number never moves. Expected on a bench test or a new install.",
@@ -56,6 +56,7 @@
         "With no plant in, or a plant not yet drinking: nothing to fix. Watering goes back to normal by itself once the reading changes; the notification stays until you dismiss it.",
         "If the room is empty, switch its Room Active switch off: an empty room gets no watering and no notifications until it is switched back on.",
         "Check the probe is pushed fully into the cube.",
+        "If the notification says the zone's EC kept changing and the reading is 100%, check the probe isn't sitting in water or run-off, and that it is calibrated for the substrate.",
         "Open the sensor's history in Home Assistant. A flat line for hours while plants are drinking means the probe or its integration has stopped: reconnect or restart it."
       ]
     },
