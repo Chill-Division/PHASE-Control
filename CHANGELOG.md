@@ -10,6 +10,22 @@ and code-level detail for developers and AI agents working on the repo.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+- **A zone waiting for a refill that's about to start is waiting, not in trouble.** With automatic
+  refills on, a shot that would take the reservoir under its minimum waits a minute or so for the
+  refill the controller starts next. Meanwhile Needs you called the zone Critical, "needs
+  attention", with its reason cut off mid-word. It is now an Info, "is waiting", as for a refill
+  already under way; the Reservoir card shows the level.
+
+### 🔧 Technical notes
+
+- Dashboard: `zoneLabelWords` reads the controller's `waiting for a reservoir refill: …` hold
+  (`_reservoir_block`, when a refill can start) as one that ends by itself: the label `Waiting:
+  waiting for a reservoir refill` and an Info notice. Its why runs past the 80 characters a zone's
+  label keeps (`zone_status_label`, `controllerZoneLabel`) and is left to the Reservoir card. A
+  refill that can't start is still the room's CS-704 warning. `controller-health.test.ts`.
+
 ## [1.6.4] - 2026-11-05
 
 Integration and controller **1.6.4**.
