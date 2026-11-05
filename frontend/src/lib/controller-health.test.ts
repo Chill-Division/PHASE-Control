@@ -4,6 +4,7 @@ import {
   discoverRooms,
   leadingNotices,
   oneValveRoom,
+  reservoirHold,
   roomStatus,
   setupWait,
 } from "./model";
@@ -511,6 +512,64 @@ describe("zone status text", () => {
     const states = fixture([integration(1, "Dry - Needs Water")]);
     delete states[HEARTBEAT];
     expect(view(states).zones[0]).toMatchObject({ status: "Dry - Needs Water", stale: true });
+  });
+});
+
+describe("a reservoir that holds watering", () => {
+  // GT1, 4 Nov 2026: at 4% with automatic refills off, watering waited for hours with nothing on the
+  // dashboard but the room's line, "Holding", and the Reservoir card looking as it always does.
+  const hold = {
+    why: "the reservoir reads 4%, under its 5% minimum",
+    cannot: "automatic refills are off",
+  };
+  const words =
+    "The reservoir reads 4%, under its 5% minimum. It can't refill by itself: automatic refills are off. Watering waits until it's refilled, by hand or with a test refill (Settings → Rooms & hardware → Tests), and carries on by itself once it reads enough.";
+  const batch = (held: unknown) =>
+    entity("sensor.crop_steering_batch_status", "idle", {
+      level_pct: 4,
+      min_pct: 5,
+      watering_held: held,
+    });
+  // What a shot that waits for it says, the controller's _reservoir_block.
+  const waited = [1, 2].map(
+    (zone) =>
+      `Z${zone} P2 reservoir too low: the reservoir reads 4%, under its 5% minimum (automatic refills are off)`,
+  );
+  const room = (states: States) => discoverRooms(states)[0];
+  it("says Not watering, why and what to do, with the way to the reservoir", () => {
+    const states = fixture([batch(hold)]);
+    expect(reservoirHold(states, room(states))).toEqual(hold);
+    expect(view(states).reservoirHold).toEqual(hold); // its zones' days expect no shots: day-timeline
+    expect(status(states)).toMatchObject({
+      tone: "stopped",
+      text: "Not watering",
+      detail: words,
+      action: { label: "Feed", route: "reservoir" },
+    });
+  });
+  it("raises one warning for the room, not a notice on each zone it holds", () => {
+    const states = fixture([
+      batch(hold),
+      entity(DECISION, waited[0], { fired: [], blocked: waited }),
+    ]);
+    expect(view(states).alerts.map((alert) => [alert.severity, alert.title, alert.detail])).toEqual(
+      [["warning", "Watering held: the reservoir is too low (CS-704)", words]],
+    );
+  });
+  it("reads an older controller's hold from its decision, once a shot waits", () => {
+    const states = fixture([entity(DECISION, waited[0], { fired: [], blocked: waited })]);
+    expect(reservoirHold(states, room(states))).toEqual(hold);
+    expect(status(states)).toMatchObject({ tone: "stopped", detail: words });
+    expect(view(states).alerts.map((alert) => alert.title)).toEqual([
+      "Watering held: the reservoir is too low (CS-704)",
+    ]);
+  });
+  it("is nothing while a refill can start by itself, or nothing holds watering", () => {
+    for (const states of [fixture([batch(null)]), fixture()]) {
+      expect(reservoirHold(states, room(states))).toBeNull();
+      expect(status(states)).toMatchObject({ tone: "holding" });
+      expect(view(states).alerts).toEqual([]);
+    }
   });
 });
 

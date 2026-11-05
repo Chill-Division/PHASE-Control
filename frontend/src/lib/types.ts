@@ -115,6 +115,8 @@ export interface RoomView {
   alerts: Notice[];
   /** False only when switch.crop_steering_<prefix>room_active reports "off". */
   roomActive: boolean;
+  /** Watering waits for the reservoir with nothing to refill it by itself (model.ts reservoirHold). */
+  reservoirHold: { why: string; cannot: string } | null;
   /** Null when the controller has no room switch: the room is on and the control is hidden. */
   roomActiveEntity: string | null;
   autoSetpoints: { entityId: string | null; enabled: boolean | null };

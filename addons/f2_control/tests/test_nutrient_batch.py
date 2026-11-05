@@ -700,6 +700,47 @@ def test_without_automatic_refills_watering_is_held_and_said_so_until_it_reads_e
     assert c._reservoir_block(room, 1, 1.0) is None
 
 
+def test_watering_held_is_said_on_the_batch_status_before_any_shot_waits():
+    # GT1, 4 Nov 2026: at 4% with automatic refills off, nothing on the dashboard but the room's line
+    # said so, and that only once a shot came due and waited. The batch status says it every pass.
+    c, fake, room = _room(pct=4.0, auto="off")
+    _tick(c, room)
+    assert fake.sets[STATUS][1]["watering_held"] == {
+        "why": "the reservoir reads 4%, under its 5% minimum",
+        "cannot": "automatic refills are off",
+    }
+    assert not _alerts(fake, "CS-704")  # the notification still waits for a shot that waits
+    _level(fake, 70.0)  # refilled by hand
+    _tick(c, room)
+    assert fake.sets[STATUS][1]["watering_held"] is None
+
+
+def test_watering_is_not_held_while_a_refill_can_start_and_is_once_one_did_not_raise_it():
+    c, fake, room = _room(pct=4.0, auto="on")
+    _tick(c, room)
+    assert room.batch["step"] == "idle" and fake.sets[STATUS][1]["watering_held"] is None  # one is coming
+    room.batch["armed"] = False  # the last refill stopped: the reservoir did not fill
+    _tick(c, room)
+    assert fake.sets[STATUS][1]["watering_held"] == {
+        "why": "the reservoir reads 4%, under its 5% minimum",
+        "cannot": "the last refill did not raise it",
+    }
+
+
+def test_a_round_that_fits_holds_nothing_and_the_next_round_is_said_when_it_would_not():
+    c, fake, room = _room(pct=7.0, auto="off")
+    room.batch["litres_per_pct"] = 145 / 70
+    room._next_round_l = 1.28  # 0.6 points: 7 -> 6.4
+    _tick(c, room)
+    assert fake.sets[STATUS][1]["watering_held"] is None
+    room._next_round_l = 4.48  # 2.2 points: under 5%
+    _tick(c, room)
+    assert fake.sets[STATUS][1]["watering_held"] == {
+        "why": "the reservoir reads 7%, and the next round of shots (4.5 L) would take it under its 5% minimum",
+        "cannot": "automatic refills are off",
+    }
+
+
 def test_a_refill_that_did_not_raise_it_holds_watering_rather_than_trying_again():
     c, fake, room = _room(pct=4.0, auto="on")
     room.batch["armed"] = False  # the last refill stopped: the reservoir did not fill

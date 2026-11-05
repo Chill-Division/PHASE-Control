@@ -687,7 +687,7 @@
       "source": "notification",
       "severity": "critical",
       "meaning": "A shot would take the room's reservoir under its minimum (or, before a refill has shown how much 1% holds, it already reads under it), and no refill can start by itself: automatic refills are off, the last one did not raise it, or something stops one. A pump that runs the reservoir dry loses its prime.",
-      "watering": "No zone in the room is watered from the reservoir until it reads enough again; then watering goes on by itself.",
+      "watering": "No zone in the room is watered from the reservoir until it reads enough again; then watering goes on by itself. The dashboard says so from the moment the room's next round of shots would take the reservoir under its minimum, before a shot waits: the room's line reads Not watering, Needs you lists it, and the Reservoir card turns orange and says Watering held.",
       "causes": [
         "The reservoir ran down with automatic refills switched off.",
         "The last refill did not raise the level (CS-702).",

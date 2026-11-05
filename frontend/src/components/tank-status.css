@@ -31,7 +31,7 @@
   padding: 20px;
   align-items: start;
 }
-.tank-vessel svg {
+.tank-vessel > svg {
   display: block;
   width: 100%;
   height: auto;
@@ -164,6 +164,24 @@
     padding: 16px;
     gap: 16px;
   }
+}
+
+/* Watering waits for the reservoir with nothing to refill it by itself: its card says it's the
+ * problem. Its edge, two pixels wide without moving anything, and its badge take the attention
+ * orange, and the badge a warning sign, so it doesn't rest on colour alone. */
+.reservoir-summary[data-held],
+.tank-panel[data-held] {
+  border-color: var(--attention);
+  box-shadow: 0 0 0 1px var(--attention);
+}
+.tone-badge[data-tone="warning"][data-watering-held] {
+  gap: 4px;
+  color: color-mix(in srgb, var(--attention) 55%, var(--foreground));
+  background: color-mix(in srgb, var(--attention) 14%, var(--surface));
+}
+.pill[data-tone="warn"][data-watering-held] {
+  --pill-tone: var(--attention);
+  gap: 4px;
 }
 
 /* The Overview's reservoir card: the tank drawn as a jar, its level and minimum. */

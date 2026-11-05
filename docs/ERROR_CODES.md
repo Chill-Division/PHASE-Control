@@ -885,7 +885,7 @@ setup change (CS-201) and a hardware hold (CS-301, CS-308, CS-309) are still rep
 
 **What it means.** A shot would take the room's reservoir under its minimum (or, before a refill has shown how much 1% holds, it already reads under it), and no refill can start by itself: automatic refills are off, the last one did not raise it, or something stops one. A pump that runs the reservoir dry loses its prime.
 
-**Watering meanwhile.** No zone in the room is watered from the reservoir until it reads enough again; then watering goes on by itself.
+**Watering meanwhile.** No zone in the room is watered from the reservoir until it reads enough again; then watering goes on by itself. The dashboard says so from the moment the room's next round of shots would take the reservoir under its minimum, before a shot waits: the room's line reads Not watering, Needs you lists it, and the Reservoir card turns orange and says Watering held.
 
 **Likely causes**
 
