@@ -21,6 +21,10 @@ people who build the system:
 `tests/test_whats_new.py` checks the shape and the plain words, and that the newest section is the
 version being released.
 
+## Unreleased
+
+- A zone waiting for a reservoir refill that's about to start now shows as waiting, not as needing attention.
+
 ## 1.6.4 - 2026-11-05
 
 - A room whose probes read nothing now says so in amber, with when its next timer shot is, instead of saying all its zones are in band.

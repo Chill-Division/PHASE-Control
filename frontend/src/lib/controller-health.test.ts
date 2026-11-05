@@ -475,6 +475,22 @@ describe("zone status text", () => {
         }),
       ]);
     }
+    // Owner, 5 Nov 2026: a shot waiting for the automatic refill the next passes start was a
+    // Critical "needs attention" for the few minutes before the refill began. Its why runs past the
+    // 80 characters a zone's label keeps, so the dashboard leaves it to the Reservoir card.
+    const refill =
+      "waiting for a reservoir refill: the reservoir reads 6%, and this shot would take it under its 5% minimum";
+    for (const words of [refill, `Blocked: ${refill}`.slice(0, 80).slice("Blocked: ".length)]) {
+      const room = held(words);
+      expect(room.zones[0].status).toBe("Waiting: waiting for a reservoir refill");
+      expect(room.alerts).toEqual([
+        expect.objectContaining({
+          title: "Zone 1 is waiting",
+          severity: "info",
+          detail: "Waiting for a reservoir refill: watering carries on by itself once that's done.",
+        }),
+      ]);
+    }
     for (const [words, detail] of [
       ["zone disabled", "Paused: no shots until it's switched back on."],
       [

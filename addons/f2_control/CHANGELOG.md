@@ -1,3 +1,7 @@
+# Unreleased
+
+- A zone waiting for an automatic refill that's about to start shows in Needs you as waiting, an Info, not as a Critical with its reason cut off.
+
 # 1.6.4
 
 Pair with integration 1.6.4.
