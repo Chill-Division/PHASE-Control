@@ -24,6 +24,7 @@ version being released.
 ## Unreleased
 
 - A zone waiting for a reservoir refill that's about to start now shows as waiting, not as needing attention.
+- The estimated refill now shows all day for a room that only waters in the morning, not just before dawn.
 
 ## 1.6.4 - 2026-11-05
 

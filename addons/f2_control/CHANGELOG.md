@@ -1,6 +1,7 @@
 # Unreleased
 
 - A zone waiting for an automatic refill that's about to start shows in Needs you as waiting, an Info, not as a Critical with its reason cut off.
+- The reservoir's estimated refill shows all day for a room whose level holds still between its morning shots, not only in the hours before dawn.
 
 # 1.6.4
 

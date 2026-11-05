@@ -12,7 +12,8 @@ const STEP_MS = 15 * 60_000;
 const STEPS = DAY_MS / STEP_MS;
 /** A rise this big from one quarter-hour to the next is a refill, by hand or not: not use. */
 const REFILL_RISE_PCT = 3;
-/** The recorded level must reach back at least this far into the last day. */
+/** The recorded level must reach back at least this far, counting the level held from before the
+ * day. */
 const LEAST_HISTORY_MS = 20 * 3_600_000;
 /** A day's use under this, % of the reservoir, is too little to estimate from. */
 const LEAST_USE_PCT = 0.5;
@@ -39,7 +40,14 @@ export function refillEstimate(
   if (current === null) return { at: null, perDay: null, reason: "The level reads nothing." };
   const start = now - DAY_MS;
   const day = readings.filter((r) => r.at >= start && r.at <= now).sort((a, b) => a.at - b.at);
-  if (!day.length || day[0].at > now - LEAST_HISTORY_MS)
+  // Home Assistant records a change, not a level that holds still, so the level in force before the
+  // day counts as recorded. GR2, 5 Nov 2026: watered only in its morning ramp, its day had nothing
+  // recorded until then, and it showed no estimate from mid-morning until the small hours.
+  const first = readings.reduce(
+    (least, r) => (r.at <= now && r.at < least ? r.at : least),
+    Infinity,
+  );
+  if (first > now - LEAST_HISTORY_MS)
     return { at: null, perDay: null, reason: "It needs about a day of recorded level first." };
   // Each quarter-hour of the last day: what it used, the fall from the last median before it (for
   // the first, from the last reading before the day, when there is one).

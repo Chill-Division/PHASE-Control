@@ -17,6 +17,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   refill the controller starts next. Meanwhile Needs you called the zone Critical, "needs
   attention", with its reason cut off mid-word. It is now an Info, "is waiting", as for a refill
   already under way; the Reservoir card shows the level.
+- **A reservoir whose level holds still between waterings has its refill estimate.** Home Assistant
+  records the level only when it changes. In a room that waters only in its morning ramp, nothing
+  changed in the first hours of the last day, so the estimate said it needed about a day of recorded
+  level, and the Overview left it out from mid-morning until the small hours. The level held from
+  before the day counts as recorded now.
 
 ### 🔧 Technical notes
 
@@ -25,6 +30,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   waiting for a reservoir refill` and an Info notice. Its why runs past the 80 characters a zone's
   label keeps (`zone_status_label`, `controllerZoneLabel`) and is left to the Reservoir card. A
   refill that can't start is still the room's CS-704 warning. `controller-health.test.ts`.
+- Dashboard: `refillEstimate` takes the recorded level to reach back to its earliest reading, the
+  level in force before the day included (Home Assistant's history gives it at the start of each
+  read), not to its first reading inside the day. `refill-estimate.test.ts`.
 
 ## [1.6.4] - 2026-11-05
 
