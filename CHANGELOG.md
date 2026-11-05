@@ -10,7 +10,9 @@ and code-level detail for developers and AI agents working on the repo.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.6.4] - 2026-11-05
+
+Integration and controller **1.6.4**.
 
 - **A room without a moisture reading says so.** When a room's probes read nothing, it is watered on
   a timer, a shot every 90 minutes, or with the shots of a zone whose probe works. Between those
