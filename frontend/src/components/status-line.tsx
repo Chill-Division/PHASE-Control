@@ -6,8 +6,9 @@ import type { Controller } from "@/lib/types";
 import "./status-line.css";
 
 /** Every room, on every page: watering, holding and why, or not watering and what to do, with
- * how old the controller's last report is. `problemsOnly`: only a room not watering or not
- * reporting (the rooms column and the Overview say the rest); `skip`: a room said elsewhere. */
+ * how old the controller's last report is. `problemsOnly`: only a room not watering, not watered as
+ * set up, or not reporting (the rooms column and the Overview say the rest); `skip`: a room said
+ * elsewhere. */
 export function StatusLines({
   controller,
   problemsOnly = false,
@@ -28,7 +29,7 @@ export function StatusLines({
   const shown = controller.rooms
     .filter((room) => room.id !== skip)
     .map((room) => ({ room, status: roomStatus(controller.states, room, now) }))
-    .filter(({ status }) => !problemsOnly || status.tone === "stopped" || status.tone === "stale");
+    .filter(({ status }) => !problemsOnly || ["warning", "stopped", "stale"].includes(status.tone));
   if (!shown.length) return null;
   return (
     <section className="status-lines" aria-label="Irrigation status by room">

@@ -37,6 +37,9 @@
 .status-line[data-tone="stale"] .status-line-dot {
   background: var(--destructive);
 }
+.status-line[data-tone="warning"] .status-line-dot {
+  background: var(--warning);
+}
 .status-line-text {
   grid-area: text;
   color: var(--muted-foreground);

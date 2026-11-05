@@ -196,6 +196,7 @@
 .room-chip[data-tone="stopped"] {
   color: var(--tone-critical-ink);
 }
+.room-card[data-tone="warning"] .room-card-line,
 .room-card[data-tone="stale"] .room-card-line {
   color: var(--tone-warning-ink);
 }
@@ -251,6 +252,7 @@
 .room-chip[data-tone="stopped"] > i {
   background: var(--destructive);
 }
+.room-chip[data-tone="warning"] > i,
 .room-chip[data-tone="stale"] > i {
   background: var(--warning);
 }

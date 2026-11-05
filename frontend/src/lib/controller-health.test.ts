@@ -161,6 +161,38 @@ describe("controller heartbeat", () => {
       const states = room([entity(DECISION, fired[0], { fired, blocked: [] })]);
       expect(status(states)).toMatchObject({ tone: "watering", detail: fired[0] });
     });
+    it("never says its zones are in band when they have no moisture reading", () => {
+      // GT1, 4 Nov 2026: probes renamed by a firmware update read nothing for hours, and between
+      // its timer shots the room said "Holding: all zones in band" beside "sensor data unavailable".
+      const words =
+        "no moisture reading: watered on a timer, the next shot at 23:34, then one every 90 min";
+      const blind = [`Z1 P3 ${words}`, `Z2 P3 ${words}`];
+      const states = room([
+        entity("sensor.crop_steering_engine_config", "ready", {
+          prefix: "",
+          slug: "",
+          num_zones: 2,
+          enable_flag: "input_boolean.f2_control_enabled",
+          plumbing: "pump_one_valve",
+          valves: { "1": VALVE, "2": VALVE },
+          zone_names: { "1": "GT1-AT", "2": "GT1-LMC" },
+        }),
+        entity(DECISION, blind[0], { fired: [], blocked: [], blind }),
+        entity("sensor.crop_steering_zone_1_waiting_for_app", "P3", {
+          at: ago(0),
+          conditions: [{ rule: "blind_timer", shot: true, to: null, in_min: 78, every_min: 90 }],
+        }),
+      ]);
+      const next = new Date(NOW + 78 * 60_000).toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+      expect(status(states)).toMatchObject({
+        tone: "warning",
+        text: "No moisture reading",
+        detail: `GT1-AT and GT1-LMC have no moisture reading, so they're watered on a timer: the next shot at ${next}, then one every 90 minutes. Check their probes, and in Settings → Rooms & hardware which sensors they read.`,
+      });
+    });
     it("says its one valve is open, not one zone's", () => {
       const states = room([
         entity(
@@ -512,6 +544,26 @@ describe("room status line", () => {
       }),
     ]);
     expect(status(late)).toMatchObject({ detail: "Z2 P2 watering off (Watching only)" });
+  });
+  it("says a zone without a moisture reading, and whose shots it takes", () => {
+    const blind = ["Z2 P2 no moisture reading: watered with Z1's shots"];
+    expect(
+      status(fixture([entity(DECISION, blind[0], { fired: [], blocked: [], blind })])),
+    ).toMatchObject({
+      tone: "warning",
+      text: "No moisture reading",
+      detail:
+        "Zone 2 has no moisture reading, so it's watered with Zone 1's shots. Check its probe, and in Settings → Rooms & hardware which sensor it reads.",
+    });
+    // What a hold says comes first, and a shot before that.
+    const held = fixture([
+      entity(DECISION, "Z1 P2 manual override", {
+        fired: [],
+        blocked: ["Z1 P2 manual override"],
+        blind,
+      }),
+    ]);
+    expect(status(held)).toMatchObject({ tone: "holding", detail: "Z1 P2 manual override" });
   });
   it.each([
     [

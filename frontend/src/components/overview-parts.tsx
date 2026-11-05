@@ -309,6 +309,7 @@ export function TargetsSource({
 const TONE_ICON = {
   watering: CircleCheck,
   holding: CircleDot,
+  warning: TriangleAlert,
   stopped: CircleAlert,
   stale: TriangleAlert,
   off: CirclePause,
@@ -670,6 +671,14 @@ export function controllerShot(
   const waiting = lane.zone.waiting;
   if (!waiting || lane.zone.phase !== lane.phase) return null;
   const find = (rule: string) => waiting.conditions.find((item) => item.rule === rule);
+  // No moisture reading: watered on a timer, whatever the phase (no reading to compare, no trigger).
+  const timer = find("blind_timer");
+  if (timer)
+    return {
+      time: Math.max(now, waiting.at + (timer.in_min ?? 0) * 60_000),
+      text: `Timer shot: no moisture reading, then one every ${number(timer.every_min ?? NaN)} minutes`,
+      trigger: NaN,
+    };
   const rule =
     lane.phase === "P1"
       ? find("p1_ramp")

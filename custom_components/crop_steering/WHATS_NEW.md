@@ -21,6 +21,10 @@ people who build the system:
 `tests/test_whats_new.py` checks the shape and the plain words, and that the newest section is the
 version being released.
 
+## Unreleased
+
+- A room whose probes read nothing now says so in amber, with when its next timer shot is, instead of saying all its zones are in band.
+
 ## 1.6.3 - 2026-11-04
 
 - In a room with one valve for every zone, a probe that reads the same for a while on a quiet night no longer makes the room's moisture jump.

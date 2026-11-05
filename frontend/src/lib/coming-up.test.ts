@@ -54,6 +54,27 @@ describe("Coming up", () => {
       ["01:00", "Room", "Lights off"],
     ]);
   });
+  it("lists the next timer shot of a zone without a moisture reading", () => {
+    // GT1, 4 Nov 2026: with no reading the room is watered on a timer, and Coming up said nothing
+    // more was expected before lights-on.
+    const blind = lane("GT1", {
+      zone: {
+        name: "GT1",
+        phase: "P2",
+        waiting: {
+          at: NOW,
+          conditions: [{ rule: "blind_timer", shot: true, to: null, in_min: 102, every_min: 90 }],
+          ecSizing: null,
+        },
+      },
+      projection: null,
+    });
+    expect(rows([blind])[0]).toEqual([
+      "19:34",
+      "GT1",
+      "Timer shot: no moisture reading, then one every 90 minutes",
+    ]);
+  });
   it("lets a next shot timed from the readings stand for the projection's first", () => {
     const timed = lane("GT1", { next: { at: at(12.2), basis: "dry-down" } });
     expect(rows([timed]).slice(0, 3)).toEqual([

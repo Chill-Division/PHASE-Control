@@ -156,6 +156,8 @@
 .status-row[data-tone="stopped"] .status-row-text strong {
   color: var(--destructive);
 }
+.status-row[data-tone="warning"] .status-row-text > svg,
+.status-row[data-tone="warning"] .status-row-text strong,
 .status-row[data-tone="stale"] .status-row-text > svg,
 .status-row[data-tone="stale"] .status-row-text strong {
   color: var(--warning);

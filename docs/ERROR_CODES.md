@@ -108,7 +108,7 @@ setup change (CS-201) and a hardware hold (CS-301, CS-308, CS-309) are still rep
 
 **What it means.** The zone's moisture sensor reads 'unavailable' or 'unknown', isn't a number, can't be found in Home Assistant at all, or carries a time in the future. The notification says which.
 
-**Watering meanwhile.** For its first 15 minutes out the zone waits: a probe back within that is a blip (Home Assistant restarting, a sensor reconnecting), so nothing is watered or notified. Then it carries on without the probe while the engine is on: the same shots as a zone whose probe is working, or one shot every 90 minutes (the app's blind_fallback_min option) within the daily water limit if there is none. Phase changes that go by moisture wait for the probe.
+**Watering meanwhile.** For its first 15 minutes out the zone waits: a probe back within that is a blip (Home Assistant restarting, a sensor reconnecting), so nothing is watered or notified. Then it carries on without the probe while the engine is on: the same shots as a zone whose probe is working, or one shot every 90 minutes (the app's blind_fallback_min option) within the daily water limit if there is none. Phase changes that go by moisture wait for the probe. The room's line on the Overview says No moisture reading, which zones and how they are watered meanwhile, and Coming up lists the next timer shot.
 
 **Likely causes**
 

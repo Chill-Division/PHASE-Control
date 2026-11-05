@@ -140,8 +140,9 @@ export interface RoomView {
 /** One line per room: is it watering, and if not, why not and what to do. */
 export interface RoomStatus {
   room: Room;
-  /** "stopped": not watering until someone acts. "stale": the controller stopped reporting. */
-  tone: "watering" | "holding" | "stopped" | "stale" | "off";
+  /** "stopped": not watering until someone acts. "stale": the controller stopped reporting.
+   * "warning": watered, but not as set up, until someone acts (no moisture reading: on a timer). */
+  tone: "watering" | "holding" | "warning" | "stopped" | "stale" | "off";
   text: string;
   detail: string;
   /** When the controller last reported (epoch ms); null when it has not. */
