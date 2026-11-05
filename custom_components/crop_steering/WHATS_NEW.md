@@ -21,7 +21,7 @@ people who build the system:
 `tests/test_whats_new.py` checks the shape and the plain words, and that the newest section is the
 version being released.
 
-## Unreleased
+## 1.6.5 - 2026-11-05
 
 - A zone waiting for a reservoir refill that's about to start now shows as waiting, not as needing attention.
 - The estimated refill now shows all day for a room that only waters in the morning, not just before dawn.
