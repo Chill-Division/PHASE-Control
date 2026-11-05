@@ -58,6 +58,34 @@ describe("estimated refill by", () => {
     expect(refillEstimate(noisy, 48, 5, NOW).perDay).toBeLessThan(14);
   });
 
+  it("counts a level that held still: Home Assistant records a change, not a level", () => {
+    // GR2, 5 Nov 2026, 17:30: its one zone watered only in its morning ramp, five shots from 07:00
+    // to 08:55 (about 9 points), and the level held still from there. Home Assistant gave the
+    // level in force at the start of each read, and the morning's changes: nothing for the evening
+    // before.
+    const now = new Date(2026, 10, 5, 17, 30).getTime();
+    const at = (hours: number, minutes = 0) => new Date(2026, 10, 5, hours, minutes).getTime();
+    const readings = [
+      { at: now - 25 * HOUR, pct: 38 },
+      { at: at(7), pct: 36.2 },
+      { at: at(7, 30), pct: 34.4 },
+      { at: at(8), pct: 32.6 },
+      { at: at(8, 25), pct: 30.8 },
+      { at: at(8, 55), pct: 29 },
+      { at: now - HOUR, pct: 29 },
+    ];
+    const estimate = refillEstimate(readings, 29, 1, now);
+    expect(estimate.reason).toBeNull();
+    expect(estimate.perDay).toBeCloseTo(9, 0);
+    // 28 points over its 1% minimum: three mornings take 27, the fourth's first shot the last.
+    const when = new Date(estimate.at!);
+    expect(when.getDate()).toBe(9);
+    expect(when.getHours()).toBeGreaterThanOrEqual(7);
+    expect(when.getHours()).toBeLessThan(9);
+    // A sensor with nothing recorded before the last ten hours still has too little to go by.
+    expect(refillEstimate(readings.slice(1), 29, 1, now).reason).toMatch(/a day of recorded level/);
+  });
+
   it("says why when it can't tell", () => {
     const short = record((at) => 48 + ((NOW - at) / HOUR) * 0.5, 10);
     expect(refillEstimate(short, 48, 5, NOW)).toMatchObject({ at: null });
