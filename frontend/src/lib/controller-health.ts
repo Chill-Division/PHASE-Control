@@ -82,6 +82,9 @@ export const holdWords = (text: string) => text.replace(/room off \(kill switch\
 export const WATCHING_LABEL = "Watching only";
 /** A zone's status while the room's saved setup change waits for the controller. */
 export const SETUP_LABEL = "Setup change waiting";
+/** A shot waiting for the automatic refill the next passes start (controller `_reservoir_block`):
+ * one that can't start holds watering as "reservoir too low" instead (CS-704). */
+const REFILL_WAIT = "waiting for a reservoir refill";
 /** Holds that end by themselves: the room's nutrient batch (its pump is busy), another room's that
  * shares the water, and the settings still loading at a start. The zone waits; nothing is wrong. A
  * batch that goes wrong raises its own CS-701 to CS-705, and a zone left dry by any hold CS-207. */
@@ -114,6 +117,10 @@ export function zoneLabelWords(label: string): string {
   // Owner, 2026-10-25: GR2's batch mixing at the start of P1 raised a Critical "needs attention",
   // with automatic refills set up. A hold that ends by itself is the zone waiting, not stopped.
   if (ROUTINE_HOLD.test(words)) return `Waiting: ${words}`;
+  // A shot waiting for the automatic refill the next passes start ends by itself too. Owner, 5 Nov
+  // 2026: it was a Critical for the minutes before the refill began. Its why, the level against the
+  // minimum, runs past the label's 80 characters and was cut mid-word; the Reservoir card shows it.
+  if (/^waiting for a reservoir refill: /.test(words)) return `Waiting: ${REFILL_WAIT}`;
   return label;
 }
 /** The controller's own zone label (`zone_status_label` in crop_steering_engine/core.py), rebuilt
