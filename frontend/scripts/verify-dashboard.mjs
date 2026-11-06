@@ -508,9 +508,32 @@ try {
     // Lights-on at the top and lights-off where the ring turns dark, not four quarters.
     assert.equal(await today.locator(".dial-hour[data-lights]").count(), 2);
     assert.ok((await today.locator(".dial-hour").count()) <= 3, "lights on, off and midnight");
-    // Side by side, Coming up is as tall as the clock's card, whatever it has to list.
-    const height = (card) => card.evaluate((el) => el.getBoundingClientRect().height);
-    assert.ok(Math.abs((await height(coming)) - (await height(today))) < 2, "the pair's height");
+    // Side by side, Coming up is as tall as the clock's card, whatever it has to list. The two are
+    // read in one frame, once they hold still: the clock card is drawn before its dial has its
+    // width (useWidth) and grows 20 px when it has, a redraw later. The checks above open the
+    // Overview from the activity log a moment before, and CI read the pair either side of that
+    // redraw on 5 Nov 2026.
+    const pairNow = () =>
+      page.evaluate(() =>
+        ["[data-coming-up]", "[data-today]"].map(
+          (selector) => document.querySelector(selector).getBoundingClientRect().height,
+        ),
+      );
+    const pair = async () => {
+      let heights = await pairNow();
+      for (let still = 0, tries = 0; still < 3 && tries < 60; tries += 1) {
+        await page.waitForTimeout(50);
+        const next = await pairNow();
+        still = next[0] === heights[0] && next[1] === heights[1] ? still + 1 : 0;
+        heights = next;
+      }
+      return heights;
+    };
+    let [comingUp, clockCard] = await pair();
+    assert.ok(
+      Math.abs(comingUp - clockCard) < 2,
+      `the pair's height: ${comingUp} and ${clockCard}`,
+    );
     const rows = coming.locator(".upcoming-list > li:not([data-clipped])");
     const more = coming.locator(".upcoming-more");
     if (await more.count()) {
@@ -520,7 +543,8 @@ try {
       assert.equal(await coming.getAttribute("data-all"), "true");
       assert.ok((await rows.count()) > shown, "Show more lists the rest of the day");
       assert.equal(await more.innerText(), "Show fewer");
-      assert.ok((await height(coming)) > (await height(today)), "opened, it grows");
+      [comingUp, clockCard] = await pair();
+      assert.ok(comingUp > clockCard, `opened, it grows: ${comingUp} beside ${clockCard}`);
     }
     // The shots the projection expects are the dial's ticks too.
     const predicted = await coming
@@ -535,7 +559,8 @@ try {
     if (await coming.getAttribute("data-all")) {
       await more.click();
       assert.equal(await coming.getAttribute("data-all"), null);
-      assert.ok(Math.abs((await height(coming)) - (await height(today))) < 2, "closed again");
+      [comingUp, clockCard] = await pair();
+      assert.ok(Math.abs(comingUp - clockCard) < 2, `closed again: ${comingUp} and ${clockCard}`);
     }
     // A phone stacks them: three rows, and the rest behind the same button.
     await page.setViewportSize({ width: 390, height: 844 });
