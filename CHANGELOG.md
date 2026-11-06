@@ -10,6 +10,23 @@ and code-level detail for developers and AI agents working on the repo.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+- **A steadier Overview check.** The browser check that Coming up is as tall as the clock beside it
+  no longer fails now and then, when the clock was still taking its size as the Overview opened. It
+  measures the two at the same moment, once they hold still.
+
+### 🔧 Technical notes
+
+- Tests: `verify-dashboard.mjs`'s Overview pair check reads Coming up's and the clock card's heights
+  in one `evaluate`, once four reads 50 ms apart agree (3 s at most), for the pair, opened and
+  closed again. The clock card is drawn before `useWidth` has its dial's width, at 300 px, and grows
+  20 px a redraw later, when it has. The checks above open the Overview from the activity log a
+  moment before, and two `getBoundingClientRect` calls in turn read either side of that redraw: it
+  failed pull request #194's run and the public repository's Validate on the v1.6.5 release commit.
+  With the redraw forced between the two reads, the old read failed 9 runs of 40, at 434 px against
+  454, and the new one none.
+
 ## [1.6.5] - 2026-11-05
 
 Integration and controller **1.6.5**.
