@@ -90,6 +90,13 @@ const REFILL_WAIT = "waiting for a reservoir refill";
  * batch that goes wrong raises its own CS-701 to CS-705, and a zone left dry by any hold CS-207. */
 const ROUTINE_HOLD =
   /^(refilling its reservoir \(|waiting for .+'s reservoir refill \(|waiting for its settings to load)/;
+/** A shot held while the room's recirculation solenoid reads on with no refill running (the
+ * controller's RECIRC_HOLD). GR1, 10 Nov 2026: left on, it took 14 shots back into the reservoir. */
+const RECIRC_HOLD = /^recirculation on \(/;
+/** Whether a hold, or a decision's "Z<zone> <phase> <hold>" entry, is the recirculation's. */
+export const recircHeld = (entry: string) => RECIRC_HOLD.test(entry.replace(/^Z\d+ \S+ /, ""));
+export const RECIRC_WORDS =
+  "Recirculation on: a shot would only go back into the reservoir. Switch it off, and watering carries on by itself.";
 /** What a hold someone set on purpose means, in the dashboard's words: it stays until it is undone.
  * Null for any other hold. */
 export function setHoldWords(hold: string): string | null {
@@ -101,6 +108,7 @@ export function setHoldWords(hold: string): string | null {
   if (/ on manual override \(one valve waters every zone\)$/.test(hold))
     return `${hold}: no shots from the controller until the override is off.`;
   if (/^external hold \(/.test(hold)) return `E${hold.slice(1)}: no shots while it's on.`;
+  if (recircHeld(hold)) return RECIRC_WORDS;
   return null;
 }
 /** A zone's status label in the dashboard's words. The controller labels a held zone "Blocked:"

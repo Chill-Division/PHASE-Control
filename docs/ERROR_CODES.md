@@ -71,6 +71,7 @@ setup change (CS-201) and a hardware hold (CS-301, CS-308, CS-309) are still rep
 | [CS-704](#cs-704) | Watering held, reservoir too low | Critical | Notification |
 | [CS-705](#cs-705) | Reservoir level not reading | Warning | Notification |
 | [CS-706](#cs-706) | Reservoir low, refill it | Information | Notification |
+| [CS-707](#cs-707) | Watering held, recirculation on | Warning | Notification |
 
 ## Sensors (CS-1xx)
 
@@ -940,3 +941,24 @@ setup change (CS-201) and a hardware hold (CS-301, CS-308, CS-309) are still rep
 - Refill the reservoir by hand. The reminder goes once the level reads 5 points above its reminder level; it comes again each day the level stays at or under it.
 - To have it refill by itself, map its fresh-water and recirculation solenoids and dosers in Settings → Rooms & hardware, then turn on automatic refills on the Feed → Reservoir page.
 - To stop these reminders, set Remind me at to 0%.
+
+<a id="cs-707"></a>
+
+### CS-707: Watering held, recirculation on
+
+*Warning · Notification*
+
+**What it means.** A shot came due while the reservoir's recirculation solenoid read on, with no refill running. The pump's water would go back into the reservoir instead of to the drippers, so the shot waits. The controller leaves the solenoid on, in case it is on for a reason, such as circulating the tank by hand.
+
+**Watering meanwhile.** No zone in the room is watered while the solenoid reads on. Once it reads off, watering goes on by itself and the notification goes. Meanwhile the room's line reads Not watering, and Needs you lists the zones that are waiting.
+
+**Likely causes**
+
+- Someone switched the recirculation on by hand, to circulate or heat the tank, and it is still on.
+- An automation, or another app, switched it on.
+- Its device restarted and came back with it on.
+
+**Suggested fixes**
+
+- Switch the recirculation solenoid off in Home Assistant once you are done with it.
+- If it comes on by itself, open the switch's Activity in Home Assistant to see what switched it on. For a device that comes back with it on, check what its switch does at start-up (ESPHome's restore_mode).

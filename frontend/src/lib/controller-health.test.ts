@@ -502,6 +502,11 @@ describe("zone status text", () => {
         "Zone 2 paused (one valve waters every zone): no shots until it's switched back on.",
       ],
       ["external hold (tank_dosing)", "External hold (tank_dosing): no shots while it's on."],
+      // GR1, 10 Nov 2026: the recirculation left on took 14 shots back into the reservoir (CS-707).
+      [
+        "recirculation on (a shot would only go back into the reservoir)",
+        "Recirculation on: a shot would only go back into the reservoir. Switch it off, and watering carries on by itself.",
+      ],
     ])
       expect(held(words).alerts).toEqual([
         expect.objectContaining({
@@ -619,6 +624,19 @@ describe("room status line", () => {
       }),
     ]);
     expect(status(late)).toMatchObject({ detail: "Z2 P2 watering off (Watching only)" });
+  });
+  it("says Not watering while the recirculation is on, whatever else holds", () => {
+    // GR1, 10 Nov 2026: left on, the recirculation took every shot back into the reservoir (CS-707).
+    const recirc = "recirculation on (a shot would only go back into the reservoir)";
+    const blocked = [`Z1 P2 ${recirc}`, "Z2 P2 manual override", `Z3 P2 ${recirc}`];
+    expect(
+      status(fixture([entity(DECISION, blocked[0], { fired: [], blocked })])),
+    ).toMatchObject({
+      tone: "stopped",
+      text: "Not watering",
+      detail:
+        "Recirculation on: a shot would only go back into the reservoir. Switch it off, and watering carries on by itself.",
+    });
   });
   it("says a zone without a moisture reading, and whose shots it takes", () => {
     const blind = ["Z2 P2 no moisture reading: watered with Z1's shots"];

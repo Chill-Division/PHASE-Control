@@ -1,3 +1,7 @@
+# Unreleased
+
+- No zone is watered while the reservoir's recirculation solenoid reads on outside a refill, since a shot would only go back into the reservoir. The room's shots wait and a notification says so (CS-707); the solenoid is left on, and watering carries on once it reads off.
+
 # 1.6.8
 
 Pair with integration 1.6.8.

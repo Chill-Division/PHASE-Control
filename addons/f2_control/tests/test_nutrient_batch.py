@@ -1191,6 +1191,74 @@ def test_in_a_pass_a_shot_due_waits_for_the_reservoir_and_the_next_round_is_plan
     assert room._next_round_l == pytest.approx(5 * 1.28)  # a P2 maintenance shot of 128 L of substrate
 
 
+# ---------------------------------------------------------------- the recirculation left on
+def test_a_shot_waits_while_the_recirculation_is_on_and_goes_once_it_is_off():
+    """GR1, 10 Nov 2026: the recirculation solenoid was left on, and 14 shots went back into the
+    reservoir. Its level never fell, so no refill started, and the plants dried. A shot now waits
+    while it reads on, says why (CS-707), and leaves it on: people circulate the tank by hand."""
+    c, fake, room = _room(pct=70.0)
+    _tick(c, room)
+    assert c._blocked(room, 1) is None
+    fake.set_state(RECIRC, "on")
+    assert c._blocked(room, 1) == controller.RECIRC_HOLD
+    (note,) = _alerts(fake, "CS-707")
+    assert note["title"] == "Watering held, recirculation on (CS-707)"
+    assert f"recirculation solenoid ({RECIRC}) is on" in note["message"]
+    assert "watering goes on by itself" in note["message"]
+    assert _switched(fake) == []  # nothing switched, the solenoid least of all
+    _tick(c, room)  # still on: still up
+    assert not _dismissed(fake, f"recirc_{room.slug}")
+    fake.set_state(RECIRC, "off")
+    _tick(c, room)  # every pass, a shot due or not
+    assert _dismissed(fake, f"recirc_{room.slug}")
+    assert c._blocked(room, 1) is None
+
+
+def test_a_refill_running_the_recirculation_holds_shots_as_the_refill():
+    c, fake, room = _room(pct=70.0)
+    _tick(c, room)
+    room.batch["step"] = "mixing"
+    fake.set_state(RECIRC, "on")
+    assert c._recirc_on(room) is None
+    assert c._blocked(room, 1) == "refilling its reservoir (mixing)"
+    assert not _alerts(fake, "CS-707")
+
+
+@pytest.mark.parametrize("state", ["off", "unavailable", "unknown"])
+def test_only_a_recirculation_that_reads_on_holds_a_shot(state):
+    c, fake, room = _room(pct=70.0)
+    fake.set_state(RECIRC, state)
+    assert c._blocked(room, 1) is None
+    assert not _alerts(fake, "CS-707")
+
+
+def test_a_room_without_a_recirculation_solenoid_mapped_is_not_held():
+    c, fake, room = _room(pct=70.0, recirc_switch=None)
+    assert c._recirc_on(room) is None and c._blocked(room, 1) is None
+
+
+def test_in_a_pass_a_shot_due_waits_for_the_recirculation_and_runs_once_it_is_off():
+    """The whole pass: zone 1 in P2 reads under its trigger, with the recirculation on. Nothing opens,
+    and the zone and the log say why. Switched off, the next pass waters."""
+    c, fake, room = _room(pct=70.0)
+    fake.set_state("sensor.crop_steering_vwc_zone_1", "40", {"unit_of_measurement": "%"},
+                   last_updated=_Clock.now(timezone.utc).isoformat())
+    room.state[1].update(phase="P2", last_daily_reset=_Clock.now().date())
+    fake.set_state(RECIRC, "on")
+    c.loop_once(_Clock.now())
+    assert not [call for call in _switched(fake) if call[1] == "turn_on"]
+    label, attrs = fake.sets["sensor.crop_steering_zone_1_status_app"]
+    assert label == f"Blocked: {controller.RECIRC_HOLD}"
+    assert _alerts(fake, "CS-707")
+    fake.set_state(RECIRC, "off")
+    _later(60)
+    fake.set_state("sensor.crop_steering_vwc_zone_1", "40", {"unit_of_measurement": "%"},
+                   last_updated=_Clock.now(timezone.utc).isoformat())
+    c.loop_once(_Clock.now())
+    assert (PUMP, "turn_on") in _switched(fake) and (VALVE, "turn_on") in _switched(fake)
+    assert _dismissed(fake, f"recirc_{room.slug}")
+
+
 # ----------------------------------------------------------------- the feed recipe's feed EC
 def test_the_feed_plan_carries_the_feed_ec_of_the_recipe_in_use():
     assert controller.feed_plan({**FLOWER, "feed_ec": 1.6})["feed_ec"] == 1.6

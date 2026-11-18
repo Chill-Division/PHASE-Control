@@ -527,6 +527,9 @@ BATCH_TIMED = ("filling", "filling_mixing", "dosing")
 # How each step reads where a shot waits for it, and in the log.
 BATCH_STEP_WORDS = {"filling": "filling", "filling_mixing": "filling and mixing", "dosing": "dosing",
                     "pausing": "between dosers", "mixing": "mixing", "settling": "mixing"}
+# Why a shot waits while the room's recirculation solenoid reads on with no refill running
+# (Controller._recirc_on), where it waits and in the log. The dashboard knows it by its start.
+RECIRC_HOLD = "recirculation on (a shot would only go back into the reservoir)"
 BATCH_LOW_PASSES = 3  # passes a refill must read due before an automatic one starts (one bad echo)
 FILL_RISE_PCT = 5.0  # half-way through its fill, the reservoir must read at least this much fuller
 LEARN_RISE_PCT = 10.0  # a refill that raised it less than this does not teach its litres per 1%
@@ -2398,6 +2401,17 @@ class Controller:
                 return f"waiting for {name}'s reservoir refill ({words})"
         return None
 
+    def _recirc_on(self, room):
+        """The room's recirculation solenoid when it reads on with no refill running, or None. The pump's
+        water then goes back into the reservoir, not to the drippers: GR1, 10 Nov 2026, the solenoid
+        left on, 14 shots in an hour and a half went round the tank, its level never fell (so no refill
+        started) and the plants dried. A refill runs it on purpose, and its own hold says so
+        (_batch_hold). A switch that reads neither on nor off holds nothing here."""
+        recirc = (room.hw.get("reservoir") or {}).get("recirc")
+        if recirc and room.batch["step"] == "idle" and str(ha_get(recirc)[0]).lower() == "on":
+            return recirc
+        return None
+
     def _fill_wait(self, room):
         """Why this room's refill waits, in words, or None: another room's reservoir is taking fresh
         water. The rooms share the supply, and two fills at once each get less water in their fill time
@@ -2548,6 +2562,9 @@ class Controller:
             self._refill_reminder(room, now, res)
         if res is not None:
             self._batch_publish(room, now, res)
+        # A held shot raised it (_blocked); it goes once the recirculation reads off, due shot or not.
+        if f"recirc_{room.slug}" in self._alerted and not self._recirc_on(room):
+            self._resolve_alert(f"recirc_{room.slug}")
 
     def _reservoir_reading(self, room, res):
         """The room's reservoir this pass: its feed plan, the level sensor's distance (mm) and how full
@@ -3466,6 +3483,22 @@ class Controller:
         for f in self.hold_entities:
             if self._on(f, False):
                 return f"external hold ({f.split('.')[-1]})"
+        # Left on, the recirculation solenoid takes every shot back into the reservoir. It is not
+        # switched off here: people circulate the tank by hand on purpose. The notification goes once
+        # it reads off (_batch_tick).
+        recirc = self._recirc_on(room)
+        if recirc:
+            self._alert(
+                f"recirc_{room.slug}",
+                "CS-707",
+                "watering held, recirculation on",
+                f"The reservoir's recirculation solenoid ({recirc}) is on, so a shot would only pump the "
+                "water back into the reservoir: no zone in this room is watered while it is on. The "
+                "controller leaves it on, in case it is on for a reason, such as circulating the tank "
+                "by hand. Switch it off when you're done, and watering goes on by itself.",
+                room=room,
+            )
+            return RECIRC_HOLD
         # Last, once nothing else holds the zone: a switch that reads neither on nor off (its device
         # offline, Home Assistant still starting) accepts a command without switching and cannot be read
         # back after the shot. On 25 Sep 2026 a shot opened onto an offline pump, could not be confirmed

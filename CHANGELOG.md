@@ -10,6 +10,31 @@ and code-level detail for developers and AI agents working on the repo.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+- **Watering waits while the reservoir's recirculation is on.** Left on, the recirculation
+  solenoid takes every shot back into the reservoir. In one room, 14 shots in an hour and a half
+  went round the tank: its level never fell, so no refill started, and the plants dried. Now, outside
+  a refill, no zone in the room is watered while the solenoid reads on. The room's line reads Not
+  watering, Needs you lists the zones that are waiting, and a notification says so (CS-707). The
+  controller leaves the solenoid on, since it may be on for a reason, such as circulating the tank
+  by hand; once it reads off, watering carries on by itself.
+
+### 🔧 Technical notes
+
+- Controller: `_blocked` holds a shot while `_recirc_on` finds the room's `recirc_switch` reading
+  on with no refill running, as `RECIRC_HOLD`, "recirculation on (a shot would only go back into
+  the reservoir)", after every hold someone sets and before the offline check. It raises CS-707
+  (`recirc_<room>`), which `_batch_tick` takes down every pass once the solenoid reads off, a shot
+  due or not. Nothing is switched off: people circulate the tank by hand on purpose. A refill's own
+  recirculation holds shots as the refill (`_batch_hold`), and a switch that reads neither on nor
+  off holds nothing. `test_nutrient_batch.py`.
+- Dashboard: `setHoldWords` words the hold, so Needs you lists the zones as not being watered, a
+  Warning, and `roomStatus` says Not watering with what to do (`recircHeld` and `RECIRC_WORDS` in
+  `controller-health.ts`). `controller-health.test.ts`.
+- Docs: CS-707 in `docs/error-codes.json` and `ERROR_CODES.md` (the dashboard's Help, rebuilt),
+  and `USER_GUIDE.md`.
+
 ## [1.6.8] - 2026-11-10
 
 Integration and controller **1.6.8**.
