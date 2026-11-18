@@ -23,6 +23,7 @@ version being released.
 
 ## Unreleased
 
+- If the reservoir's recirculation is left on, watering now waits and tells you, instead of pumping each shot straight back into the tank.
 - The clock on the Overview turns a zone's ring red wherever watering was held back for something that needs you.
 
 ## 1.6.8 - 2026-11-10

@@ -20,6 +20,8 @@ import {
   controllerZoneLabel,
   holdWords,
   readHeartbeat,
+  RECIRC_WORDS,
+  recircHeld,
   RESTING,
   WATCHING_LABEL,
   zoneLabelWords,
@@ -1170,6 +1172,8 @@ export function roomStatus(states: States, room: Room, now = Date.now()): RoomSt
       label: "Feed",
       route: "reservoir",
     });
+  // The recirculation left on holds every shot in the room (CS-707), not the routine holding.
+  if (blocked.some(recircHeld)) return say("stopped", "Not watering", RECIRC_WORDS);
   if (blocked.length) return say("holding", "Holding", blocked.join(" · "));
   // GT1, 4 Nov 2026: renamed probes read nothing for hours, and between its timer shots the room said
   // "all zones in band". A zone without a reading is never in band.

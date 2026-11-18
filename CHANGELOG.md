@@ -12,6 +12,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Watering waits while the reservoir's recirculation is on.** Left on, the recirculation
+  solenoid takes every shot back into the reservoir. In one room, 14 shots in an hour and a half
+  went round the tank: its level never fell, so no refill started, and the plants dried. Now, outside
+  a refill, no zone in the room is watered while the solenoid reads on. The room's line reads Not
+  watering, Needs you lists the zones that are waiting, and a notification says so (CS-707). The
+  controller leaves the solenoid on, since it may be on for a reason, such as circulating the tank
+  by hand; once it reads off, watering carries on by itself.
 - **The Overview's clock shows when watering was held.** Until now it drew only the shots given, so
   a shot held back left no mark. Now a zone's ring turns red wherever a shot was due and held for
   something that needs you, such as the zone paused, the reservoir too low or a fault, and the key
@@ -20,6 +27,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🔧 Technical notes
 
+- Controller: `_blocked` holds a shot while `_recirc_on` finds the room's `recirc_switch` reading
+  on with no refill running, as `RECIRC_HOLD`, "recirculation on (a shot would only go back into
+  the reservoir)", after every hold someone sets and before the offline check. It raises CS-707
+  (`recirc_<room>`), which `_batch_tick` takes down every pass once the solenoid reads off, a shot
+  due or not. Nothing is switched off: people circulate the tank by hand on purpose. A refill's own
+  recirculation holds shots as the refill (`_batch_hold`), and a switch that reads neither on nor
+  off holds nothing. `test_nutrient_batch.py`.
+- Dashboard: `setHoldWords` words the hold, so Needs you lists the zones as not being watered, a
+  Warning, and `roomStatus` says Not watering with what to do (`recircHeld` and `RECIRC_WORDS` in
+  `controller-health.ts`). `controller-health.test.ts`.
 - Dashboard: `holdNeedsSomeone` (`controller-health.ts`) tells the holds Needs you warns about from
   the rest: Watching only, a setup change waiting and the holds that end by themselves
   (`ROUTINE_HOLD`, the refill wait) are left out. `dialZones` passes each lane's other `blocks` to
@@ -28,7 +45,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   minutes long. `TodayCard` adds "watering held" to the key while any zone has one, and the times
   to the clock's label. `controller-health.test.ts`, and `verify-dashboard.mjs` on the demo's day
   at 4 PM: Flower 1's zone 3, paused, and Flower 2's zone 2, held by its high EC.
-- Docs: `USER_GUIDE.md`.
+- Docs: CS-707 in `docs/error-codes.json` and `ERROR_CODES.md` (the dashboard's Help, rebuilt),
+  and `USER_GUIDE.md`.
 
 ## [1.6.8] - 2026-11-10
 

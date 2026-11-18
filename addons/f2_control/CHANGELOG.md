@@ -1,5 +1,6 @@
 # Unreleased
 
+- No zone is watered while the reservoir's recirculation solenoid reads on outside a refill, since a shot would only go back into the reservoir. The room's shots wait and a notification says so (CS-707); the solenoid is left on, and watering carries on once it reads off.
 - The Overview's clock draws a zone's ring in red wherever a shot was due and held for something that needs you (the zone paused, the reservoir too low, a fault), and its key says "watering held". A refill under way and Watching only leave it as it was.
 
 # 1.6.8
