@@ -10,6 +10,26 @@ and code-level detail for developers and AI agents working on the repo.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+- **The Overview's clock shows when watering was held.** Until now it drew only the shots given, so
+  a shot held back left no mark. Now a zone's ring turns red wherever a shot was due and held for
+  something that needs you, such as the zone paused, the reservoir too low or a fault, and the key
+  under the clock says "watering held". Holds that end by themselves, like a refill under way, and
+  Watching only leave the ring as it was. A screen reader hears when each zone was held.
+
+### 🔧 Technical notes
+
+- Dashboard: `holdNeedsSomeone` (`controller-health.ts`) tells the holds Needs you warns about from
+  the rest: Watching only, a setup change waiting and the holds that end by themselves
+  (`ROUTINE_HOLD`, the refill wait) are left out. `dialZones` passes each lane's other `blocks` to
+  `DayDial` as `held` (hours since lights-on, `open` while still held), which draws each as a red
+  line (`--destructive`) along the middle of the zone's ring, edged in `--surface` and at least six
+  minutes long. `TodayCard` adds "watering held" to the key while any zone has one, and the times
+  to the clock's label. `controller-health.test.ts`, and `verify-dashboard.mjs` on the demo's day
+  at 4 PM: Flower 1's zone 3, paused, and Flower 2's zone 2, held by its high EC.
+- Docs: `USER_GUIDE.md`.
+
 ## [1.6.8] - 2026-11-10
 
 Integration and controller **1.6.8**.

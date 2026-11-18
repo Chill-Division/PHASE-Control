@@ -1,3 +1,7 @@
+# Unreleased
+
+- The Overview's clock draws a zone's ring in red wherever a shot was due and held for something that needs you (the zone paused, the reservoir too low, a fault), and its key says "watering held". A refill under way and Watching only leave it as it was.
+
 # 1.6.8
 
 Pair with integration 1.6.8.
