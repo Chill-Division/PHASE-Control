@@ -1535,6 +1535,46 @@ try {
     }
     await pinned.close();
   });
+  await check("overview: the clock draws in red where a shot was held for something that needs someone", async () => {
+    // Owner, 2026-11-18: the clock should tell a held shot from one given. The demo's day at 4 PM, in
+    // a context of its own, since a page's clock is its context's: Flower 1's zone 3 has been paused
+    // since about 2 PM, and Flower 2's zone 2 was held by its high EC for a few minutes after 1 PM.
+    const own = await browser.newContext({
+      viewport: { width: 1440, height: 1000 },
+      reducedMotion: "reduce",
+    });
+    await own.route("**/*", guard);
+    await own.clock.setFixedTime(new Date(2026, 8, 20, 16, 0, 0));
+    const room = await own.newPage();
+    room.on("pageerror", (error) => pageErrors.push(error.message));
+    const clockOf = async (id) => {
+      await room.goto(`${base}/dashboard.html?demo&room=${id}#/overview`, {
+        waitUntil: "networkidle",
+      });
+      // The holds come with the day's history, after the clock first draws.
+      await room.waitForFunction(() =>
+        document
+          .querySelector("[data-today] .day-dial")
+          ?.getAttribute("aria-label")
+          ?.includes("watering held"),
+      );
+      const dial = room.locator("[data-today] .day-dial");
+      return {
+        label: await dial.getAttribute("aria-label"),
+        held: await dial.locator(".dial-held").count(),
+        key: await room.locator("[data-today] .dial-legend").innerText(),
+      };
+    };
+    const paused = await clockOf("room:f1_");
+    assert.equal(paused.held, 1, paused.label);
+    assert.match(paused.label, /Zone 3 P2 \(watering held .+ to now\)/);
+    assert.doesNotMatch(paused.label, /Zone [12] P\d \(/);
+    assert.match(paused.key, /watering held/);
+    const ec = await clockOf("room:");
+    assert.equal(ec.held, 1, ec.label);
+    assert.match(ec.label, /Zone 2 P2 \(watering held .+ to (?!now).+\)/);
+    await own.close();
+  });
   await check("water today: per plant is the room's choice, made in Settings", async () => {
     // Each zone's water today on its card, against its daily limit.
     const cells = () => page.locator("[data-zone-card] [data-water-share] strong").allInnerTexts();

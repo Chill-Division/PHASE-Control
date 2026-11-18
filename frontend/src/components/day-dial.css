@@ -29,6 +29,14 @@
   stroke: var(--surface);
   stroke-width: 1.5;
 }
+/* A shot due and held for something that needs someone: red along the ring, edged in the card's
+   colour so it stands apart from the phase beneath. */
+.dial-held-edge {
+  stroke: var(--surface);
+}
+.dial-held-line {
+  stroke: var(--destructive);
+}
 /* An expected shot: a tick in its phase's own colour across the faded rest of the day. */
 .dial-planned {
   stroke-width: 2;

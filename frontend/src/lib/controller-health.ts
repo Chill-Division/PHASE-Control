@@ -103,6 +103,19 @@ export function setHoldWords(hold: string): string | null {
   if (/^external hold \(/.test(hold)) return `E${hold.slice(1)}: no shots while it's on.`;
   return null;
 }
+/** Whether a hold is one Needs you warns about, a hold someone set or a fault, which the Overview's
+ * clock draws in red: not Watching only, a saved setup change on its way to the controller, or a
+ * hold that ends by itself (a refill, the settings loading, an automatic refill about to start).
+ * Owner, 2026-11-18: a held shot should stand out on the clock, in red. */
+export function holdNeedsSomeone(hold: string): boolean {
+  const words = holdWords(hold);
+  return !(
+    words === WATCHING_HOLD ||
+    /^Setup change/.test(words) ||
+    ROUTINE_HOLD.test(words) ||
+    /^waiting for a reservoir refill: /.test(words)
+  );
+}
 /** A zone's status label in the dashboard's words. The controller labels a held zone "Blocked:"
  * and its hold; held for the room's watering switch, that is the room's Watching only (its status
  * line says so, with the way back to Steering), not a fault of the zone's. */

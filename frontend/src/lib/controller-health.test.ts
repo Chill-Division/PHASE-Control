@@ -9,7 +9,13 @@ import {
   setupWait,
 } from "./model";
 import { onHold, roomMode } from "./room-mode";
-import { ageText, ageTone, parseControllerTime, readHeartbeat } from "./controller-health";
+import {
+  ageText,
+  ageTone,
+  holdNeedsSomeone,
+  parseControllerTime,
+  readHeartbeat,
+} from "./controller-health";
 import { createDemo, demoBeat } from "./demo";
 import type { EntityState, Notice, States } from "./types";
 
@@ -891,5 +897,35 @@ describe("room status line", () => {
       expect(buildRoom(states, room).alerts.map((alert) => alert.title)).not.toContain(
         "Controller not running",
       );
+  });
+});
+
+describe("holds the clock draws in red", () => {
+  it("marks a hold someone set, or a fault: what Needs you warns about", () => {
+    for (const hold of [
+      "zone disabled",
+      "manual override",
+      "Zone 2 paused (one valve waters every zone)",
+      "external hold (switch.flood_sensor)",
+      "reservoir too low (12% with 5% minimum; next shots need 9%)",
+      "recirculation on (a shot would only go back into the reservoir)",
+      "BLOCK high EC 8.7 — slab saturated (self-clears)",
+      "daily-cap 4.0 L of 4.0 L",
+      "watering switch unavailable",
+    ])
+      expect(holdNeedsSomeone(hold), hold).toBe(true);
+  });
+  it("leaves out Watching only, a setup change on its way, and holds that end by themselves", () => {
+    for (const hold of [
+      "watering off (Watching only)",
+      // The words of a controller before 1.3.1 for Watching only.
+      "room off (kill switch)",
+      "Setup change waiting for the controller (revision 4)",
+      "refilling its reservoir (dosing)",
+      "waiting for Flower 2's reservoir refill (mixing)",
+      "waiting for its settings to load",
+      "waiting for a reservoir refill: 18% now, under the 20% the next shots need",
+    ])
+      expect(holdNeedsSomeone(hold), hold).toBe(false);
   });
 });

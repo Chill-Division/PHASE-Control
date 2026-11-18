@@ -21,7 +21,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { DayDial, phaseColor, type DialBand } from "@/components/day-dial";
+import { DayDial, phaseColor, type DialBand, type DialZone } from "@/components/day-dial";
 import {
   number,
   ReviewDialog,
@@ -30,7 +30,7 @@ import {
   type Page,
 } from "@/components/dashboard";
 import { nextText, type Lane } from "@/components/day-timeline";
-import { ageText } from "@/lib/controller-health";
+import { ageText, holdNeedsSomeone } from "@/lib/controller-health";
 import type { DrybackTrend } from "@/lib/dryback";
 import { dayDryback, type GrowDay } from "@/lib/day-timeline";
 import { oneValveRoom, roomStatus } from "@/lib/model";
@@ -452,9 +452,10 @@ export function NeedsYou({
 }
 
 // ------------------------------------------------------------------ the clock
-/** Each zone's grow-day for the clock: its phases so far, the rest as projected, its shots. In a
- * one-valve room (`shared`) the first zone's projection is every zone's: one shot waters them all. */
-export function dialZones(lanes: Lane[], day: GrowDay, now: number, shared = false) {
+/** Each zone's grow-day for the clock: its phases so far, the rest as projected, its shots, and when
+ * it was held for something that needs someone. In a one-valve room (`shared`) the first zone's
+ * projection is every zone's: one shot waters them all. */
+export function dialZones(lanes: Lane[], day: GrowDay, now: number, shared = false): DialZone[] {
   return lanes.map((lane, index) => {
     const ahead: DialBand[] = [];
     const room = shared ? lanes[0] : lane;
@@ -483,6 +484,15 @@ export function dialZones(lanes: Lane[], day: GrowDay, now: number, shared = fal
         ...ahead,
       ],
       shots: lane.shots.map((shot) => hoursOf(day, shot.start)),
+      // Shots it was due and held from, by a hold Needs you warns about; the routine ones (a
+      // refill, Watching only) leave the ring as it is.
+      held: lane.blocks
+        .filter((block) => holdNeedsSomeone(block.text))
+        .map((block) => ({
+          start: hoursOf(day, block.start),
+          end: hoursOf(day, block.end),
+          open: block.open,
+        })),
       // As Coming up lists them: none for a zone that is stopped or held.
       planned:
         room.stopped || room.next.basis === "held"
@@ -529,7 +539,19 @@ export function TodayCard({
     shots: [],
   }));
   const shared = oneValveRoom(controller.states, controller.room.room);
-  const zones = day && lanes ? dialZones(lanes, day, now, shared) : fallback;
+  const zones: DialZone[] = day && lanes ? dialZones(lanes, day, now, shared) : fallback;
+  // What the red on a zone's ring says, for a screen reader: when it was held.
+  const heldWords = (zone: DialZone) =>
+    day && zone.held?.length
+      ? ` (watering held ${zone.held
+          .map(
+            (span) =>
+              `${clock(day.start + span.start * 3_600_000)} to ${
+                span.open ? "now" : clock(day.start + span.end * 3_600_000)
+              }`,
+          )
+          .join(", ")})`
+      : "";
   const before = day ? now < day.lightsOff : false;
   const until = day ? (before ? day.lightsOff : day.end) - now : 0;
   // The middle says what comes next, Coming up's first shot, not the time (the hand and the
@@ -588,7 +610,7 @@ export function TodayCard({
             lightsOn={new Date(day.start).getHours() + new Date(day.start).getMinutes() / 60}
             zones={zones}
             label={`${controller.room.room.name}'s grow-day: ${zones
-              .map((zone) => `${zone.name} ${zone.phase ?? "phase unknown"}`)
+              .map((zone) => `${zone.name} ${zone.phase ?? "phase unknown"}${heldWords(zone)}`)
               .join(", ")}; ${
               shot
                 ? `next shot ${shot.due ? "now" : `${shot.estimate ? "about " : ""}${clock(shot.time)}`}, ${who}; `
@@ -627,6 +649,12 @@ export function TodayCard({
               <em aria-hidden="true" />a shot
             </span>
             <span className="muted">· faded: still to come</span>
+            {zones.some((zone) => zone.held?.length) && (
+              <span>
+                <u aria-hidden="true" />
+                watering held
+              </span>
+            )}
           </span>
         </div>
       )}

@@ -324,6 +324,13 @@
   height: 12px;
   background: var(--muted-foreground);
 }
+/* Watering held for something that needs someone: the red along a zone's ring. */
+.dial-legend-row u {
+  width: 12px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--destructive);
+}
 .coming-up {
   display: flex;
   flex-direction: column;
