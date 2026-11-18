@@ -17,6 +17,9 @@ export interface DialZone {
   shots: number[];
   /** The shots its projection expects, in their phase. */
   planned?: { hour: number; phase: string }[];
+  /** When a shot it was due was held for something that needs someone (hours since lights-on),
+   * drawn in red along its ring. `open`: it is held still. */
+  held?: { start: number; end: number; open?: boolean }[];
   /** Only the phase it is in now (another room's clock): a dot at now, in the phase's colour. */
   phase?: string | null;
 }
@@ -79,6 +82,9 @@ export function DayDial({
   const inner = mini ? c * 0.3 : c * 0.52;
   const step = count > 1 ? Math.min(mini ? 5.5 : 19, (firstR - inner) / (count - 1)) : 0;
   const ringW = mini ? Math.max(2, Math.min(4, step - 1.5)) : Math.max(5, Math.min(14, step - 5));
+  // A held stretch: a red line along the middle of the ring, edged in the card's colour so it
+  // stands apart from the phase beneath it.
+  const heldW = Math.max(2, Math.round(ringW * 0.5));
   const ang = (t: number) => (t / 24) * Math.PI * 2 - Math.PI / 2;
   const pt = (r: number, t: number) => [c + r * Math.cos(ang(t)), c + r * Math.sin(ang(t))];
   const arc = (r: number, a: number, b: number) => {
@@ -155,6 +161,25 @@ export function DayDial({
                   style={{ stroke: phaseColor(band.phase), strokeWidth: ringW }}
                 />
               ))}
+              {(zone.held ?? []).map((span, i) => {
+                // At least six minutes of the day, so a hold of a minute or two still shows.
+                const a = clampHour(span.start),
+                  b = Math.min(24, Math.max(clampHour(span.end), a + 0.1));
+                return (
+                  <g key={`h${i}`} className="dial-held">
+                    <path
+                      d={arc(r, a, b)}
+                      className="dial-held-edge"
+                      style={{ strokeWidth: heldW + 2 }}
+                    />
+                    <path
+                      d={arc(r, a, b)}
+                      className="dial-held-line"
+                      style={{ strokeWidth: heldW }}
+                    />
+                  </g>
+                );
+              })}
               {zone.shots.map((t, i) => (
                 <path
                   key={`s${i}`}

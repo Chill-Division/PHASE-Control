@@ -19,6 +19,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   watering, Needs you lists the zones that are waiting, and a notification says so (CS-707). The
   controller leaves the solenoid on, since it may be on for a reason, such as circulating the tank
   by hand; once it reads off, watering carries on by itself.
+- **The Overview's clock shows when watering was held.** Until now it drew only the shots given, so
+  a shot held back left no mark. Now a zone's ring turns red wherever a shot was due and held for
+  something that needs you, such as the zone paused, the reservoir too low or a fault, and the key
+  under the clock says "watering held". Holds that end by themselves, like a refill under way, and
+  Watching only leave the ring as it was. A screen reader hears when each zone was held.
 
 ### 🔧 Technical notes
 
@@ -32,6 +37,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Dashboard: `setHoldWords` words the hold, so Needs you lists the zones as not being watered, a
   Warning, and `roomStatus` says Not watering with what to do (`recircHeld` and `RECIRC_WORDS` in
   `controller-health.ts`). `controller-health.test.ts`.
+- Dashboard: `holdNeedsSomeone` (`controller-health.ts`) tells the holds Needs you warns about from
+  the rest: Watching only, a setup change waiting and the holds that end by themselves
+  (`ROUTINE_HOLD`, the refill wait) are left out. `dialZones` passes each lane's other `blocks` to
+  `DayDial` as `held` (hours since lights-on, `open` while still held), which draws each as a red
+  line (`--destructive`) along the middle of the zone's ring, edged in `--surface` and at least six
+  minutes long. `TodayCard` adds "watering held" to the key while any zone has one, and the times
+  to the clock's label. `controller-health.test.ts`, and `verify-dashboard.mjs` on the demo's day
+  at 4 PM: Flower 1's zone 3, paused, and Flower 2's zone 2, held by its high EC.
 - Docs: CS-707 in `docs/error-codes.json` and `ERROR_CODES.md` (the dashboard's Help, rebuilt),
   and `USER_GUIDE.md`.
 
