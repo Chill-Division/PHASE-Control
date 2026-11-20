@@ -597,11 +597,13 @@ setup change (CS-201) and a hardware hold (CS-301, CS-308, CS-309) are still rep
 - The probe has moved, or isn't where the drippers wet the cube.
 - Shots too small to lift the reading.
 - Drip lines that drain between shots: each shot refills them first, so the plants get less than its size says.
+- The plants or the probe changed (a defoliation, a transplant, a probe moved or reseated): the substrate no longer fills to the peak the zone learned.
 
 **Suggested fixes**
 
 - Check the zone's drippers and lines, and do a catch test.
 - Check the probe's position in the cube.
+- If the plants or the probe changed, use the zone's Relearn peak (Irrigation strategy → Auto setpoints): it forgets the old peak, and the zone's next ramp learns the new one.
 
 <a id="cs-405"></a>
 

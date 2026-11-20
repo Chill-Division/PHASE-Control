@@ -394,7 +394,8 @@ def test_an_old_file_with_the_judges_keys_keeps_what_the_zone_learned(tmp_path):
     c = _make([1], p)
     c._load_state()
     learn = c.rooms[0].state[1]["learn"]
-    assert learn == learned  # every learned value kept, the judge's keys gone
+    # every learned value kept, the judge's keys gone, and no Relearn Peak press (absent from these files)
+    assert learn == {**learned, "relearned": None}
     assert (
         C.auto_setpoints.working_peak(learn) == 33.8
     )  # the peak the zone learned, nothing added

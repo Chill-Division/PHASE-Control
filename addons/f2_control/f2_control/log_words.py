@@ -79,10 +79,7 @@ def who(entries, value, people):
     automation or a script by its name, a user by their person's name. None when that is not known,
     as for a user who is nobody's person."""
     for entry in reversed(entries or []):
-        try:
-            if float(entry.get("state")) != float(value):
-                continue
-        except (TypeError, ValueError):
+        if not _same_state(entry.get("state"), value):
             continue
         kind, name = entry.get("context_event_type"), entry.get("context_name")
         if kind == "automation_triggered":
@@ -91,6 +88,15 @@ def who(entries, value, people):
             return f'Script "{name}"' if name else "A script"
         return people.get(entry.get("context_user_id"))
     return None
+
+
+def _same_state(state, value):
+    """A logbook entry's state is the value: as numbers for a setting, as written for a button press
+    (its state is the time it was pressed)."""
+    try:
+        return float(state) == float(value)
+    except (TypeError, ValueError):
+        return state is not None and str(state) == str(value)
 
 
 # Why a zone changed phase: decide()'s transition texts, said for a person.

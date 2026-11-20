@@ -202,6 +202,16 @@ def test_who_from_the_logbook():
     assert log_words.who([{"state": "9", "context_user_id": "u1"}, {"message": "x"}], 10, people) is None
 
 
+def test_who_pressed_a_button_from_the_logbook():
+    """A button's state is the time it was pressed (Relearn Peak): matched as written."""
+    people = {"u1": "Sam"}
+    at = "2026-11-20T09:31:02.123456+00:00"
+    entries = [{"state": "2026-11-19T08:00:00+00:00", "context_user_id": "u2"}, {"state": at, "context_user_id": "u1"}]
+    assert log_words.who(entries, at, people) == "Sam"
+    assert log_words.who(entries, "2026-11-20T09:31:03+00:00", people) is None
+    assert log_words.who([{"state": None, "context_user_id": "u1"}], "None", people) is None
+
+
 # ---------------------------------------------------------------- the controller's own lines
 class _Clock(datetime):
     """The controller's wall clock, pinned in local time (and in UTC for sensor freshness)."""

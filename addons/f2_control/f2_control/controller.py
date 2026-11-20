@@ -608,6 +608,9 @@ BATCH_REQUEST_S = 1800.0
 # set this long after the moment just before its press (the integration's feed_api.FORCE_S).
 MIX_FORCE_S = 120.0
 TEST_SHOT_S = 10  # how long a zone's Test Shot waters it
+# A zone's Relearn Peak press older than this when the controller first sees it (pressed while the
+# controller was stopped for longer) is noted, not acted on.
+RELEARN_REQUEST_S = 1800.0
 # A Test Shot press older than this when the controller sees it is not acted on: the person testing is
 # watching the drippers, and a shot long after they asked for it tests nothing for them.
 TEST_REQUEST_S = 600.0
@@ -2384,6 +2387,7 @@ class Controller:
         # reasons about the same number the engine does
         ec_rules = getattr(snap, "ec_settled", None)
         ec_rules = snap.ec if ec_rules is None else ec_rules
+        self._relearn_if_asked(room, zone, learn, now)
         auto_setpoints.new_day(learn, self._grow_day_start(room, now).isoformat(), snap.vwc)
         auto_setpoints.tick(learn, snap.vwc, st["phase"], now.timestamp(), lights_on,
                             snap.dryback_rate, self._minutes_since_shot(st, now))
@@ -2398,7 +2402,8 @@ class Controller:
                             "Automatic adjustment of this zone's targets is paused, because this "
                             f"morning's ramp didn't look right: {auto_setpoints.frozen_reason(learn)}. "
                             "Watering carries on with the current targets, and the next morning's "
-                            "ramp is judged again.",
+                            "ramp is judged again. If the plants or the probe changed, the zone's Relearn "
+                            "peak (Irrigation strategy → Auto setpoints) forgets the old peak.",
                             room=room, zone=zone)
             self._save_state()
         if enabled and not planned:
@@ -2436,6 +2441,30 @@ class Controller:
             managed=[f"number.crop_steering_{room.prefix}zone_{zone}_{s}" for s in auto_setpoints.MANAGED],
         )
         ha_set(f"sensor.crop_steering_{room.prefix}zone_{zone}_auto_setpoints", state, attrs)
+
+    def _relearn_if_asked(self, room, zone, learn, now):
+        """A new press of the zone's Relearn Peak button: Auto setpoints forgets the zone's peak
+        (auto_setpoints.relearn), its CS-404 goes, and the log says who asked. The press is kept with
+        what the zone learned (`relearned`), so a restart never takes an old one for new; one older
+        than RELEARN_REQUEST_S when first seen is noted, not acted on. It waters nothing."""
+        entity = f"button.crop_steering_{room.prefix}zone_{zone}_relearn_peak"
+        pressed = ha_get(entity)[0]
+        if pressed in (None, "", "unknown", "unavailable") or pressed == learn.get("relearned"):
+            return
+        learn["relearned"] = pressed
+        at = _local(pressed)
+        if at is None or abs((now - at).total_seconds()) > RELEARN_REQUEST_S:
+            self._say(room, zone, f"Relearn Peak pressed at {pressed[:16]} was not acted on: too long ago")
+            self._save_state()
+            return
+        was = learn["peak"]
+        auto_setpoints.relearn(learn)
+        self._save_state()
+        self._resolve_alert(f"auto_{room.slug}_z{zone}")  # CS-404: what it judged by is gone
+        who = self._who_changed(entity, pressed, at - timedelta(minutes=1))
+        forgot = f"forgot {was:g}%" if was is not None else "it had none learned yet"
+        self._say(room, zone, f"{who or 'Someone'} asked Auto setpoints to relearn this zone's peak: {forgot}; "
+                  "its next ramp stops where the substrate stops taking water, and that is its peak")
 
     def _auto_write(self, room, zone, suffix, old, value, learn, now):
         entity = f"number.crop_steering_{room.prefix}zone_{zone}_{suffix}"

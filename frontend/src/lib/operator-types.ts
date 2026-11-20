@@ -19,6 +19,7 @@ export type OperatorAction =
   | "feed_save"
   | "feed_mix"
   | "test_shot"
+  | "relearn_peak"
   | "whats_new_get"
   | "whats_new_seen"
   | "whats_new_tour_seen"

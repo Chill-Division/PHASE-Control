@@ -672,6 +672,7 @@ export function Strategy({
                       key={item.id}
                       status={item.auto}
                       name={zone ? undefined : item.name}
+                      relearn={{ controller, zoneId: item.id, zoneName: item.name }}
                     />
                   ),
               )}

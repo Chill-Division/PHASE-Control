@@ -344,12 +344,32 @@ export class OperatorDemo {
       this.feedDemo ||= new FeedDemo(this.getStates, this.updateStates);
       return this.feedDemo.call(action, data) as T;
     }
-    if (action === "test_shot") {
+    if (action === "test_shot" || action === "relearn_peak") {
       // As Home Assistant does: the press is the button's state, which the controller app reads.
       const prefix = String(data.room_id).replace(/^room:/, "");
-      const button = `button.crop_steering_${prefix}zone_${Number(data.zone)}_test_shot`;
+      const button = `button.crop_steering_${prefix}zone_${Number(data.zone)}_${action}`;
       const now = new Date().toISOString();
       const states = this.getStates();
+      // What the controller app does with a Relearn peak at its next pass: the zone's learned peak
+      // is forgotten, and with it a pause for a ramp that ended far under it.
+      const auto = `sensor.crop_steering_${prefix}zone_${Number(data.zone)}_auto_setpoints`;
+      const relearnt =
+        action === "relearn_peak" && states[auto]
+          ? {
+              [auto]: {
+                ...states[auto],
+                state: states[auto].state === "off" ? "off" : "learning",
+                attributes: {
+                  ...states[auto].attributes,
+                  learned_peak: null,
+                  hold_days: 0,
+                  p1_outcome: "pending",
+                  frozen_reason: null,
+                },
+                last_updated: now,
+              },
+            }
+          : {};
       this.updateStates({
         ...states,
         [button]: {
@@ -360,6 +380,7 @@ export class OperatorDemo {
           last_changed: now,
           last_updated: now,
         },
+        ...relearnt,
       });
       return { requested: now } as T;
     }

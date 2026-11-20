@@ -58,7 +58,9 @@ def fresh():
     return {"peak": None, "gain": None, "day_rate": None, "night_rate": None, "day_n": 0, "night_n": 0,
             "day_acc": [0.0, 0], "night_acc": [0.0, 0],
             "hold_days": 0, "day": None, "ramp_start": None, "ramp": [], "pending": None,
-            "outcome": "pending", "stalled_at": None, "last_change": "", "prev_peak": None, "prev_hold": 0}
+            "outcome": "pending", "stalled_at": None, "last_change": "", "prev_peak": None, "prev_hold": 0,
+            # The zone's Relearn Peak press last dealt with (its button's state, a time), or None.
+            "relearned": None}
 
 
 def restore(saved):
@@ -73,6 +75,8 @@ def restore(saved):
                 out[k] = float(out[k])
         for k in ("day_n", "night_n", "hold_days", "prev_hold"):
             out[k] = int(out[k])
+        if out["relearned"] is not None and not isinstance(out["relearned"], str):
+            out["relearned"] = None
         if not isinstance(out["ramp"], list) or not all(
             isinstance(r, dict) and {"pct", "rise", "settled"} <= set(r) for r in out["ramp"]
         ):
@@ -177,6 +181,16 @@ def ramp_outcome(learn, phase, vwc=None):
             if learn["peak"] is None or top > learn["peak"]:
                 learn["peak"] = top
     return learn["outcome"]
+
+
+def relearn(learn):
+    """Forget the zone's peak, as a person asked (its Relearn Peak button): the plants or the probe
+    changed, and the substrate no longer fills where it did. With no peak to measure today's ramp
+    against, a ramp that stops taking water is a plateau wherever it stops, and that is the peak from
+    then on (ramp_outcome): one going now hands over to P2 at its next flat shots, and one already
+    over is judged again. How much a shot lifts the zone (`gain`) and how fast it dries stay: they
+    still hold."""
+    learn.update(peak=None, hold_days=0, prev_peak=None, prev_hold=0, outcome="pending", stalled_at=None)
 
 
 def frozen_reason(learn):

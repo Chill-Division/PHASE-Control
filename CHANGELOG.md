@@ -12,29 +12,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- **Restarting or updating Home Assistant switches your pumps, valves and dosers off first.** Home
-  Assistant going away leaves every relay as it was, so a refill's pump, its fresh water or a doser,
-  or a shot, ran on with nothing watching it for as long as Home Assistant was away: a Core update
-  in the middle of a refill interrupted it. Now, as Home Assistant shuts down for a restart, an
-  update or a shutdown of the host, each room switches off the pumps, valves and dosers it has that
-  are on, while the devices are still connected. It switches nothing on, and nothing that isn't the
-  room's. A power cut, a crash or the network dropping gives it no such chance: only a device's own
-  failsafe covers those.
-- **A refill carries on after Home Assistant restarts or updates.** While Home Assistant was away
-  the controller read every switch as off, so a refill stopped with "the room's watering switch was
-  switched off", which nobody had done, the hardware hold latched because nothing could be switched
-  off, and nothing switched the pump or the recirculation off once Home Assistant was back. Now the
-  controller waits for Home Assistant: nothing is switched, nothing latches, and the refill pauses.
-  Once Home Assistant is back it carries on where it was, its fill and its step running on for as
-  long as their switches were off. A dose cut short stops the batch instead, and the notice says
-  what went in. A shot that ends while Home Assistant is away no longer latches the hold either.
-- **A refill carries on after the controller app updates or restarts, too.** Stopping the app, for an
-  update, a Rebuild or a restart, switched off what a refill had on and ended it there, leaving the
-  tank part-filled or part-dosed to sort out by hand. Now the refill pauses. When the app is back
-  within 10 minutes, it carries on as after a Home Assistant restart: what it had on goes back on,
-  its fill and its step run on for as long as they were off, and a dose cut short stops it cleanly.
-  Back later, the refill stops, as before. The update to this version still stops a refill that is
-  running, since the old version is the one that stops.
+**Installing this update may still interrupt a tank refill, or a dose, that is running at the time,
+but updates after it won't: from now on a refill pauses through a restart or an update and picks up
+where it left off.** To be safe, install it while no refill is running.
+
+- **Refills and watering carry on through restarts and updates.** Restarting or updating Home
+  Assistant, or updating the controller app, ended a refill part-way and left the tank part-filled or
+  part-dosed to sort out by hand, and a Home Assistant restart could also stop all watering on that
+  hardware until someone switched watering off and on again. Now a refill pauses, and once
+  everything is back it picks up where it left off: its fill and its mixing run on for as long as
+  they were stopped, and watering carries on as normal. The one exception is a dose that is running
+  at that moment: it can't be finished safely, so the refill stops there, and the notice says how
+  much went in. A controller app stopped for more than 10 minutes stops the refill too, as before.
+- **Home Assistant switches your pumps, valves and dosers off as it shuts down.** Home Assistant
+  going away leaves every relay as it was, so a refill's pump, its fresh water or a doser, or a
+  shot, ran on with nothing watching it for as long as Home Assistant was away. Now, as Home
+  Assistant shuts down for a restart, an update or a shutdown of the host, each room switches off
+  the pumps, valves and dosers it has that are on, while the devices are still connected. It
+  switches nothing on, and nothing that isn't the room's. A power cut, a crash or the network
+  dropping gives it no such chance: only a device's own failsafe covers those.
+- **Relearn a zone's peak.** When the plants or the probe change (a defoliation, a transplant, a
+  probe moved), the peak Auto setpoints learned for a zone can go out of reach: each morning's ramp
+  then runs out of shots chasing it, and the zone's automatic targets pause. A zone's new **Relearn
+  peak** (Irrigation strategy → Auto setpoints) forgets it: the zone's next ramp stops where the
+  substrate stops taking water, and that is its peak from then on. Pressed during a ramp, the ramp
+  ends at its next shots that don't lift the moisture. It waters nothing, and keeps the rest of what
+  Auto setpoints learned. In one room this week a ramp chasing an out-of-date peak took 20 shots and
+  13.7 L a morning; replayed with the peak relearned, it stops after 3 shots and 1.2 L.
 
 ### 🔧 Technical notes
 
@@ -100,6 +104,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `tests/test_state_migration.py`, `addons/f2_control/tests/test_app_restart.py`, and
   `test_nutrient_batch.py`'s stop test now checks the pause.
 - Docs: `docs/USER_GUIDE.md`, `addons/f2_control/DOCS.md`.
+- Controller: a new press of a zone's `button.crop_steering_<prefix>zone_<n>_relearn_peak`
+  (`_relearn_if_asked`, at the top of `_auto_tick`) runs `auto_setpoints.relearn`: the learned
+  `peak`, `hold_days`, `prev_peak`, `prev_hold` and `stalled_at` go and `outcome` is pending again,
+  while `gain`, the drying rates and today's `ramp` stay, so today's ramp is judged again with no
+  peak to measure it against (`ramp_outcome`: a ramp going now is a plateau at its next two flat
+  shots; one already over is "short" or "reached"). CS-404 is resolved, and the log says who asked
+  (`_who_changed`; `log_words.who` now also matches a button's state, a time, as written). The press
+  is kept as `learn["relearned"]`, a new key (None in an older file), so a restart never acts on an
+  old press; one first seen more than `RELEARN_REQUEST_S` (30 min) after it was made is noted, not
+  acted on. CS-404's notification and catalogue entry (`docs/error-codes.json`) point to it.
+  Replayed through the real module, GT4's 20 Nov ramp (20 shots and 13.7 L, "suspect" against a
+  stale 88.5% peak) hands over to P2 after 3 shots and 1.2 L once relearned.
+- Integration: a "Zone N Relearn Peak" button for each zone, on the zone's device (`button.py`), and
+  `relearn_peak` (room_id, zone), response-only and for an administrator like `test_shot`, which
+  presses it with the caller's context (`selftest.py`, `services.yaml`). An old room gains the
+  buttons unpressed.
+- Dashboard: `RelearnPeak` (`relearn-peak.tsx`) in each zone's line of Irrigation strategy → Auto
+  setpoints (`AutoZoneChip`), with a "?" (`SettingHelp`, `RELEARN_HELP`) and a confirmation naming
+  the peak it forgets. `relearn_` joins the room-scoped operator actions (`use-controller.ts`), and
+  the demo forgets the zone's peak as the controller would.
+- Tests: `addons/f2_control/tests/test_relearn_peak.py` and `test_log_words.py`;
+  `tests_ha/test_relearn_peak.py` (the button on each zone's device, the service, the real controller
+  reading a press, the logbook naming who pressed it), `test_upgrade_in_place.py` and
+  `test_non_admin_user.py`; `tests/test_admin_only.py` and `tests/test_state_migration.py`.
+- Docs: `docs/USER_GUIDE.md`, `docs/ENTITIES.md`, `docs/ERROR_CODES.md`, `CLAUDE.md`.
 
 ## [1.7.0] - 2026-11-18
 

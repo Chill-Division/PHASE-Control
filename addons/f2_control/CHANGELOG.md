@@ -1,8 +1,8 @@
 # Unreleased
 
-- As Home Assistant shuts down for a restart or an update, the integration switches each room's pumps, valves and dosers off while the devices are still connected, so nothing is left running while Home Assistant is away.
-- While Home Assistant restarts or updates, the controller waits for it instead of reading every switch as off: a refill pauses and carries on once Home Assistant is back, its fill and its step running on for as long as they were off. A dose cut short stops the batch and says what went in, and nothing latches the hardware hold.
-- Updating, rebuilding or restarting this app pauses a refill too, instead of ending it: an app back within 10 minutes carries it on the same way. The update to this version still stops a running refill, since the old version is the one that stops.
+- Installing this update may still interrupt a tank refill, or a dose, that's running at the time, but updates after it won't: from now on a refill pauses while Home Assistant or this app restarts or updates, and picks up where it left off. A dose running at that moment stops the refill cleanly, and the notice says how much went in.
+- Home Assistant switches each room's pumps, valves and dosers off as it shuts down, so nothing runs while it's away, and watering carries on once it's back.
+- Each zone has a Relearn peak (Irrigation strategy → Auto setpoints), for when the plants or the probe change and the peak Auto setpoints learned goes out of reach.
 
 # 1.7.0
 

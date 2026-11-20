@@ -1,0 +1,11 @@
+.relearn-peak {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+.relearn-peak-notice {
+  flex-basis: 100%;
+  color: var(--muted-foreground);
+  font-size: var(--text-xs);
+}
