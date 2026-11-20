@@ -1,3 +1,7 @@
+# Unreleased
+
+- As Home Assistant shuts down for a restart or an update, the integration switches each room's pumps, valves and dosers off while the devices are still connected, so nothing is left running while Home Assistant is away.
+
 # 1.7.0
 
 Pair with integration 1.7.0.

@@ -8,7 +8,10 @@ An autonomous **4-phase crop-steering irrigation** system for Home Assistant. Tw
 runtime layers plus the React/shadcn operator workspace:
 
 1. **HA integration** (`custom_components/crop_steering/`) — entities, config-flow
-   wizard, pure calculations, service events. Never touches hardware.
+   wizard, pure calculations, service events. It never drives hardware, with one
+   exception: as Home Assistant shuts down (a restart or an update) it switches each
+   room's pumps, valves and dosers OFF while the devices are still connected
+   (`shutdown.py`). It only ever switches them off.
 2. **f2-control add-on** (`addons/f2_control/`) — the live autonomous coordinator.
    A single synchronous Python process that polls HA over REST every 60 s, imports
    the pure `crop-steering-engine` package, runs the per-zone P0→P1→P2→P3 logic,

@@ -21,6 +21,10 @@ people who build the system:
 `tests/test_whats_new.py` checks the shape and the plain words, and that the newest section is the
 version being released.
 
+## Unreleased
+
+- Restarting or updating Home Assistant now switches your pumps, valves and dosers off first, so nothing keeps running while it's away.
+
 ## 1.7.0 - 2026-11-18
 
 - If the reservoir's recirculation is left on, watering now waits and tells you, instead of pumping each shot straight back into the tank.

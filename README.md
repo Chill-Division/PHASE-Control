@@ -50,7 +50,7 @@ More in the [screenshots](https://github.com/Chill-Division/PHASE-Control/blob/m
 
 ## Install
 
-PHASE Control comes in two parts, and watering needs both: the **integration** keeps your rooms, settings and strategies and adds the PHASE Control page to the sidebar, but never switches anything; the **controller app** reads the probes and runs the pump and valves.
+PHASE Control comes in two parts, and watering needs both: the **integration** keeps your rooms, settings and strategies and adds the PHASE Control page to the sidebar, and switches the room's pumps, valves and dosers off as Home Assistant shuts down for a restart or an update, so nothing is left running while it's away; the **controller app** reads the probes and runs the pump and valves.
 
 | [How to install](https://www.youtube.com/watch?v=Lor93_c-ibU) (2:28) | [How to upgrade](https://www.youtube.com/watch?v=pDjWWWM_XBQ) (1:17) |
 | --- | --- |

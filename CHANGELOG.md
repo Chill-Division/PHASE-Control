@@ -10,6 +10,35 @@ and code-level detail for developers and AI agents working on the repo.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+- **Restarting or updating Home Assistant switches your pumps, valves and dosers off first.** Home
+  Assistant going away leaves every relay as it was, so a refill's pump, its fresh water or a doser,
+  or a shot, ran on with nothing watching it for as long as Home Assistant was away: a Core update
+  in the middle of a refill interrupted it. Now, as Home Assistant shuts down for a restart, an
+  update or a shutdown of the host, each room switches off the pumps, valves and dosers it has that
+  are on, while the devices are still connected. It switches nothing on, and nothing that isn't the
+  room's. A power cut, a crash or the network dropping gives it no such chance: only a device's own
+  failsafe covers those.
+
+### 🔧 Technical notes
+
+- Integration: `shutdown.py` registers `async_switch_off_at_shutdown` for each room with
+  `hass.async_add_shutdown_job`, removed when the room unloads. Home Assistant runs shutdown jobs in
+  the first stage of `async_stop`, before `EVENT_HOMEASSISTANT_STOP`, with 20 s for all of them, and
+  ESPHome closes its device connections only at `EVENT_HOMEASSISTANT_CLOSE`. A Core update stops
+  Core as a restart does: the Supervisor pulls the new image while Core runs, then `docker stop`, and
+  Core's SIGTERM handler runs `async_stop`. What the room has mapped and on goes off in
+  `room.switch_off_order`, the dosers, the fresh water and the pump first, then the zone valves, the
+  main line and the recirculation line, each group at once, within 10 s; `switch.turn_off`, and
+  `homeassistant.turn_off` for anything that is not a switch. First the room's descriptor gains
+  `shutting_down_at` (`shutting_down_signal`), for a controller that reads a switch going off in the
+  moment before Home Assistant stops answering. On the test VM (2026.11.2) an automation on the same
+  hook switched an ESPHome relay off 0.1 s into a restart, and the device reported it off before
+  Home Assistant disconnected. `tests_ha/test_switch_off_at_shutdown.py` (real switch entities,
+  `hass.async_stop()`), `tests/test_room.py`.
+- Docs: `CLAUDE.md`, `README.md`, `docs/ENTITIES.md`, `docs/SYSTEM_OVERVIEW.md`.
+
 ## [1.7.0] - 2026-11-18
 
 Integration and controller **1.7.0**.
