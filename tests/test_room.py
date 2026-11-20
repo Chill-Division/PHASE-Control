@@ -158,3 +158,43 @@ def test_with_nothing_to_compare_the_state_is_restored_never_thrown_away():
     assert (
         _ours(created=_at(1), written=_at(3, aware=False)) is True
     )  # naive against aware
+
+
+def test_shutting_down_switches_off_what_moves_water_first_then_its_line():
+    descriptor = room.build_engine_config(
+        "",
+        "default",
+        2,
+        {
+            "1": {"zone_switch": "switch.valve_1"},
+            "2": {"zone_switch": "switch.valve_2"},
+        },
+        {
+            "pump_switch": "switch.pump",
+            "main_line_switch": "switch.main_line",
+            "fresh_water_switch": "switch.fresh",
+            "recirc_switch": "switch.recirc",
+            "doser_1_switch": "switch.doser_1",
+            "doser_3_switch": "switch.doser_3",
+        },
+    )
+    assert room.switch_off_order(descriptor) == [
+        ["switch.doser_1", "switch.doser_3", "switch.fresh", "switch.pump"],
+        ["switch.valve_1", "switch.valve_2", "switch.main_line", "switch.recirc"],
+    ]
+
+
+def test_a_switch_mapped_twice_is_switched_off_once_and_a_bare_room_has_nothing():
+    # One valve for every zone (a shared-valve room), and a pump doubling as the main line.
+    descriptor = room.build_engine_config(
+        "",
+        "default",
+        2,
+        {"1": {"zone_switch": "switch.valve"}, "2": {"zone_switch": "switch.valve"}},
+        {"pump_switch": "switch.pump", "main_line_switch": "switch.pump"},
+    )
+    assert room.switch_off_order(descriptor) == [["switch.pump"], ["switch.valve"]]
+    assert room.switch_off_order(
+        room.build_engine_config("", "default", 1, {}, {})
+    ) == [[], []]
+    assert room.switch_off_order(None) == [[], []]

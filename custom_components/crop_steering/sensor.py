@@ -250,6 +250,8 @@ class CropSteeringEngineConfigSensor(SensorEntity):
         self._attr_object_id = f"{DOMAIN}_{self._prefix}engine_config"
         # Home Assistant ignores _attr_object_id; the controller finds a room by THIS id.
         self.entity_id = f"sensor.{self._attr_object_id}"
+        # When Home Assistant began shutting down, once it has (shutdown.py); None until then.
+        self._shutting_down_at = None
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -269,11 +271,25 @@ class CropSteeringEngineConfigSensor(SensorEntity):
         from homeassistant.helpers.dispatcher import async_dispatcher_connect
 
         from .room_order import SIGNAL
+        from .shutdown import shutting_down_signal
 
         # A new room order: publish this room's place in it.
         self.async_on_remove(
             async_dispatcher_connect(self.hass, SIGNAL, self.async_write_ha_state)
         )
+        # Home Assistant shutting down: say so before the room's hardware is switched off.
+        self.async_on_remove(
+            async_dispatcher_connect(
+                self.hass,
+                shutting_down_signal(self._entry.entry_id),
+                self._shutting_down,
+            )
+        )
+
+    @callback
+    def _shutting_down(self, when: str) -> None:
+        self._shutting_down_at = when
+        self.async_write_ha_state()
 
     @property
     def extra_state_attributes(self) -> dict:
@@ -290,6 +306,10 @@ class CropSteeringEngineConfigSensor(SensorEntity):
         # Where the dashboard lists this room (room_order.py): None until an order names it.
         order = self.hass.data.get(DOMAIN, {}).get("_room_order") if self.hass else None
         attributes["room_position"] = order.position(self._prefix) if order else None
+        # Only while Home Assistant shuts down: the controller then takes a switch going off for
+        # Home Assistant switching it off (shutdown.py), not a person.
+        if self._shutting_down_at:
+            attributes["shutting_down_at"] = self._shutting_down_at
         return attributes
 
 
