@@ -28,6 +28,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Once Home Assistant is back it carries on where it was, its fill and its step running on for as
   long as their switches were off. A dose cut short stops the batch instead, and the notice says
   what went in. A shot that ends while Home Assistant is away no longer latches the hold either.
+- **A refill carries on after the controller app updates or restarts, too.** Stopping the app, for an
+  update, a Rebuild or a restart, switched off what a refill had on and ended it there, leaving the
+  tank part-filled or part-dosed to sort out by hand. Now the refill pauses. When the app is back
+  within 10 minutes, it carries on as after a Home Assistant restart: what it had on goes back on,
+  its fill and its step run on for as long as they were off, and a dose cut short stops it cleanly.
+  Back later, the refill stops, as before. The update to this version still stops a refill that is
+  running, since the old version is the one that stops.
 
 ### 🔧 Technical notes
 
@@ -79,6 +86,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   integration's shutdown marker read by the real controller; `tests/test_state_migration.py`. On the
   test VM (2026.11.2) a restart read unreachable for 6 s, then `NOT_RUNNING` for 3 s, then `RUNNING`.
 - Docs: `docs/USER_GUIDE.md`.
+- Controller: `_safe_off` (SIGTERM: an update, a Rebuild, a restart) still switches off what a running
+  batch has on, without a read-back, but pauses the batch instead of ending it: `batch["app_stopped"]`,
+  a new state key, and `away` when not already set. `_load_state` doesn't take a batch with
+  `app_stopped` for a crash (`_batch_crashed`). At the first pass `_batch_tick` stops it when the app
+  was down longer than `APP_RESUME_S` (600 s, from `app_stopped` to this process's `_started`, so
+  Home Assistant starting after a host reboot doesn't count), saying "the controller app was stopped
+  for N min, too long to carry it on" (CS-701); otherwise `_batch_resume` carries it on, its grace
+  counted from when this process started, its words naming the controller app. A Supervisor update
+  builds the new image while the old app runs, then stops it (10 s, the app's default `timeout`) and
+  starts the new one; a Rebuild removes it first and builds after (`supervisor/apps/app.py`). A batch
+  record an older controller ended as it stopped (`interrupted`) is said at the next start as before.
+  `tests/test_state_migration.py`, `addons/f2_control/tests/test_app_restart.py`, and
+  `test_nutrient_batch.py`'s stop test now checks the pause.
+- Docs: `docs/USER_GUIDE.md`, `addons/f2_control/DOCS.md`.
 
 ## [1.7.0] - 2026-11-18
 

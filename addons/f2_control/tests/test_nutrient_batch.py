@@ -974,16 +974,14 @@ def test_a_batch_saved_in_progress_is_switched_off_at_the_next_start(tmp_path):
     assert "the controller app stopped without finishing it" in note["message"]
 
 
-def test_stopping_the_app_mid_batch_switches_it_off_and_says_so_once_at_the_next_start():
+def test_stopping_the_app_mid_batch_switches_it_off_and_pauses_it():
+    """What the next start does with it is test_app_restart.py's."""
     c, fake, room = _room()
     _tick(c, room)
     _press(c, fake, room)
     c._safe_off()
-    assert fake.states[FRESH][0] == "off" and room.batch["step"] == "idle"
-    assert room.batch["interrupted"]["step"] == "filling"
-    _tick(c, room)
-    _tick(c, room)
-    assert len(_alerts(fake, "CS-701")) == 1 and room.batch["interrupted"] is None
+    assert fake.states[FRESH][0] == "off" and room.batch["step"] == "filling"
+    assert room.batch["app_stopped"] and room.batch["away"]
 
 
 # ---------------------------------------------------------------- the refill reminder (CS-706)

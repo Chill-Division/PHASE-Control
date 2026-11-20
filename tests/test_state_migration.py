@@ -478,3 +478,32 @@ def test_a_batch_record_from_before_restarts_paused_it_loads_running_and_a_pause
         c = _make([1], p)
         c._load_state()
         assert c.rooms[0].batch["away"] == kept
+
+
+def test_a_refill_paused_by_the_app_stopping_loads_paused_not_as_a_crash(tmp_path):
+    """A batch saved with `app_stopped` was paused as the app stopped: it loads as it was, and is not
+    switched off as a crash. One from before has no such key, and a damaged value is dropped.
+    """
+    p = tmp_path / "state.json"
+    saved = {
+        "step": "filling",
+        "switches": {"fresh": "switch.fresh"},
+        "fill_end": "2026-11-20T09:01:00",
+        "away": "2026-11-20T09:00:00",
+        "app_stopped": "2026-11-20T09:00:00",
+    }
+    p.write_text(json.dumps({"default": {"1": {"phase": "P2"}, "_batch": saved}}))
+    c = _make([1], p)
+    c._load_state()
+    room = c.rooms[0]
+    assert room.batch["app_stopped"] == "2026-11-20T09:00:00"
+    assert not room._batch_crashed
+
+    p.write_text(
+        json.dumps(
+            {"default": {"1": {"phase": "P2"}, "_batch": {**saved, "app_stopped": 5}}}
+        )
+    )
+    c = _make([1], p)
+    c._load_state()
+    assert c.rooms[0].batch["app_stopped"] is None and c.rooms[0]._batch_crashed
