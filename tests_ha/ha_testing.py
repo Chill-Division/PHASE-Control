@@ -16,6 +16,7 @@ if find_spec("pytest_homeassistant"):
         MockUser,
         async_fire_time_changed,
         mock_restore_cache,
+        setup_test_component_platform,
     )
     from pytest_homeassistant.components.recorder.common import (
         async_wait_recording_done,
@@ -26,6 +27,7 @@ else:  # Home Assistant before 2026.11
         MockUser,
         async_fire_time_changed,
         mock_restore_cache,
+        setup_test_component_platform,
     )
     from pytest_homeassistant_custom_component.components.recorder.common import (
         async_wait_recording_done,
@@ -37,4 +39,5 @@ __all__ = [
     "async_fire_time_changed",
     "async_wait_recording_done",
     "mock_restore_cache",
+    "setup_test_component_platform",
 ]

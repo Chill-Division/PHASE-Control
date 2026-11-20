@@ -265,6 +265,20 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # entities pick up the new config without an HA restart.
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
 
+    # As Home Assistant shuts down (a restart, an update), switch off the room's pumps, valves and
+    # dosers while every device is still connected (shutdown.py).
+    from homeassistant.core import HassJob
+
+    from .shutdown import async_switch_off_at_shutdown
+
+    entry.async_on_unload(
+        hass.async_add_shutdown_job(
+            HassJob(async_switch_off_at_shutdown, f"{DOMAIN} switch off at shutdown"),
+            hass,
+            entry,
+        )
+    )
+
     _LOGGER.info("PHASE Control setup complete")
 
     return True

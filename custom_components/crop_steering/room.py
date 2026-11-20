@@ -164,3 +164,34 @@ def build_engine_config(
         # Only when mapped: a room without a reservoir publishes the descriptor it always did.
         **{key: hw[key] for key in RESERVOIR_KEYS if hw.get(key)},
     }
+
+
+def switch_off_order(descriptor):
+    """PURE. What switches off as Home Assistant shuts down (shutdown.py), from a room descriptor
+    (build_engine_config), as two groups: first what moves water or nutrient (the dosers, the fresh
+    water and the pump), then what it runs through (the zone valves, the main line and the
+    recirculation line). That is the controller's own order when it stops a batch: the pump before its
+    line. Every mapped switch is in it once, and nothing else is: never a room's lights or climate.
+    """
+    descriptor = descriptor or {}
+    valves = descriptor.get("valves") or {}
+    first = [
+        *(descriptor.get(key) for key in DOSER_KEYS),
+        descriptor.get("fresh_water_switch"),
+        descriptor.get("pump"),
+    ]
+    then = [
+        *valves.values(),
+        descriptor.get("mainline"),
+        descriptor.get("recirc_switch"),
+    ]
+    seen = set()
+    groups = []
+    for group in (first, then):
+        kept = []
+        for entity in group:
+            if isinstance(entity, str) and entity and entity not in seen:
+                seen.add(entity)
+                kept.append(entity)
+        groups.append(kept)
+    return groups
