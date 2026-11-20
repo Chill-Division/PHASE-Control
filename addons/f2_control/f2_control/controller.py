@@ -593,6 +593,9 @@ HA_AWAY_POLL_S = 5.0
 # Once Home Assistant is back, how long a paused refill waits for its switches to read again (ESPHome
 # devices reconnect a few seconds after Home Assistant has started) before it stops instead.
 RESUME_GRACE_S = 180.0
+# A refill paused by the controller app stopping (an update, a Rebuild, a restart) carries on when the
+# app is back within this long; back later (stopped by hand, say), it stops as before.
+APP_RESUME_S = 600.0
 # How far before Home Assistant was seen going away to look in a switch's history for when it went
 # off: Home Assistant switches it off as it shuts down, a moment before it stops answering, and a
 # step that isn't watched between passes may only see that at the next pass.
@@ -646,6 +649,9 @@ def fresh_batch():
         # When Home Assistant was seen going away while this batch ran: it is paused, and carried on
         # or stopped cleanly once Home Assistant is back (_batch_resume). None while it runs.
         "away": None,
+        # When the controller app stopped while this batch ran (_safe_off): it is paused too, and the
+        # app carries it on if it is back within APP_RESUME_S. None while it runs.
+        "app_stopped": None,
     }
 
 
@@ -664,7 +670,7 @@ def restore_batch(saved):
             type(value) in (int, float) and math.isfinite(value) and (value > 0 or key == "start_pct")
         ):
             continue
-        if key in ("fill_end", "reminded_at", "away") and value is not None and not isinstance(value, str):
+        if key in ("fill_end", "reminded_at", "away", "app_stopped") and value is not None and not isinstance(value, str):
             continue
         if key in ("plan", "last", "interrupted", "switches") and value is not None and not isinstance(
             value, dict
@@ -911,6 +917,7 @@ class Controller:
         # (_ha_answers): None while it answers, and before it has ever been away.
         self._ha_away_since = None
         self._ha_back_at = None
+        self._started = datetime.now()  # a refill the app stopped is judged by how long it was down
         self._alerted = {}
         self._alert_codes = {}  # key -> the code last raised under it (see _alert_due)
         self._fused_id_cache = (
@@ -1298,9 +1305,9 @@ class Controller:
         self._saved_room_blocks = per_room
         for room in self.rooms:
             self._load_room_state(room, per_room)
-            # A batch saved in progress: this process died part-way (a crash, a power cut; a stop
-            # finishes it on the way out). Its first pass switches it off (_batch_tick).
-            room._batch_crashed = room.batch["step"] != "idle"
+            # A batch saved in progress: this process died part-way (a crash, a power cut). Its first
+            # pass switches it off (_batch_tick). One the app paused as it stopped (_safe_off) is not.
+            room._batch_crashed = room.batch["step"] != "idle" and not room.batch.get("app_stopped")
 
     def _rediscover(self, now):
         """Periodic re-scan so rooms added in the integration UI (or whose descriptor wasn't
@@ -2614,6 +2621,9 @@ class Controller:
         if batch["step"] != "idle":
             if res is None:
                 self._batch_stop(room, now, "its reservoir is no longer mapped in Settings → Rooms & hardware")
+            elif batch.get("app_stopped") and self._app_down_s(batch) > APP_RESUME_S:
+                down = _span(timedelta(seconds=self._app_down_s(batch)))
+                self._batch_stop(room, now, f"the controller app was stopped for {down}, too long to carry it on")
             elif batch.get("away"):
                 self._batch_resume(room, now)
             else:
@@ -3009,6 +3019,16 @@ class Controller:
                 return at.astimezone().replace(tzinfo=None) if at else None
         return None
 
+    def _app_down_s(self, batch):
+        """How long the controller app was stopped while this batch was paused: from when it stopped
+        to when this process started (not to now, which may also include Home Assistant starting)."""
+        stopped = _when(batch.get("app_stopped"))
+        return max(0.0, (self._started - stopped).total_seconds()) if stopped else 0.0
+
+    @staticmethod
+    def _paused_by(batch):
+        return "the controller app restarted" if batch.get("app_stopped") else "Home Assistant restarted"
+
     def _batch_resume(self, room, now):
         """Carry on a refill that Home Assistant going away paused (`away`), or stop it cleanly.
 
@@ -3029,14 +3049,15 @@ class Controller:
         switches = batch.get("switches") or {}
         step = batch["step"]
         away = _when(batch.get("away")) or now
-        since = max(away, self._ha_back_at or away)
+        since = max(away, self._ha_back_at or away, self._started)
+        cause = self._paused_by(batch)
         waiting = (now - since).total_seconds() < RESUME_GRACE_S
         flag = str(ha_get(room.enable_flag)[0]).lower()
         if flag in UNREAD_STATES:
             if waiting:
                 return
             return self._batch_stop(
-                room, now, f"the room's watering switch ({room.enable_flag}) can't be read since Home Assistant came back"
+                room, now, f"the room's watering switch ({room.enable_flag}) can't be read since {cause}"
             )
         if flag not in ON_STATES:
             return self._batch_stop(room, now, f"the room's watering switch ({room.enable_flag}) was switched off")
@@ -3050,7 +3071,7 @@ class Controller:
         if unread:
             if waiting:
                 return
-            return self._batch_stop(room, now, f"{', '.join(unread)} did not come back after Home Assistant restarted")
+            return self._batch_stop(room, now, f"{', '.join(unread)} did not come back after {cause}")
         if step == "dosing":
             doser = self._batch_doser(room)
             dose = batch["plan"]["doses"][batch["index"]]
@@ -3060,7 +3081,7 @@ class Controller:
                 off_at = (self._went_off_at(doser, on_at) if on_at else None) or away
             return self._batch_stop(
                 room, now,
-                f"Home Assistant restarted while doser {dose['doser']} was dosing, so its dose was cut short",
+                f"{cause} while doser {dose['doser']} was dosing, so its dose was cut short",
                 dose_off_at=off_at,
             )
         moved = {}  # each switch that reads OFF: how long it was off, or None when history can't say
@@ -3071,7 +3092,7 @@ class Controller:
         fresh, recirc, pump = switches.get("fresh"), switches.get("recirc"), switches.get("pump")
         for entity in (e for e in (fresh, recirc, pump) if e in moved):
             if not self._batch_switch(entity, "on"):
-                return self._batch_stop(room, now, f"{entity} did not switch back on after Home Assistant came back")
+                return self._batch_stop(room, now, f"{entity} did not switch back on after {cause}")
         fill_end, until = _when(batch.get("fill_end")), _when(batch.get("until"))
         if fill_end is not None and moved.get(fresh):
             fill_end += timedelta(seconds=moved[fresh])
@@ -3083,18 +3104,18 @@ class Controller:
             until = fill_end  # the mix runs at least until the fill's end, as it was planned
         if until is not None:
             batch["until"] = until.isoformat()
-        batch["away"] = None
+        batch.update(away=None, app_stopped=None)
         self._save_state()
-        self._batch_note(room, now, self._resumed_words(switches, moved))
+        self._batch_note(room, now, self._resumed_words(switches, moved, cause))
 
     @staticmethod
-    def _resumed_words(switches, moved):
+    def _resumed_words(switches, moved, cause="Home Assistant restarted"):
         if not moved:
             return "reservoir refill carried on: nothing it had on went off while Home Assistant was away"
         names = {switches.get("fresh"): "the fresh water", switches.get("recirc"): "the recirculation",
                  switches.get("pump"): "the pump"}
         back = [names[e] for e in names if e in moved]
-        words = f"reservoir refill carried on after Home Assistant came back: {_and_list(back)} back on"
+        words = f"reservoir refill carried on after {cause}: {_and_list(back)} back on"
         off = moved.get(switches.get("fresh"), 0.0)
         if switches.get("fresh") in moved:
             words += (f", the fill running {_span(timedelta(seconds=off))} longer for the time it was off" if off
@@ -3297,7 +3318,8 @@ class Controller:
         batch["last"] = {"at": now.isoformat(), "result": result, "stage": plan.get("stage"),
                          "dosed": dict(batch["dosed"]), "doses": self._batch_doses(batch)}
         learned = self._learn_litres(room, plan) if result == "done" else None
-        batch.update(step="idle", until=None, on_at=None, index=0, start_pct=None, fill_end=None, away=None)
+        batch.update(step="idle", until=None, on_at=None, index=0, start_pct=None, fill_end=None, away=None,
+                     app_stopped=None)
         self._save_state()
         self._batch_note(room, now, f"reservoir refill {plan.get('stage')} {result}" + (f"; {learned}" if learned else ""))
 
@@ -4708,8 +4730,9 @@ class Controller:
         loop. Anything that cannot be closed and read back OFF stays recorded for the next start.
 
         A nutrient batch in progress is this process's own too: everything it switched on is switched
-        off, without waiting to read it back (Supervisor gives the app 10 s), and the next start says
-        it stopped part-way."""
+        off, without waiting to read it back (Supervisor gives the app 10 s), and the batch pauses. An
+        app back within APP_RESUME_S (an update, a Rebuild) carries it on as after a Home Assistant
+        restart (_batch_resume); one back later stops it, and says so (_batch_tick)."""
         for room in self.rooms:
             batch = getattr(room, "batch", None)
             if not batch or batch["step"] == "idle":
@@ -4723,12 +4746,10 @@ class Controller:
             ):
                 ha_call("switch", "turn_off", entity_id=entity)
             now = datetime.now()
-            batch["interrupted"] = {"at": now.isoformat(), "step": batch["step"],
-                                    "stage": (batch.get("plan") or {}).get("stage")}
-            batch["last"] = {"at": now.isoformat(), "result": "stopped: the controller app stopped",
-                             "stage": (batch.get("plan") or {}).get("stage"), "dosed": dict(batch["dosed"]),
-                             "doses": self._batch_doses(batch)}
-            batch.update(step="idle", until=None, on_at=None, index=0, away=None)
+            batch["app_stopped"] = now.isoformat()
+            batch["away"] = batch.get("away") or now.isoformat()
+            self._say(room, None, f"stopping: reservoir refill paused while {BATCH_STEP_WORDS.get(batch['step'], batch['step'])}; "
+                      f"it carries on if the app is back within {APP_RESUME_S / 60:g} min")
         for room in self.rooms:
             rec = getattr(room, "shot_inflight", None)
             if not rec:
