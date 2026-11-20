@@ -56,6 +56,15 @@ def no_blind_grace(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _home_assistant_answers(monkeypatch):
+    """Never let a test ask a real Home Assistant whether it is running: it is, unless a rig says
+    otherwise (fake_ha.FakeHA.running)."""
+    import controller
+
+    monkeypatch.setattr(controller, "ha_running", lambda timeout=5: True)
+
+
+@pytest.fixture(autouse=True)
 def _no_real_history(monkeypatch):
     """Never let a test ask a real Home Assistant for history: none is recorded unless a rig says so."""
     import controller

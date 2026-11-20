@@ -87,6 +87,24 @@ def ha_get(entity, timeout=8):
         return HAState()
 
 
+def _span(delta):
+    """A timedelta in words: "12 s", "3 min 5 s", "1 h 4 min"."""
+    seconds = max(0, int(round(delta.total_seconds())))
+    if seconds < 60:
+        return f"{seconds} s"
+    minutes, seconds = divmod(seconds, 60)
+    if minutes < 60:
+        return f"{minutes} min {seconds} s" if seconds else f"{minutes} min"
+    hours, minutes = divmod(minutes, 60)
+    return f"{hours} h {minutes} min" if minutes else f"{hours} h"
+
+
+def _and_list(items):
+    """["a", "b", "c"] -> "a, b and c"."""
+    items = list(items)
+    return ", ".join(items[:-1]) + (" and " if len(items) > 1 else "") + (items[-1] if items else "")
+
+
 def _aware(stamp):
     """An ISO timestamp -> timezone-aware datetime, or None (missing, malformed or naive)."""
     try:
@@ -156,6 +174,27 @@ def ha_set(entity, state, attributes=None, timeout=8):
         )
     except Exception:
         pass
+
+
+def ha_running(timeout=5):
+    """Whether Home Assistant answers and has finished starting. False while it restarts, updates or
+    starts up: the Supervisor's proxy answers 502 while Core is down, and Core says NOT_RUNNING or
+    STARTING until its integrations have loaded (/api/core/state, which the Supervisor itself asks; on
+    the test VM, 2026.11.2, a restart read unreachable for 6 s, then NOT_RUNNING for 3 s). Any other
+    answer counts as running, so this pauses the controller only while Home Assistant is plainly away."""
+    try:
+        r = _S.get(f"{BASE}/core/state", headers=HDR, timeout=timeout)
+    except Exception:
+        return False
+    if r.status_code >= 500:
+        return False
+    if r.status_code != 200:
+        return True
+    try:
+        state = (r.json() or {}).get("state")
+    except Exception:
+        return True
+    return state in (None, "RUNNING")
 
 
 # ---------------------------------------------------------------- config (defaults; override via /data/options.json)
@@ -277,6 +316,8 @@ SETTINGS_WAIT_PASSES = 3
 # What Controller._on reads as ON. A hold (hold_entities) in one of these states stops a shot starting
 # (_blocked) and ends one in flight (_wait_shot): the same test, so the two can never disagree.
 ON_STATES = ("on", "true", "open", "1", "home")
+# What a read gives when it says nothing: Home Assistant unreachable (None), or the entity not loaded.
+UNREAD_STATES = ("none", "unknown", "unavailable", "")
 
 # The pump runs this long before the main line opens, and the main line this long before the zone
 # valve: the room's Pump Prime Time and Main Line Lead Time, capped at the most those settings take,
@@ -544,7 +585,18 @@ REMIND_EVERY_S = 86400.0
 REMIND_CLEAR_PCT = 5.0
 # Between passes, while a batch fills or doses, how often it is checked for a reason to stop (the
 # room's watering switched off, a switch gone off): the fresh water stops within seconds, not a pass.
+# Every running batch is checked this often for Home Assistant going away, so a restart between two
+# passes pauses it (_ha_answers) instead of looking like its switches being switched off.
 BATCH_WATCH_S = 5.0
+# While Home Assistant is away (a restart, an update), how often it is looked for again.
+HA_AWAY_POLL_S = 5.0
+# Once Home Assistant is back, how long a paused refill waits for its switches to read again (ESPHome
+# devices reconnect a few seconds after Home Assistant has started) before it stops instead.
+RESUME_GRACE_S = 180.0
+# How far before Home Assistant was seen going away to look in a switch's history for when it went
+# off: Home Assistant switches it off as it shuts down, a moment before it stops answering, and a
+# step that isn't watched between passes may only see that at the next pass.
+WENT_OFF_LOOKBACK_S = 180.0
 MAX_DOSE_S = 1800.0  # a doser's longest run; a plan asking more is not run
 # A "Mix a Batch Now" press older than this when the controller first sees it is not acted on: it
 # waited while the controller was stopped, and a batch must not start hours after it was asked for.
@@ -591,6 +643,9 @@ def fresh_batch():
         "interrupted": None,  # stopped by the app stopping: said once when it starts again
         "switches": None,  # what this batch drives, taken when it starts (so a restart can stop them)
         "reminded_at": None,  # when the refill reminder (CS-706) was said; None while it is not up
+        # When Home Assistant was seen going away while this batch ran: it is paused, and carried on
+        # or stopped cleanly once Home Assistant is back (_batch_resume). None while it runs.
+        "away": None,
     }
 
 
@@ -609,7 +664,7 @@ def restore_batch(saved):
             type(value) in (int, float) and math.isfinite(value) and (value > 0 or key == "start_pct")
         ):
             continue
-        if key in ("fill_end", "reminded_at") and value is not None and not isinstance(value, str):
+        if key in ("fill_end", "reminded_at", "away") and value is not None and not isinstance(value, str):
             continue
         if key in ("plan", "last", "interrupted", "switches") and value is not None and not isinstance(
             value, dict
@@ -852,6 +907,10 @@ class Controller:
         self._state_path = os.environ.get("F2_STATE_PATH") or "/data/state.json"
         self._busy = False
         self._shot_room = None  # the room whose shot is in flight (see _execute_shot / _safe_off)
+        # When Home Assistant was seen going away (a restart, an update) and when it was seen back
+        # (_ha_answers): None while it answers, and before it has ever been away.
+        self._ha_away_since = None
+        self._ha_back_at = None
         self._alerted = {}
         self._alert_codes = {}  # key -> the code last raised under it (see _alert_due)
         self._fused_id_cache = (
@@ -2555,6 +2614,8 @@ class Controller:
         if batch["step"] != "idle":
             if res is None:
                 self._batch_stop(room, now, "its reservoir is no longer mapped in Settings → Rooms & hardware")
+            elif batch.get("away"):
+                self._batch_resume(room, now)
             else:
                 self._batch_step(room, now, res)
         elif res is not None:
@@ -2881,13 +2942,31 @@ class Controller:
 
     def _batch_interrupted(self, room):
         """Why a running batch must stop, or None: the room's watering switch or the room switched
-        off, a hardware fault, or a switch the step keeps on no longer reading on."""
-        if not self._on(room.enable_flag, False):
+        off, a hardware fault, or a switch the step keeps on no longer reading on. As Home Assistant
+        shuts down it switches the room's pumps, valves and dosers off itself, and then nothing can be
+        read: that pauses the batch (_batch_pause) and is no reason to stop it."""
+        flag = str(ha_get(room.enable_flag)[0]).lower()
+        if flag not in ON_STATES:
+            if flag in UNREAD_STATES:
+                if self._batch_pause(room):
+                    return None
+                return f"the room's watering switch ({room.enable_flag}) can't be read"
             return f"the room's watering switch ({room.enable_flag}) was switched off"
         if not self._room_active(room):
             return "the room was switched off"
         if room.hardware_fault:
             return "a hardware fault was latched"
+        for entity in self._batch_needs(room):
+            state = str(ha_get(entity)[0]).lower()
+            if state != "on":
+                if self._batch_pause(room):
+                    return None
+                return f"{entity} was switched off" if state == "off" else f"{entity} went offline"
+        return None
+
+    def _batch_needs(self, room):
+        """What the batch's step keeps on: the fresh water until the fill's end, the recirculation
+        line and the pump from half-way, and the doser while it doses."""
         batch = room.batch
         switches = batch.get("switches") or {}
         step = batch["step"]
@@ -2896,11 +2975,131 @@ class Controller:
             need += [switches.get("recirc"), switches.get("pump")]
         if step == "dosing":
             need.append(self._batch_doser(room))
-        for entity in (e for e in need if e):
-            state = str(ha_get(entity)[0]).lower()
-            if state != "on":
-                return f"{entity} was switched off" if state == "off" else f"{entity} went offline"
+        return [e for e in need if e]
+
+    def _batch_pause(self, room, now=None):
+        """When Home Assistant is going away (_ha_going_away), pause the room's batch until it is back
+        (_batch_resume), and True; else False."""
+        if not self._ha_going_away(room):
+            return False
+        self._batch_paused(room, now or datetime.now())
+        return True
+
+    def _batch_paused(self, room, now):
+        """The room's running batch waits for Home Assistant, from the first time it is seen going; a
+        later look keeps that time."""
+        batch = room.batch
+        if batch.get("step") == "idle" or batch.get("away"):
+            return
+        batch["away"] = now.isoformat()
+        self._save_state()
+        self._batch_note(room, now, "reservoir refill paused until Home Assistant is back")
+
+    def _went_off_at(self, entity, since):
+        """When `entity` went from ON to anything else after `since` (a local time), from Home
+        Assistant's history, as a local time; None when history can't say: unreachable, not recorded,
+        or never ON since then."""
+        rows = ha_history(entity, since.astimezone())
+        seen_on = False
+        for state, changed in rows or ():
+            if str(state).lower() == "on":
+                seen_on = True
+            elif seen_on:
+                at = _aware(changed)
+                return at.astimezone().replace(tzinfo=None) if at else None
         return None
+
+    def _batch_resume(self, room, now):
+        """Carry on a refill that Home Assistant going away paused (`away`), or stop it cleanly.
+
+        As Home Assistant shuts down for a restart or an update the integration switches the room's
+        pumps, valves and dosers off (a device with its own failsafe does the same when it loses Home
+        Assistant), so what the step had on may read OFF now:
+          * a dose was running: it was cut short, so the batch stops and says how much went in, up to
+            when the doser went off (its history), or when Home Assistant was seen going;
+          * otherwise each switch the step needs that reads OFF goes back on, the fresh water first and
+            the recirculation line before the pump, and the fill's end and the step's end move on by
+            as long as each was off, from its history. One whose history can't say moves on by
+            nothing: the fill comes out short of its time, never over it.
+        A switch that still can't be read RESUME_GRACE_S after Home Assistant is back stops the batch;
+        so does the room's watering switched off meanwhile, or the room, or a hardware fault."""
+        if self._ha_going_away(room):
+            return  # still shutting down: the room's descriptor says so
+        batch = room.batch
+        switches = batch.get("switches") or {}
+        step = batch["step"]
+        away = _when(batch.get("away")) or now
+        since = max(away, self._ha_back_at or away)
+        waiting = (now - since).total_seconds() < RESUME_GRACE_S
+        flag = str(ha_get(room.enable_flag)[0]).lower()
+        if flag in UNREAD_STATES:
+            if waiting:
+                return
+            return self._batch_stop(
+                room, now, f"the room's watering switch ({room.enable_flag}) can't be read since Home Assistant came back"
+            )
+        if flag not in ON_STATES:
+            return self._batch_stop(room, now, f"the room's watering switch ({room.enable_flag}) was switched off")
+        if not self._room_active(room):
+            return self._batch_stop(room, now, "the room was switched off")
+        if room.hardware_fault:
+            return self._batch_stop(room, now, "a hardware fault was latched")
+        need = self._batch_needs(room)
+        reads = {e: str(ha_get(e)[0]).lower() for e in need}
+        unread = [e for e, state in reads.items() if state not in ("on", "off")]
+        if unread:
+            if waiting:
+                return
+            return self._batch_stop(room, now, f"{', '.join(unread)} did not come back after Home Assistant restarted")
+        if step == "dosing":
+            doser = self._batch_doser(room)
+            dose = batch["plan"]["doses"][batch["index"]]
+            off_at = None
+            if reads.get(doser) == "off":
+                on_at = _when(batch.get("on_at"))
+                off_at = (self._went_off_at(doser, on_at) if on_at else None) or away
+            return self._batch_stop(
+                room, now,
+                f"Home Assistant restarted while doser {dose['doser']} was dosing, so its dose was cut short",
+                dose_off_at=off_at,
+            )
+        moved = {}  # each switch that reads OFF: how long it was off, or None when history can't say
+        for entity in need:
+            if reads[entity] == "off":
+                went = self._went_off_at(entity, away - timedelta(seconds=WENT_OFF_LOOKBACK_S))
+                moved[entity] = max(0.0, (now - went).total_seconds()) if went else None
+        fresh, recirc, pump = switches.get("fresh"), switches.get("recirc"), switches.get("pump")
+        for entity in (e for e in (fresh, recirc, pump) if e in moved):
+            if not self._batch_switch(entity, "on"):
+                return self._batch_stop(room, now, f"{entity} did not switch back on after Home Assistant came back")
+        fill_end, until = _when(batch.get("fill_end")), _when(batch.get("until"))
+        if fill_end is not None and moved.get(fresh):
+            fill_end += timedelta(seconds=moved[fresh])
+            batch["fill_end"] = fill_end.isoformat()
+        shift = moved.get(fresh if step == "filling" else pump)
+        if until is not None and shift:
+            until += timedelta(seconds=shift)
+        if step == "mixing" and fill_end is not None and (until is None or fill_end > until):
+            until = fill_end  # the mix runs at least until the fill's end, as it was planned
+        if until is not None:
+            batch["until"] = until.isoformat()
+        batch["away"] = None
+        self._save_state()
+        self._batch_note(room, now, self._resumed_words(switches, moved))
+
+    @staticmethod
+    def _resumed_words(switches, moved):
+        if not moved:
+            return "reservoir refill carried on: nothing it had on went off while Home Assistant was away"
+        names = {switches.get("fresh"): "the fresh water", switches.get("recirc"): "the recirculation",
+                 switches.get("pump"): "the pump"}
+        back = [names[e] for e in names if e in moved]
+        words = f"reservoir refill carried on after Home Assistant came back: {_and_list(back)} back on"
+        off = moved.get(switches.get("fresh"), 0.0)
+        if switches.get("fresh") in moved:
+            words += (f", the fill running {_span(timedelta(seconds=off))} longer for the time it was off" if off
+                      else ", though when the fresh water went off can't be read, so the fill may come out short")
+        return words
 
     def _batch_doser(self, room):
         batch = room.batch
@@ -2911,6 +3110,8 @@ class Controller:
         batch = room.batch
         plan, switches = batch.get("plan") or {}, batch.get("switches") or {}
         why = self._batch_interrupted(room)
+        if batch.get("away"):
+            return  # Home Assistant is shutting down: paused until it is back
         if why:
             return self._batch_stop(room, now, why)
         # The fresh water stops at the fill's end, whatever the step: the doses go in while it fills, and
@@ -3020,11 +3221,17 @@ class Controller:
         else:
             self._batch_dose(room, now, following)
 
-    def _batch_stop(self, room, now, why, *, did_not_fill=False, every_switch=False):
+    def _batch_stop(self, room, now, why, *, did_not_fill=False, every_switch=False, dose_off_at=None):
         """End a batch before it finished: switch off what it had on (a doser and the fresh water
         first, the pump before its line), record it, and say so. `why` is the level read after the
-        fill when it did not fill. A switch that will not read OFF latches the hardware hold."""
+        fill when it did not fill. A switch that will not read OFF latches the hardware hold.
+        `dose_off_at`: when the dose in progress stopped, when that was before now.
+
+        While Home Assistant isn't answering nothing can be switched off or read back, so the batch
+        pauses instead, and is judged again once Home Assistant is back (_batch_resume)."""
         batch = room.batch
+        if not every_switch and not ha_running():
+            return self._batch_paused(room, now)
         step, switches = batch["step"], batch.get("switches") or {}
         # The fresh water runs until the fill's end, whatever the step (the doses go in while it fills).
         fresh = [switches.get("fresh")] if batch.get("fill_end") is not None else []
@@ -3039,9 +3246,11 @@ class Controller:
         off = [e for e in dict.fromkeys(off) if e]
         off_at = datetime.now()
         failures = self._switch_off_failures(off) if off else []
+        if failures and not every_switch and not ha_running():  # Home Assistant went away as it stopped
+            return self._batch_paused(room, now)
         confirmed = not failures
         if step == "dosing" and not every_switch:
-            self._batch_given(room, off_at)
+            self._batch_given(room, min(dose_off_at, off_at) if dose_off_at else off_at)
         stage = (batch.get("plan") or {}).get("stage") or "no stage"
         where = {"filling": "filling", "filling_mixing": "filling", "settling": "starting to mix",
                  "dosing": "dosing", "pausing": "dosing", "mixing": "mixing"}.get(step, step)
@@ -3088,7 +3297,7 @@ class Controller:
         batch["last"] = {"at": now.isoformat(), "result": result, "stage": plan.get("stage"),
                          "dosed": dict(batch["dosed"]), "doses": self._batch_doses(batch)}
         learned = self._learn_litres(room, plan) if result == "done" else None
-        batch.update(step="idle", until=None, on_at=None, index=0, start_pct=None, fill_end=None)
+        batch.update(step="idle", until=None, on_at=None, index=0, start_pct=None, fill_end=None, away=None)
         self._save_state()
         self._batch_note(room, now, f"reservoir refill {plan.get('stage')} {result}" + (f"; {learned}" if learned else ""))
 
@@ -3155,26 +3364,32 @@ class Controller:
 
     def _batch_watch(self, room, now):
         """Between passes, while this room's batch fills or doses: stop it at once when it must stop.
-        Its steps still move on in the passes (_sleep_for wakes the loop when one is due)."""
+        Its steps still move on in the passes (_sleep_for wakes the loop when one is due). Any running
+        batch is also watched for Home Assistant going away, which pauses it (_ha_answers): a restart
+        between two passes must not read as its switches being switched off."""
+        if room.batch.get("step") == "idle" or not self._ha_answers(now) or room.batch.get("away"):
+            return
         if not batch_timed(room.batch):
             return
         why = self._batch_interrupted(room)
+        if room.batch.get("away"):
+            return  # Home Assistant is shutting down: paused, not stopped
         if why:
             self._batch_stop(room, now, why)
             if room.hw.get("reservoir") is not None:
                 self._batch_publish(room, now, room.hw["reservoir"])
 
     def _wait_for_next_pass(self):
-        """Sleep until the next pass (_sleep_for). While a batch fills or doses, wake every
-        BATCH_WATCH_S to watch it (_batch_watch)."""
+        """Sleep until the next pass (_sleep_for). While a batch runs, wake every BATCH_WATCH_S to
+        watch it (_batch_watch)."""
         deadline = time.monotonic() + self._sleep_for(datetime.now())
         while True:
             left = deadline - time.monotonic()
             if left <= 0:
                 return
-            timed = [room for room in self.rooms if batch_timed(room.batch)]
-            time.sleep(min(left, BATCH_WATCH_S) if timed else left)
-            for room in timed:
+            running = [room for room in self.rooms if room.batch.get("step") != "idle"]
+            time.sleep(min(left, BATCH_WATCH_S) if running else left)
+            for room in running:
                 try:
                     self._batch_watch(room, datetime.now())
                 except Exception as e:
@@ -3182,7 +3397,10 @@ class Controller:
 
     def _sleep_for(self, now):
         """Until the next pass: the loop's own interval, or sooner when a batch step is due or its fill
-        ends, so the fresh water or a doser is switched off on time."""
+        ends, so the fresh water or a doser is switched off on time. While Home Assistant is away, every
+        HA_AWAY_POLL_S: soon enough to carry a paused refill on, and no faster, as nothing can be done."""
+        if self._ha_away_since is not None:
+            return min(self.loop_seconds, HA_AWAY_POLL_S)
         wait = self.loop_seconds
         for room in self.rooms:
             if room.batch.get("step") == "idle":
@@ -3868,6 +4086,17 @@ class Controller:
         saved = self._save_state()
         self._alert_hardware_fault(room, saved)
 
+    def _latch_unless_away(self, room, where, failures):
+        """A shot's close that did not read back OFF latches the hardware hold, unless Home Assistant
+        isn't answering: then it says nothing about the switches. The shot stays recorded
+        (shot_inflight), and once Home Assistant is back the reconciler finds its valve, main line and
+        pump OFF (Home Assistant switches them off as it shuts down) and closes the record, or closes
+        them, and latches the hold only if one then will not read OFF (_reconcile_room_inflight)."""
+        if ha_running():
+            return self._latch_hardware_fault(room, where, failures)
+        log(f"[{room.slug}] {where}: Home Assistant isn't answering, so the shot's switches can't be "
+            "confirmed OFF; they are checked again once it is back")
+
     def _alert_hardware_fault(self, room, saved=True):
         self._alert(
             f"hardware_fault_{room.slug}",
@@ -4210,14 +4439,15 @@ class Controller:
             (left if any(self._on(f, False) for f in self.hold_entities) else close).append(pump)
         failures = self._switch_off_failures(close) if close else []
         if failures:
-            self._latch_hardware_fault(room, f"zone {zone} shot cut short", failures)
+            self._latch_unless_away(room, f"zone {zone} shot cut short", failures)
         else:
             room.shot_inflight = None  # as after a normal close: nothing of this shot's is left open
         changed = _aware(getattr(reads[valve], "last_changed", None)) if reads[valve][0] == "off" else None
         closed_after = (changed - valve_opened).total_seconds() if changed else None
         open_s = closed_after if closed_after is not None and 0 <= closed_after <= elapsed else elapsed
-        what = (f"its valve {by} was switched OFF by something other than this controller" if by == valve
-                else f"the hold {by} turned ON")
+        what = (f"the hold {by} turned ON" if by != valve
+                else f"Home Assistant switched its valve {by} OFF as it shut down" if self._ha_going_away(room)
+                else f"its valve {by} was switched OFF by something other than this controller")
         outcome = " ".join(
             ([f"Switched off {', '.join(close)}."] if close else [])
             + ([f"Left {', '.join(left)} on: a hold owns it now."] if left else [])
@@ -4387,7 +4617,7 @@ class Controller:
                 failures = self._close_failures((valve, *upstream), refused)
                 for ent in reversed(upstream):
                     ha_call("switch", "turn_off", entity_id=ent)
-                self._latch_hardware_fault(room, f"zone {zone} shot end", failures)
+                self._latch_unless_away(room, f"zone {zone} shot end", failures)
             else:
                 room.shot_inflight = None  # closed and read back OFF: this shot left nothing open
             shutdown_checked = True
@@ -4455,7 +4685,7 @@ class Controller:
                     # late is not a stuck pump (the 15 Sep false hold, on this very path).
                     closed = self._confirm_switches(closing, "off")
                     if refused or not closed:
-                        self._latch_hardware_fault(
+                        self._latch_unless_away(
                             room,
                             f"zone {zone} shot error cleanup",
                             self._close_failures(closing, refused),
@@ -4498,7 +4728,7 @@ class Controller:
             batch["last"] = {"at": now.isoformat(), "result": "stopped: the controller app stopped",
                              "stage": (batch.get("plan") or {}).get("stage"), "dosed": dict(batch["dosed"]),
                              "doses": self._batch_doses(batch)}
-            batch.update(step="idle", until=None, on_at=None, index=0)
+            batch.update(step="idle", until=None, on_at=None, index=0, away=None)
         for room in self.rooms:
             rec = getattr(room, "shot_inflight", None)
             if not rec:
@@ -4819,6 +5049,8 @@ class Controller:
     def loop_once(self, now):
         if self._busy:
             return
+        if not self._ha_answers(now):
+            return  # nothing can be read or switched: the pass waits for Home Assistant
         for room in self.rooms:  # first, so a doser or the fresh water stops on time
             try:  # a batch fault must never stop the room being watered
                 self._batch_tick(room, now)
@@ -4848,6 +5080,40 @@ class Controller:
             all_pub[room.slug] = pub
         self._check_defaulted_setpoints()
         self._maybe_notify(all_pub, now)
+
+    def _ha_answers(self, now):
+        """Whether Home Assistant answers and is running (ha_running). While it restarts or updates
+        nothing can be read or switched, so the controller waits for it: every pass returns at once,
+        a refill running is paused (its `away`, _batch_resume carries it on once Home Assistant is
+        back), and a switch that can't be read is never taken for one switched off. Said once when it
+        goes, and once when it is back."""
+        if ha_running():
+            away, self._ha_away_since = self._ha_away_since, None
+            if away is not None:
+                self._ha_back_at = now
+                log(f"Home Assistant is back after {_span(now - away)}: carrying on")
+            return True
+        if self._ha_away_since is None:
+            self._ha_away_since = now
+            log("Home Assistant is not answering (restarting or updating?): waiting for it, and "
+                "switching nothing until it is back")
+        self._pause_batches(now)
+        return False
+
+    def _pause_batches(self, now):
+        """Every running refill waits for Home Assistant (_batch_resume)."""
+        for room in self.rooms:
+            self._batch_paused(room, now)
+
+    def _ha_going_away(self, room):
+        """Home Assistant is shutting down, or not answering: a switch of the room's that went off now
+        was switched off by Home Assistant, not a person. As it shuts down the integration says so on
+        the room's descriptor (`shutting_down_at`) before it switches the room's pumps, valves and
+        dosers off, and the controller can still read it for a moment."""
+        if not ha_running():
+            return True
+        _state, attrs, _ = ha_get(f"sensor.crop_steering_{room.prefix}engine_config")
+        return bool((attrs or {}).get("shutting_down_at"))
 
     def _blind_time_transition(self, room, zone, now, lights_on, lights_just_on):
         """Time-only phase forces for a BLIND zone (dead/missing probe), so it can never

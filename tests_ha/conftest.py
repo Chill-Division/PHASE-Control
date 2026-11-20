@@ -117,7 +117,7 @@ def controller_for(hass, monkeypatch):
             )
         clock = Clock()
         monkeypatch.setattr(controller, "load_options", lambda: dict(options or {}))
-        for name in ("ha_get", "ha_call", "ha_get_all", "ha_set"):
+        for name in ("ha_get", "ha_call", "ha_get_all", "ha_set", "ha_running"):
             monkeypatch.setattr(controller, name, getattr(fake, name))
         monkeypatch.setattr(controller.time, "sleep", clock.sleep)
         monkeypatch.setattr(controller.time, "monotonic", clock.monotonic)
