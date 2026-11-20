@@ -53,7 +53,7 @@ local Python installs. CI is unaffected.
 ### 1. HA integration — `custom_components/crop_steering/`
 - About 90 entities for a one-zone room (numbers, switches, selects, sensors) via a config-flow UI; no YAML.
 - Services: `set_manual_override`, and the `setup_*`, `strategy_*`,
-  `runs_*`, `stock_*`, `feed_*` and `whats_new_*` families and `test_shot`, which the dashboard calls.
+  `runs_*`, `stock_*`, `feed_*` and `whats_new_*` families, `test_shot` and `relearn_peak`, which the dashboard calls.
 - Pure, testable helpers in `calculations.py`.
 
 ### 2. f2-control add-on — `addons/f2_control/` (live engine)

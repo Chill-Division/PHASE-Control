@@ -23,8 +23,9 @@ version being released.
 
 ## Unreleased
 
+- Installing this update may interrupt a refill that's running, but later ones won't: a refill now picks up where it left off after a restart or an update.
 - Restarting or updating Home Assistant now switches your pumps, valves and dosers off first, so nothing keeps running while it's away.
-- A refill interrupted by restarting or updating Home Assistant or the controller app now carries on by itself once they're back.
+- A zone's new Relearn peak forgets the peak it learned, for after a defoliation, a transplant or a moved probe.
 
 ## 1.7.0 - 2026-11-18
 
