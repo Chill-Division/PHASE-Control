@@ -20,6 +20,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   are on, while the devices are still connected. It switches nothing on, and nothing that isn't the
   room's. A power cut, a crash or the network dropping gives it no such chance: only a device's own
   failsafe covers those.
+- **A refill carries on after Home Assistant restarts or updates.** While Home Assistant was away
+  the controller read every switch as off, so a refill stopped with "the room's watering switch was
+  switched off", which nobody had done, the hardware hold latched because nothing could be switched
+  off, and nothing switched the pump or the recirculation off once Home Assistant was back. Now the
+  controller waits for Home Assistant: nothing is switched, nothing latches, and the refill pauses.
+  Once Home Assistant is back it carries on where it was, its fill and its step running on for as
+  long as their switches were off. A dose cut short stops the batch instead, and the notice says
+  what went in. A shot that ends while Home Assistant is away no longer latches the hold either.
 
 ### 🔧 Technical notes
 
@@ -38,6 +46,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Home Assistant disconnected. `tests_ha/test_switch_off_at_shutdown.py` (real switch entities,
   `hass.async_stop()`), `tests/test_room.py`.
 - Docs: `CLAUDE.md`, `README.md`, `docs/ENTITIES.md`, `docs/SYSTEM_OVERVIEW.md`.
+- Controller: `ha_running` asks `/api/core/state`, the endpoint the Supervisor uses: unreachable, a
+  5xx (the Supervisor's proxy answers 502 while Core is down) or a state other than `RUNNING`
+  (`NOT_RUNNING`, `STARTING`, `STOPPING`) is Home Assistant away, and any other answer is running,
+  as before. While it is away `loop_once` returns at its top (`_ha_answers`, said once each way),
+  `_sleep_for` polls every `HA_AWAY_POLL_S` (5 s), and every running batch, now watched every
+  `BATCH_WATCH_S` whatever its step, is paused: `batch["away"]`, a new state key (`fresh_batch`,
+  `restore_batch`; None in an older file). `_batch_interrupted` pauses instead of stopping when a
+  switch the step needs reads anything but on, or the watering switch can't be read, while
+  `_ha_going_away`: Home Assistant not running, or the room's descriptor carrying
+  `shutting_down_at`. A watering switch that can't be read with Home Assistant running is said as
+  such, not as switched off. `_batch_stop` pauses as well when Home Assistant isn't answering, or
+  stops answering as it switches off (not for a crash stop, `every_switch`).
+- Controller: `_batch_resume`, once Home Assistant is back and the descriptor no longer says it is
+  shutting down. The watering switch off, the room off or a hardware fault stops the batch; a switch
+  the step needs that can't be read is waited for up to `RESUME_GRACE_S` (180 s), then stops it; a
+  dose in progress stops it (CS-701: "Home Assistant restarted while doser N was dosing, so its dose
+  was cut short"), counted to when the doser went off (`_went_off_at`, from history; else when Home
+  Assistant was seen going, `_batch_stop(dose_off_at=...)`). Otherwise each switch that reads off
+  goes back on (the fresh water, the recirculation, the pump), `fill_end` moves on by the fresh
+  water's time off, and `until` by that of the step's own switch (the fresh water while filling,
+  else the pump), each from history from `WENT_OFF_LOOKBACK_S` before Home Assistant was seen going.
+  Where history can't say, nothing moves: the fill comes out short, never over.
+- Controller: a shot's close that does not read back OFF while Home Assistant isn't answering
+  (`_latch_unless_away`: at the shot's end, when it is cut short, and in the error cleanup) latches
+  nothing. Its write-ahead record stays, and the reconciler closes it once Home Assistant is back.
+  `_close_cut_short` says Home Assistant switched the valve off as it shut down, when it did. A shot
+  that ends while Home Assistant is away still counts its whole time.
+- Tests: `addons/f2_control/tests/test_ha_restart.py`. The fake Home Assistant answers nothing while
+  `running` is False, and `ha_running` is faked in `fake_ha.install`, the add-on suite's conftest and
+  `tests_ha`'s `controller_for`. `tests_ha/test_refill_through_a_restart.py` has the real
+  integration's shutdown marker read by the real controller; `tests/test_state_migration.py`. On the
+  test VM (2026.11.2) a restart read unreachable for 6 s, then `NOT_RUNNING` for 3 s, then `RUNNING`.
+- Docs: `docs/USER_GUIDE.md`.
 
 ## [1.7.0] - 2026-11-18
 
