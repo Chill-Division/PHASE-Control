@@ -34,6 +34,6 @@ The app's **Log** tab has a line a minute for every zone, each dated and named a
 
 ## Updating
 
-Update the integration and this app together. Use **Update** or **Rebuild** to include new Python code; restarting an old image does not rebuild it. Preserve persistent data and export strategies before upgrades. See the installation guide for rollback instructions.
+Update the integration and this app together. Use **Update** or **Rebuild** to include new Python code; restarting an old image does not rebuild it. A refill running when the app stops pauses, and carries on if the app is back within 10 minutes. Preserve persistent data and export strategies before upgrades. See the installation guide for rollback instructions.
 
 The display name is PHASE Controller. The existing f2_control slug remains stable for upgrade compatibility. The repository was renamed from HA-Irrigation-Strategy to PHASE-Control with the app, in October 2026 (for a day it was PHASE-Steering). If you added it under an old name, leave it: GitHub sends the old address on to the new one, and removing it to add the new address would install a second, empty copy of this app. The app and the integration carry one version number: run the same release of both. The dashboard sidebar shows both, as reported by the running parts. Local browser/unit checks do not constitute a live HA installation test.

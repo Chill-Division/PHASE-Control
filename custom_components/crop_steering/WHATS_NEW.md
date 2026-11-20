@@ -24,7 +24,7 @@ version being released.
 ## Unreleased
 
 - Restarting or updating Home Assistant now switches your pumps, valves and dosers off first, so nothing keeps running while it's away.
-- A refill interrupted by a Home Assistant restart or update now carries on by itself once Home Assistant is back.
+- A refill interrupted by restarting or updating Home Assistant or the controller app now carries on by itself once they're back.
 
 ## 1.7.0 - 2026-11-18
 

@@ -2,6 +2,7 @@
 
 - As Home Assistant shuts down for a restart or an update, the integration switches each room's pumps, valves and dosers off while the devices are still connected, so nothing is left running while Home Assistant is away.
 - While Home Assistant restarts or updates, the controller waits for it instead of reading every switch as off: a refill pauses and carries on once Home Assistant is back, its fill and its step running on for as long as they were off. A dose cut short stops the batch and says what went in, and nothing latches the hardware hold.
+- Updating, rebuilding or restarting this app pauses a refill too, instead of ending it: an app back within 10 minutes carries it on the same way. The update to this version still stops a running refill, since the old version is the one that stops.
 
 # 1.7.0
 
