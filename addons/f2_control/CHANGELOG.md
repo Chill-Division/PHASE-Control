@@ -1,4 +1,6 @@
-# Unreleased
+# 1.8.0
+
+Pair with integration 1.8.0.
 
 - Installing this update may still interrupt a tank refill, or a dose, that's running at the time, but updates after it won't: from now on a refill pauses while Home Assistant or this app restarts or updates, and picks up where it left off. A dose running at that moment stops the refill cleanly, and the notice says how much went in.
 - Home Assistant switches each room's pumps, valves and dosers off as it shuts down, so nothing runs while it's away, and watering carries on once it's back.
