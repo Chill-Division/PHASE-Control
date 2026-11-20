@@ -448,3 +448,33 @@ def test_a_batch_record_from_before_the_refill_reminder_loads_with_none_up(tmp_p
         2.07,
     )
     assert batch["last"]["stage"] == "Flower" and batch["reminded_at"] is None
+
+
+def test_a_batch_record_from_before_restarts_paused_it_loads_running_and_a_paused_one_stays_paused(
+    tmp_path,
+):
+    """1.7's `_batch` block has no `away`: a refill saved part-way loads as running (and so is switched
+    off at the next start, as before), not paused. One saved while Home Assistant was away keeps when
+    that was, and a damaged value is dropped."""
+    p = tmp_path / "state.json"
+    saved = {
+        "step": "mixing",
+        "switches": {"pump": "switch.pump"},
+        "until": "2026-11-20T09:00:00",
+    }
+    p.write_text(json.dumps({"default": {"1": {"phase": "P2"}, "_batch": saved}}))
+    c = _make([1], p)
+    c._load_state()
+    batch = c.rooms[0].batch
+    assert batch["step"] == "mixing" and batch["away"] is None
+    assert c.rooms[0]._batch_crashed
+
+    for away, kept in (("2026-11-20T08:59:40", "2026-11-20T08:59:40"), (12, None)):
+        p.write_text(
+            json.dumps(
+                {"default": {"1": {"phase": "P2"}, "_batch": {**saved, "away": away}}}
+            )
+        )
+        c = _make([1], p)
+        c._load_state()
+        assert c.rooms[0].batch["away"] == kept

@@ -25,6 +25,7 @@ class FakeHA:
         self.calls: list[tuple] = []  # (domain, service, data)
         self.sets: dict[str, tuple] = {}  # entity_id -> (state, attributes)
         self.history: dict[str, list] = {}  # entity_id -> what ha_history returns (a test's own)
+        self.running = True  # False: Home Assistant is away (restarting, updating) - see ha_running
 
     # ---- state helpers ----
     def set_state(self, entity_id, state, attributes=None, last_updated=_CURRENT_TIMESTAMP):
@@ -37,11 +38,15 @@ class FakeHA:
 
     # ---- controller shims ----
     def ha_get(self, entity, timeout=8):
+        if not self.running:  # unreachable: nothing reads, as the controller's ha_get gives it
+            return _Read((None, {}, None))
         read = _Read(self.states.get(entity, (None, {}, None)))
         read.last_changed = self.changed.get(entity) if entity in self.states else None
         return read
 
     def ha_call(self, domain, service, **data):
+        if not self.running:  # unreachable: the call never gets there
+            return False
         self.calls.append((domain, service, data))
         # emulate a switch actually toggling, so valve read-back sees the new state; as in Home
         # Assistant, its attributes (its friendly name) stay
@@ -56,11 +61,16 @@ class FakeHA:
 
     def ha_history(self, entity, since, timeout=12):
         """What the recorder holds from `since`: a test's own list, else the state the entity is in now."""
+        if not self.running:
+            return None
         if entity in self.history:
             return self.history[entity]
         if entity not in self.states:
             return None
         return [(self.states[entity][0], self.changed.get(entity))]
+
+    def ha_running(self, timeout=5):
+        return self.running
 
     def ha_get_all(self):
         out = []
@@ -69,7 +79,8 @@ class FakeHA:
         return out
 
     def ha_set(self, entity, state, attributes=None, timeout=None):
-        self.sets[entity] = (state, attributes or {})
+        if self.running:
+            self.sets[entity] = (state, attributes or {})
 
 
 def install(controller, fake: FakeHA, options: dict):
@@ -84,6 +95,7 @@ def install(controller, fake: FakeHA, options: dict):
         controller.ha_get_all,
         controller.ha_set,
         controller.ha_history,
+        controller.ha_running,
     )
     controller.load_options = lambda: dict(options)
     controller.ha_get = fake.ha_get
@@ -91,4 +103,5 @@ def install(controller, fake: FakeHA, options: dict):
     controller.ha_get_all = fake.ha_get_all
     controller.ha_set = fake.ha_set
     controller.ha_history = fake.ha_history
+    controller.ha_running = fake.ha_running
     return orig
