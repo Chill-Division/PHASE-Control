@@ -1,3 +1,4 @@
+import { RelearnPeak } from "@/components/relearn-peak";
 import { useState } from "react";
 import { Droplets, Layers, Power, Ruler, Sparkles } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -365,8 +366,18 @@ const STATE_CLASS: Record<AutoSetpointStatus["state"], string> = {
   off: "status-neutral",
   unavailable: "status-neutral",
 };
-/** Per-zone supervisor status: state (and why it is frozen), learned peak, last change. */
-export function AutoZoneChip({ status, name }: { status: AutoSetpointStatus; name?: string }) {
+/** Per-zone supervisor status: state (and why it is frozen), learned peak with its Relearn peak, last
+ * change. */
+export function AutoZoneChip({
+  status,
+  name,
+  relearn,
+}: {
+  status: AutoSetpointStatus;
+  name?: string;
+  /** Where Relearn peak asks for this zone; none, no button. */
+  relearn?: { controller: Controller; zoneId: number; zoneName: string };
+}) {
   const hold = autoHoldText(status),
     reason = autoFrozenReason(status);
   return (
@@ -385,6 +396,7 @@ export function AutoZoneChip({ status, name }: { status: AutoSetpointStatus; nam
         <b>{status.learnedPeak === null ? "not yet known" : `${status.learnedPeak.toFixed(1)}%`}</b>
         {hold ? ` (${hold})` : ""}
       </span>
+      {relearn && <RelearnPeak {...relearn} status={status} />}
       <span>
         Last change <b>{status.lastChange ?? "none yet"}</b>
       </span>
