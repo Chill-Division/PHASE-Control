@@ -1,11 +1,12 @@
-"""Buttons for PHASE Control: "Mix a Batch Now" for the room's reservoir, and a "Test Shot" for each
-zone.
+"""Buttons for PHASE Control: "Mix a Batch Now" for the room's reservoir, and a "Test Shot" and a
+"Relearn Peak" for each zone.
 
 Pressing one does nothing here. Home Assistant records when it was pressed as the button's state, and
 the controller app, which reads that, acts the next time it looks: Mix a Batch Now refills, mixes and
 doses the reservoir (feed.py); a zone's Test Shot waters that zone for 10 seconds, to check that
 watering works. Each is a request, not a command: the controller only acts while the room's watering
-switch is on and nothing else is in the way, and says so if it cannot.
+switch is on and nothing else is in the way, and says so if it cannot. A zone's Relearn Peak has the
+controller's Auto setpoints forget the peak it learned for the zone, which waters nothing.
 """
 
 from __future__ import annotations
@@ -35,6 +36,7 @@ async def async_setup_entry(
         [
             CropSteeringMixBatchButton(entry),
             *(CropSteeringTestShotButton(entry, zone) for zone in range(1, zones + 1)),
+            *(CropSteeringRelearnButton(entry, zone) for zone in range(1, zones + 1)),
         ]
     )
 
@@ -93,6 +95,39 @@ class CropSteeringTestShotButton(ButtonEntity):
     async def async_press(self) -> None:
         _LOGGER.info(
             "Test shot requested for zone %s of %s",
+            self._zone,
+            room_prefix(self._entry) or "the room",
+        )
+
+
+class CropSteeringRelearnButton(ButtonEntity):
+    """A zone's Relearn Peak: the controller app's Auto setpoints forgets the peak it learned for the
+    zone, after the plants or the probe changed (a defoliation, a transplant, a probe moved). The
+    zone's next ramp stops where the substrate stops taking water, and that is its peak from then on.
+    What else it learned stays: how much a shot lifts the zone and how fast it dries."""
+
+    _attr_icon = "mdi:restore"
+
+    def __init__(self, entry: ConfigEntry, zone: int) -> None:
+        self._entry, self._zone = entry, zone
+        self._attr_unique_id = f"{DOMAIN}_{entry.entry_id}_zone_{zone}_relearn_peak"
+        self._attr_name = f"Zone {zone} Relearn Peak"
+        self._attr_object_id = f"{DOMAIN}_{room_prefix(entry)}zone_{zone}_relearn_peak"
+        self.entity_id = f"button.{self._attr_object_id}"
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        return DeviceInfo(
+            identifiers={(DOMAIN, f"{self._entry.entry_id}_zone_{self._zone}")},
+            name=zone_device_name(self._entry, self._zone),
+            manufacturer="Home Assistant Community",
+            model="Zone Controller",
+            sw_version=SOFTWARE_VERSION,
+        )
+
+    async def async_press(self) -> None:
+        _LOGGER.info(
+            "Relearning the peak asked for zone %s of %s",
             self._zone,
             room_prefix(self._entry) or "the room",
         )

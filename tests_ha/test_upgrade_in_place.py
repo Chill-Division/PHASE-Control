@@ -258,6 +258,18 @@ async def test_an_old_room_gains_a_test_shot_button_on_each_zones_device_never_p
     assert registry.async_get("button.crop_steering_zone_1_trigger_shot") is None
 
 
+async def test_an_old_room_gains_a_relearn_peak_button_on_each_zones_device_never_pressed(hass):
+    """Each of the 2.17 room's two zones gets its Relearn Peak, unpressed, on the zone's own device:
+    nothing is relearned by the update itself."""
+    await _upgrade(hass, "entry_2_17_wizard.json")
+    registry = er.async_get(hass)
+    for zone in (1, 2):
+        button = f"button.crop_steering_zone_{zone}_relearn_peak"
+        assert hass.states.get(button).state == "unknown"
+        number = registry.async_get(f"number.crop_steering_zone_{zone}_plant_count")
+        assert registry.async_get(button).device_id == number.device_id
+
+
 @pytest.mark.parametrize(
     "name", ["entry_2_17_wizard.json", "entry_2_18_one_switch_tent.json", "entry_env_era.json"]
 )

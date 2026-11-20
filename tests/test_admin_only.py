@@ -67,6 +67,7 @@ CHANGES = {
     "feed_save": {"room_id": ROOM, "expected_revision": 0, "document": {}},
     "feed_mix": {"room_id": ROOM},
     "test_shot": {"room_id": ROOM, "zone": 1},
+    "relearn_peak": {"room_id": ROOM, "zone": 1},
     "room_order_save": {"rooms": [ROOM]},
 }
 
@@ -149,8 +150,11 @@ def rig(monkeypatch):
         monkeypatch.setattr(setup_api, name, fake)
 
     hass = ha_stubs.FakeHass(
-        # the zone's Test Shot button, which test_shot presses
-        states={f"button.{DOMAIN}_zone_1_test_shot": "unknown"},
+        # the zone's Test Shot and Relearn Peak buttons, which test_shot and relearn_peak press
+        states={
+            f"button.{DOMAIN}_zone_1_test_shot": "unknown",
+            f"button.{DOMAIN}_zone_1_relearn_peak": "unknown",
+        },
         data={
             DOMAIN: {
                 "_manual_overrides": {"zone_1_manual_override": override},
