@@ -1,3 +1,7 @@
+# Unreleased
+
+- A leak check after every shot: a shot that takes far more from the reservoir than this room's shots usually do warns (CS-708), and the second in a row holds watering (CS-709) until watering is switched off and on again. Rescue shots still run: for a zone at its rescue level, the watchdog's for a zone left dry too long, and a zone without a probe reading on its timer. Set how far over the usual counts, and whether it holds or only warns, on the Feed → Reservoir page.
+
 # 1.8.0
 
 Pair with integration 1.8.0.
