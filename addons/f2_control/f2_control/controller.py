@@ -571,6 +571,28 @@ BATCH_STEP_WORDS = {"filling": "filling", "filling_mixing": "filling and mixing"
 # Why a shot waits while the room's recirculation solenoid reads on with no refill running
 # (Controller._recirc_on), where it waits and in the log. The dashboard knows it by its start.
 RECIRC_HOLD = "recirculation on (a shot would only go back into the reservoir)"
+# A shot that takes far more from the reservoir than this room's shots usually do: water escaping, from
+# a burst line, a loose fitting or a lateral off its clip (GR1, 21 Nov 2026: from the 10:15 shot each
+# 7.2 L shot took about 40 L, until the tank ran dry). Judged once the level has settled after a shot,
+# against how far this room's shots USUALLY take the level down for their litres, learned from its own
+# shots: a room whose drippers give more than set takes more from its tank every shot (GR1's took 1.45
+# times their litres), and that is its normal. In points of the level, so a room whose refills have
+# never shown what 1% holds (filled by hand) is judged too; its litres are said where they have.
+DRAW_SETTLE_S = 120.0  # after a shot, how long before the level counts as settled
+DRAW_STALE_S = 1800.0  # a shot judged by now never will be (no reading since): the next starts afresh
+DRAW_LEARN_SHOTS = 3  # shots whose average is the room's usual before any is judged a leak
+DRAW_ALPHA = 0.3  # from then on, the weight of each new normal shot in it...
+DRAW_STEP = (0.5, 2.0)  # ...which counts as at most this far from the usual: one odd reading moves it little
+DRAW_MIN_L = 2.0  # what a shot (or shots in a row) must give to be judged on the level at all
+# The leak check's settings when the integration sends none (one from before it): a shot is leaky once
+# it takes this many times its usual and at least this many litres more; watering holds at the second.
+LEAK_FACTOR, LEAK_MIN_L = 3.0, 10.0
+LEAK_NOISE_PCT = 2.0  # ...and more than this many points of the level over its usual: a level's wobble
+# Why a shot waits while two shots in a row took far more from the reservoir than usual. Still run: the
+# shots a plan hold never stops (PLAN_HOLD_EXEMPT: the rescues and a test shot), and any shot for a zone
+# at or under its rescue level, or whose watchdog is due (_leak_block). Better to try and get some water
+# on the plants than to let them die (the owner, 21 Nov 2026). The dashboard knows it by its start.
+LEAK_HOLD = "leak suspected: two shots took far more from the reservoir than usual"
 BATCH_LOW_PASSES = 3  # passes a refill must read due before an automatic one starts (one bad echo)
 FILL_RISE_PCT = 5.0  # half-way through its fill, the reservoir must read at least this much fuller
 LEARN_RISE_PCT = 10.0  # a refill that raised it less than this does not teach its litres per 1%
@@ -655,6 +677,15 @@ def fresh_batch():
         # When the controller app stopped while this batch ran (_safe_off): it is paused too, and the
         # app carries it on if it is back within APP_RESUME_S. None while it runs.
         "app_stopped": None,
+        # How far this room's shots usually take the reservoir's level down, points a litre of shots
+        # (learned from shots judged normal, _draw_judge), and how many have taught it: None and 0
+        # until one has.
+        "draw_pct_per_l": None,
+        "draw_n": 0,
+        "leaky": 0,  # shots in a row that took far more than usual (CS-708 at the first)
+        # Watering held for a leak, from the second such shot (CS-709): when, and what it took. None
+        # while not held. Switching the room's watering off clears it.
+        "leak_hold": None,
     }
 
 
@@ -663,19 +694,19 @@ def restore_batch(saved):
     batch = fresh_batch()
     if not isinstance(saved, dict):
         return batch
-    kinds = {"step": str, "index": int, "dosed": dict, "low_seen": int, "armed": bool}
+    kinds = {"step": str, "index": int, "dosed": dict, "low_seen": int, "armed": bool, "draw_n": int, "leaky": int}
     for key, default in batch.items():
         value = saved.get(key, default)
         wanted = kinds.get(key)
         if wanted is not None and type(value) is not wanted:
             continue
-        if key in ("litres_per_pct", "start_pct") and value is not None and not (
+        if key in ("litres_per_pct", "start_pct", "draw_pct_per_l") and value is not None and not (
             type(value) in (int, float) and math.isfinite(value) and (value > 0 or key == "start_pct")
         ):
             continue
         if key in ("fill_end", "reminded_at", "away", "app_stopped") and value is not None and not isinstance(value, str):
             continue
-        if key in ("plan", "last", "interrupted", "switches") and value is not None and not isinstance(
+        if key in ("plan", "last", "interrupted", "switches", "leak_hold") and value is not None and not isinstance(
             value, dict
         ):
             continue
@@ -716,8 +747,26 @@ def feed_plan(attrs):
     if not all(math.isfinite(value) and value >= 0 for value in plan.values()):
         return None
     plan.update(stage=attrs.get("stage"), problem=attrs.get("problem"), doses=doses,
-                feed_ec=_recipe_feed_ec(attrs.get("feed_ec")))
+                feed_ec=_recipe_feed_ec(attrs.get("feed_ec")), **_leak_settings(attrs))
     return plan
+
+
+def _leak_settings(attrs):
+    """The leak check's settings from the feed plan sensor: an integration from before them sends none,
+    and the check runs on its own defaults (LEAK_FACTOR, LEAK_MIN_L, holding). A factor of 0 is off."""
+    def number(key, default, low, high):
+        try:
+            value = float(attrs[key])
+        except (KeyError, TypeError, ValueError):
+            return default
+        return value if math.isfinite(value) and low <= value <= high else default
+
+    hold = attrs.get("leak_hold")
+    return {
+        "leak_factor": number("leak_factor", LEAK_FACTOR, 0.0, 20.0),
+        "leak_min_l": number("leak_min_l", LEAK_MIN_L, 0.0, 500.0),
+        "leak_hold": hold if isinstance(hold, bool) else True,
+    }
 
 
 def _recipe_feed_ec(value):
@@ -2589,6 +2638,242 @@ class Controller:
         )
         return f"reservoir too low: {why} ({cannot})"
 
+    # ---------- the leak check: what each shot takes from the reservoir ----------
+    def _reservoir_pct_now(self, room):
+        """How full the room's reservoir reads now, %, or None: no level set up, or no reading."""
+        res = room.hw.get("reservoir") or {}
+        plan = (getattr(room, "_res", None) or {}).get("plan")
+        if not res.get("distance") or not plan:
+            return None
+        return level_pct(self._level_now(res["distance"]), plan.get("full_mm", 0.0), plan.get("empty_mm", 0.0))
+
+    def _draw_begin(self, room):
+        """Before a shot opens anything: the reservoir's level, to judge what the shot takes from it
+        (_draw_judge). A shot that comes before the last one has been judged (its level settling, or
+        read again) is judged together with it, from the level before the first: in a room whose zones
+        have a valve each, the shots of one pass are judged as one."""
+        now = datetime.now()
+        pending = getattr(room, "_draw", None)
+        if pending and (now - (pending["closed"] or pending["at"])).total_seconds() < DRAW_STALE_S:
+            pending.pop("after", None)  # this shot joins it: a reading taken before it says nothing now
+            return
+        room._draw = None
+        if self._tank_shared(room):  # another room's shots would count as this one's
+            return
+        before = self._reservoir_pct_now(room)
+        room._draw = None if before is None else {"before": before, "litres": 0.0, "at": now, "closed": None}
+
+    def _tank_shared(self, room):
+        """Does another room read the same level sensor: one reservoir for both. Its level can't tell one
+        room's shots from the other's, so the leak check doesn't judge either."""
+        level = (room.hw.get("reservoir") or {}).get("distance")
+        return bool(level) and any((other.hw.get("reservoir") or {}).get("distance") == level
+                                   for other in self.rooms if other is not room)
+
+    def _draw_shot(self, room, litres):
+        """A shot has given `litres` (every zone it watered): its level is judged once it settles."""
+        pending = getattr(room, "_draw", None)
+        if pending is not None:
+            pending["litres"] += litres
+            pending["shots"] = pending.get("shots", 0) + 1
+            pending["closed"] = datetime.now()
+
+    @staticmethod
+    def _usual_draw(batch):
+        """How far this room's shots usually take its reservoir's level down, points a litre of shots,
+        once DRAW_LEARN_SHOTS have taught it (and it moves at all), else None."""
+        usual = batch.get("draw_pct_per_l")
+        return usual if (batch.get("draw_n") or 0) >= DRAW_LEARN_SHOTS and usual and usual > 0 else None
+
+    def _draw_judge(self, room, now):
+        """How far the shot (or shots in a row) took the reservoir's level down, once it has settled,
+        against how far this room's shots usually take it for their litres: far further is leaky
+        (_leaky_shot), anything else teaches the usual (_normal_draw). The first DRAW_LEARN_SHOTS only
+        teach it. One that reads leaky is read again a pass later and judged on the fuller of the two
+        readings, so one bad echo is no leak. Nothing is judged with the room's leak check off, across a
+        refill, when the level rose, or on a shot too small to show."""
+        pending = getattr(room, "_draw", None)
+        if not pending:
+            return
+        if pending["closed"] is None:  # the shot gave no water (a shot runs within one pass)
+            room._draw = None
+            return
+        if (now - pending["closed"]).total_seconds() < DRAW_SETTLE_S:
+            return
+        batch = room.batch
+        plan = (getattr(room, "_res", None) or {}).get("plan") or _leak_settings({})
+        refilled, after = _when(batch.get("started")), self._reservoir_pct_now(room)
+        if (plan["leak_factor"] <= 0 or batch.get("step") != "idle" or after is None
+                or (refilled is not None and refilled >= pending["at"]) or pending["litres"] < DRAW_MIN_L):
+            room._draw = None
+            return
+        after = max(after, pending.get("after", after))  # read twice: the fuller reading
+        took, litres = pending["before"] - after, pending["litres"]  # points of the level, litres of shots
+        if took < 0:  # the level rose: water went in, by hand or otherwise
+            room._draw = None
+            return
+        per_l, per_pct = self._usual_draw(batch), batch.get("litres_per_pct")
+        usual = litres * per_l if per_l else None
+        # The litres over the usual a leak must take, in points: by what 1% holds once a refill has shown
+        # it, else as this room's own shots take the level down.
+        over = plan["leak_min_l"] / per_pct if per_pct else plan["leak_min_l"] * (per_l or 0.0)
+        leaky = (usual is not None and took >= usual * plan["leak_factor"]
+                 and took - usual >= max(over, LEAK_NOISE_PCT))
+        if leaky and "after" not in pending:
+            pending["after"] = after  # read again next pass
+            return
+        room._draw = None
+        what = {"litres": litres, "shots": pending.get("shots", 1), "took": took, "usual": usual,
+                "per_pct": per_pct}
+        if leaky:
+            self._leaky_shot(room, now, what, plan)
+        else:
+            self._normal_draw(room, what)
+        self._save_state()
+
+    def _normal_draw(self, room, what):
+        """A shot that took what this room's shots usually do: it ends a leak warning, and teaches the
+        usual, unless watering is held for a leak (only a rescue or a test runs then)."""
+        batch = room.batch
+        if batch.get("leaky"):
+            batch["leaky"] = 0
+            self._resolve_alert(f"leak_{room.slug}")
+            self._say(room, None, f"the reservoir's drop is back to normal: {self._leak_words(what)}")
+        if batch.get("leak_hold"):
+            return
+        sample, usual, n = what["took"] / what["litres"], batch.get("draw_pct_per_l"), batch.get("draw_n") or 0
+        if usual is None or n <= 0:
+            learned = sample
+        elif n < DRAW_LEARN_SHOTS:  # the average of the first
+            learned = usual + (sample - usual) / (n + 1)
+        else:
+            low, high = DRAW_STEP
+            learned = usual + DRAW_ALPHA * (min(max(sample, usual * low), usual * high) - usual)
+        batch["draw_pct_per_l"], batch["draw_n"] = round(learned, 4), n + 1
+
+    def _leaky_shot(self, room, now, what, plan):
+        """A shot that took far more from the reservoir than usual: said at the first (CS-708), and at the
+        second in a row watering is held (CS-709), when the room's leak check holds (its default)."""
+        batch = room.batch
+        batch["leaky"] = (batch.get("leaky") or 0) + 1
+        self._say(room, None, f"leak warning: {self._leak_words(what)}")
+        if batch["leaky"] >= 2 and plan["leak_hold"]:
+            if not batch.get("leak_hold"):
+                batch["leak_hold"] = {"at": now.isoformat(), **{k: round(v, 2) if isinstance(v, float) else v
+                                                                for k, v in what.items()}}
+                self._say(room, None, "watering held: two shots in a row took far more from the reservoir than usual")
+            self._resolve_alert(f"leak_{room.slug}")  # the hold's notification says it all
+            self._alert_leak_hold(room)
+            return
+        self._alert(
+            f"leak_{room.slug}",
+            "CS-708",
+            "a shot took far more from the reservoir than usual",
+            f"{self._leak_words(what, start=True)}. Water may be escaping, from a burst line, a loose fitting "
+            "or a lateral off its clip: check the lines and fittings. "
+            + ("If the next shot does the same, watering in this room is held." if plan["leak_hold"]
+               else "Watering carries on: this room's leak check is set not to hold it."),
+            room=room,
+        )
+
+    @staticmethod
+    def _leak_words(what, start=False):
+        """What a shot took from the reservoir, against what this room's shots that size usually take:
+        "a 7.2 L shot took 19% of the reservoir (about 39 L), where this room's shots that size usually
+        take 5.0% (about 10 L)". The litres once a refill has shown what 1% holds."""
+        per_pct = what.get("per_pct")
+
+        def amount(points):
+            pct = f"{points:.1f}%" if points < 10 else f"{points:.0f}%"
+            return f"{pct} (about {points * per_pct:.0f} L)" if per_pct else pct
+
+        litres, shots = what["litres"], what.get("shots", 1)
+        shot = f"{litres:.1f} L of shots in a row" if shots > 1 else f"a {litres:.1f} L shot"
+        if start:
+            shot = shot[:1].upper() + shot[1:]
+        words = f"{shot} took {amount(what['took']).replace('%', '% of the reservoir', 1)}"
+        if what.get("usual") is not None:
+            words += f", where this room's shots that size usually take {amount(what['usual'])}"
+        return words
+
+    def _alert_leak_hold(self, room):
+        """The leak hold's notification (CS-709): raised when watering is held, and again while it holds
+        a shot (every 30 minutes at most, _alert), so a restart that loses it brings it back."""
+        hold = room.batch.get("leak_hold") or {}
+        last = ""
+        if all(isinstance(hold.get(k), (int, float)) for k in ("litres", "took", "usual")):
+            last = f" The last: {self._leak_words(hold)}."
+        self._alert(
+            f"leak_hold_{room.slug}",
+            "CS-709",
+            "watering held, a leak?",
+            "Two shots in a row took far more from the reservoir than this room's shots usually do." + last
+            + " Water is probably escaping, from a burst line, a loose fitting or a lateral off its clip, so "
+            "only rescue shots run in this room: for a zone at its rescue level, the watchdog's for a zone "
+            "left dry too long, and a zone without a probe reading on its timer. Fix the leak, then switch "
+            "the room's watering off (Watching only) and back on to carry on.",
+            room=room,
+        )
+
+    def _leak_block(self, room, zone, snaps, params, reason):
+        """The leak hold (CS-709), or None: a shot waits while two shots in a row took far more from the
+        reservoir than usual, except a rescue, which a plan hold doesn't stop either (PLAN_HOLD_EXEMPT:
+        the P3 emergency, the watchdog's, a dead probe's safety timer and its copy of a sibling's
+        rescue, and a test shot a person asked for), and any shot for a zone that needs water to live
+        (_leak_rescue; a dead probe's copy of another zone's shot goes by that zone). Better to try and
+        get some water on the plants than to let them die, whatever is lost."""
+        if not room.batch.get("leak_hold"):
+            return None
+        kind = getattr(reason, "kind", None)
+        if kind in PLAN_HOLD_EXEMPT:
+            self._say(room, zone, f"{LEAK_HOLD}, but a {log_words.shot(reason)[0]} still runs")
+            return None
+        looked = getattr(reason, "copies", zone) if kind == "blind_copy" else zone
+        why = self._leak_rescue(snaps.get(looked), params.get(looked))
+        if why:
+            self._say(room, zone, f"{LEAK_HOLD}, but {why}: its shot still runs")
+            return None
+        self._alert_leak_hold(room)
+        return LEAK_HOLD
+
+    @staticmethod
+    def _leak_rescue(snap, p):
+        """Why a zone's shot runs through a leak hold whatever shot it is, or None: the zone reads at or
+        under its rescue level (its emergency floor), in any phase, or its watchdog is due (in daylight
+        and out of P0, no water for its watchdog hours and under its maintenance trigger). decide()
+        calls a held zone's shot by its routine's name, a P2 top-up say, while the routine is due, so
+        the watchdog's own shot never comes: the routine's runs in its place."""
+        if snap is None or p is None:
+            return None
+        if snap.vwc <= p.p3_emergency_floor:
+            return "this zone is at its rescue level"
+        if (p.watchdog_hours > 0 and snap.lights_on and snap.phase != "P0"
+                and snap.minutes_since_shot > p.watchdog_hours * 60.0 and snap.vwc < p.p2_threshold):
+            return f"this zone has had no water for {snap.minutes_since_shot / 60.0:.1f} h (its watchdog)"
+        return None
+
+    def _leak_hold_cleared(self, room):
+        """Switching the room's watering off (or the room off) ends a leak hold: someone has seen to it,
+        or will before switching it back on. So does the room's leak check being set not to hold, or
+        switched off."""
+        batch = room.batch
+        if not batch.get("leak_hold"):
+            return
+        plan = (getattr(room, "_res", None) or {}).get("plan") or _leak_settings({})
+        if plan["leak_hold"] and plan["leak_factor"] > 0:
+            if str(ha_get(room.enable_flag)[0]).lower() != "off" and self._room_active(room):
+                return
+            why = "the room's watering was switched off"
+        else:
+            why = "the room's leak check was set not to hold"
+        batch.update(leak_hold=None, leaky=0)
+        self._save_state()
+        for key in (f"leak_hold_{room.slug}", f"leak_{room.slug}"):  # up since before a restart, too
+            self._alerted.pop(key, None)
+            self._alert_codes.pop(key, None)
+            ha_call("persistent_notification", "dismiss", notification_id=f"f2_{key}")
+        self._say(room, None, f"leak hold cleared: {why}")
+
     def _refill_cannot(self, room):
         """Why the reservoir can't be refilled by itself now, or None: automatic refills off, the last
         refill not raising it, or a batch that can't start (_batch_refusal)."""
@@ -2647,6 +2932,11 @@ class Controller:
                 room=room,
             )
         room._res = self._reservoir_reading(room, res) if res is not None else None
+        try:  # the leak check must never stop a refill's next step
+            self._draw_judge(room, now)
+            self._leak_hold_cleared(room)
+        except Exception as e:
+            log("leak check error", room.slug, e)
         if batch["step"] != "idle":
             if res is None:
                 self._batch_stop(room, now, "its reservoir is no longer mapped in Settings → Rooms & hardware")
@@ -3400,6 +3690,10 @@ class Controller:
                 "empty_mm": plan.get("empty_mm"),
                 "min_pct": plan.get("min_pct"),
                 "litres_per_pct": batch.get("litres_per_pct"),
+                # how far this room's shots usually take its level down, points a litre of shots (None
+                # until learned), and the leak hold (CS-709), while watering waits on it
+                "usual_draw": self._usual_draw(batch),
+                "leak_hold": batch.get("leak_hold"),
                 # will the room's next round of shots take it under its minimum (None: can't tell)
                 "due": self._refill_due(room) if not running else None,
                 "next_round_l": round(getattr(room, "_next_round_l", 0.0) or 0.0, 2),
@@ -4007,7 +4301,9 @@ class Controller:
                 for mate in mates}
 
     def _count_shot(self, room, size_pct, *, delivered_l, steering, shares):
-        """A delivered shot's water, counted on every zone it reached (`shares`, from _shares)."""
+        """A delivered shot's water, counted on every zone it reached (`shares`, from _shares), and what it
+        took from the reservoir judged once the level settles (_draw_shot)."""
+        self._draw_shot(room, delivered_l * sum(shares.values()))
         for mate, share in shares.items():
             self._advance_shot_counters(room, mate, size_pct, delivered_l=delivered_l * share,
                                         steering=steering)
@@ -4557,6 +4853,10 @@ class Controller:
         nominal_l = (flow_lps * duration_s if flow_lps is not None
                      else size_pct / 100.0 * self._substrate_l(room, zone))
         shares = self._shares(room, zone)
+        try:  # the reservoir's level before anything opens (the leak check), which never stops a shot
+            self._draw_begin(room)
+        except Exception as e:
+            log("leak check error", room.slug, e)
         self._busy = True
         self._shot_room = room  # the room whose shot is in flight right now (see _safe_off)
         hw = room.hw
@@ -5432,6 +5732,7 @@ class Controller:
                 rescue = getattr(s_reason, "kind", None) in PLAN_HOLD_EXEMPT
                 decisions[zone] = (s_fire, s_size, Reason(f"COPY Z{sib} (VWC probe dead)",
                                                           "blind_copy_rescue" if rescue else "blind_copy"))
+                decisions[zone][2].copies = sib  # a leak hold goes by the zone it copies (_leak_block)
                 plan = (
                     "Until it reads normally again, this zone gets the same shots as "
                     f"{self._zone_title(room, sib)}, whose probe is working."
@@ -5501,6 +5802,8 @@ class Controller:
             # would have stopped (ZoneSnapshot.steering_held), so the hold is said here instead.
             block = (self._blocked(room, zone, reason) if fire
                      else strategy_block(getattr(room, "strategy_snapshot", None), zone))
+            if fire and not block:
+                block = self._leak_block(room, zone, snaps, params, reason)
             if fire and not block:
                 block = self._reservoir_block(room, zone, size)
             acted = self._act_zone(

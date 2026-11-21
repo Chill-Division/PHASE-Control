@@ -21,6 +21,10 @@ people who build the system:
 `tests/test_whats_new.py` checks the shape and the plain words, and that the newest section is the
 version being released.
 
+## Unreleased
+
+- If two shots in a row drain far more from the tank than usual, such as from a line off its clip, watering now pauses and tells you, and rescue shots still run. Set how sensitive it is on the Reservoir page.
+
 ## 1.8.0 - 2026-11-21
 
 - Installing this update may interrupt a refill that's running, but later ones won't: a refill now picks up where it left off after a restart or an update.

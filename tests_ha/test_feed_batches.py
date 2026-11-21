@@ -360,13 +360,82 @@ async def test_the_refill_reminder_reaches_the_real_controller_which_says_it_onc
     )
 
 
+async def test_the_leak_check_settings_reach_the_real_controller(
+    hass, hass_admin_user, controller_for
+):
+    """The leak check's settings, saved through the real feed_save, are on the feed plan sensor, and
+    the real controller judges by them: 3 times the usual and 10 L more, holding at the second leaky
+    shot, until a room sets its own. A factor that would call ordinary shots leaks is refused."""
+    hass.states.async_set(
+        "sensor.res_distance", "719.5", {"unit_of_measurement": "mm"}
+    )
+    for entity in list(RESERVOIR.values())[1:]:
+        hass.states.async_set(entity, "off")
+    await _install(hass)
+    room = await _room(hass, hass_admin_user)
+    await _service(
+        hass, hass_admin_user, "setup_save", _payload(room, hardware=RESERVOIR)
+    )
+    await hass.async_block_till_done()
+    attributes = hass.states.get(PLAN).attributes
+    assert (
+        attributes["leak_factor"],
+        attributes["leak_min_l"],
+        attributes["leak_hold"],
+    ) == (3.0, 10.0, True)
+
+    doc = await _service(hass, hass_admin_user, "feed_get", {"room_id": "room:"})
+    assert (doc["leak_factor"], doc["leak_min_l"], doc["leak_hold"]) == (3.0, 10.0, True)
+    settings = {"full_mm": 125, "empty_mm": 850, "leak_factor": 4.5, "leak_min_l": 25}
+    await _service(
+        hass,
+        hass_admin_user,
+        "feed_save",
+        {
+            "room_id": "room:",
+            "expected_revision": doc["revision"],
+            "document": {**settings, "leak_hold": False},
+        },
+    )
+    await hass.async_block_till_done()
+    attributes = hass.states.get(PLAN).attributes
+    assert (
+        attributes["leak_factor"],
+        attributes["leak_min_l"],
+        attributes["leak_hold"],
+    ) == (4.5, 25.0, False)
+
+    c, _fake, _clock = controller_for({})
+    controller_room = c.rooms[0]
+    c._batch_tick(controller_room, datetime.now())
+    plan = controller_room._res["plan"]
+    assert (plan["leak_factor"], plan["leak_min_l"], plan["leak_hold"]) == (
+        4.5,
+        25.0,
+        False,
+    )
+
+    doc = await _service(hass, hass_admin_user, "feed_get", {"room_id": "room:"})
+    with pytest.raises(HomeAssistantError, match="or at least 1.5"):
+        await _service(
+            hass,
+            hass_admin_user,
+            "feed_save",
+            {
+                "room_id": "room:",
+                "expected_revision": doc["revision"],
+                "document": {"leak_factor": 1.2},
+            },
+        )
+
+
 async def test_a_feed_document_stored_by_2_30_loads_with_its_mark_as_the_empty_distance(
     hass, hass_storage
 ):
     """In place: a room's feed settings as 2.30.1 stored them (made by its own feed.clean), with an
     "almost empty at" mark of 800 mm and a 20 s settle. They load: the mark is the distance when
-    empty, the settle is gone, and the distance when full, the minimum and the refill reminder start
-    at their defaults; nothing else changes, its recipe and revision included."""
+    empty, the settle is gone, and the distance when full, the minimum, the refill reminder and the
+    leak check start at their defaults; nothing else changes, its recipe and revision included."""
     stored = {
         "revision": 5,
         "fill_s": 690,
@@ -404,6 +473,12 @@ async def test_a_feed_document_stored_by_2_30_loads_with_its_mark_as_the_empty_d
         plan.attributes["batch_l"],
     ) == (800.0, 0.0, 5.0, 600, 690, 145.0)
     assert plan.attributes["remind_pct"] == 20.0
+    # and the leak check at its defaults: 3 times the usual and 10 L more, holding at the second
+    assert (
+        plan.attributes["leak_factor"],
+        plan.attributes["leak_min_l"],
+        plan.attributes["leak_hold"],
+    ) == (3.0, 10.0, True)
     assert "settle_s" not in plan.attributes and plan.attributes["revision"] == 5
 
 

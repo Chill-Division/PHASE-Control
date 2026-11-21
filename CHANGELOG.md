@@ -10,6 +10,60 @@ and code-level detail for developers and AI agents working on the repo.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+- **A leak check after every shot.** A lateral that comes off its clip, a burst line or a loose
+  fitting can empty the reservoir in a few shots: in one room, from one morning shot on, each 7.2 L
+  shot took about 40 L from the tank until it ran dry, and nothing said so. Now, once the
+  reservoir's level has settled after a shot, the controller compares how far the shot took it down
+  with how far the room's shots usually do for their litres. It learns that from the room's own
+  shots, so drippers that give more than they're set to are no leak. A shot that takes far more, by
+  default 3 times as much and at least 10 L more, raises a warning (CS-708). If the next shot does
+  the same, watering in the room is held (CS-709): the room's line reads Not watering, with Switch
+  watering off…, and only rescue shots run: for a zone at its rescue level, the watchdog's for a
+  zone left dry too long, and a zone without a probe reading on its timer. Better some water, even
+  leaking, than plants left to dry out. Fix the leak, then switch watering off and back on. The
+  Reservoir page's new **Leak check** sets how far over the usual counts, and whether the second
+  leaky shot holds watering or only warns; a factor of 0 switches it off.
+
+### 🔧 Technical notes
+
+- Controller: `_draw_begin` (in `_execute_shot`, before anything opens) reads the reservoir's level,
+  `_count_shot` adds each shot's litres for every zone it watered (`_draw_shot`), and `_draw_judge`
+  (in `_batch_tick`, each pass) judges them once the level has settled `DRAW_SETTLE_S` (120 s) after
+  the last, in points of the level a litre of shots, against the room's learned `draw_pct_per_l`:
+  the average of its first `DRAW_LEARN_SHOTS` (3) shots, which judge nothing, then an EWMA in which
+  each shot counts as at most half to twice the usual. Leaky: `leak_factor` times the usual, and
+  `leak_min_l` more (by `litres_per_pct`, or as the room's own shots take the level before a refill
+  has shown it) and `LEAK_NOISE_PCT` (2 points) more, read again a pass later and judged on the
+  fuller reading. A shot that comes before the last one is judged joins it, so a pass's shots in a
+  room with a valve for each zone are judged as one. Nothing is judged with the check off, across a
+  refill (the batch's `started`), when the level rose or reads nothing, under `DRAW_MIN_L` (2 L), or
+  for a reservoir two rooms read (`_tank_shared`). The first leaky shot raises CS-708
+  (`leak_<room>`); the second in a row sets the batch's `leak_hold` and raises CS-709
+  (`leak_hold_<room>`, again while it holds a shot). `_leak_block`, in the zone loop before
+  `_reservoir_block`, holds each shot as `LEAK_HOLD` except the kinds a plan hold lets through
+  (`PLAN_HOLD_EXEMPT`: `p3_emergency`, `watchdog`, `blind_fallback`, `blind_copy_rescue`,
+  `test_shot`) and any shot for a zone at or under its `p3_emergency_floor` or whose watchdog is due
+  (`_leak_rescue`: decide() keeps naming a held zone's shot by its routine, so the watchdog's own
+  never comes; a dead probe's copy goes by the zone it copies, `Reason.copies`);
+  `_leak_hold_cleared` ends it once the watering switch or the room reads off, or the check is set
+  not to hold or switched off. The leak check's calls are fenced, so an error in it never stops a
+  refill step or a shot. New `_batch` keys `draw_pct_per_l`, `draw_n`, `leaky` and `leak_hold`,
+  checked by `restore_batch`; the batch status publishes `usual_draw` and `leak_hold`.
+  `test_leak_check.py`, `test_state_migration.py`.
+- Integration: `feed.py` `SETTINGS` gain `leak_factor` (0 to 20; 0 is off, else at least
+  `LEAK_FACTOR_LOWEST`, 1.5) and `leak_min_l` (0 to 500 L), defaults 3 and 10, and the document
+  `leak_hold` (default true), all on the feed plan sensor. A document stored before them loads at
+  the defaults, and a controller paired with an older integration checks at them. `test_feed.py`,
+  `tests_ha/test_feed_batches.py`.
+- Dashboard: Feed → Reservoir → Leak check, with the two settings, the hold tickbox and what the
+  check has learned; `readBatchStatus` reads `usual_draw` and `leak_hold`; `roomStatus` says Not
+  watering, with Switch watering off…, while held, between shots too; Needs you raises a held zone
+  as Critical, in `LEAK_WORDS` (`leakHeld`). `feed.test.ts`, `controller-health.test.ts`.
+- Docs: CS-708 and CS-709 in `docs/error-codes.json` and `ERROR_CODES.md` (the dashboard's Help,
+  rebuilt), `USER_GUIDE.md` and `ENTITIES.md`.
+
 ## [1.8.0] - 2026-11-21
 
 Integration and controller **1.8.0**.

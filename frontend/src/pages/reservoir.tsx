@@ -40,6 +40,7 @@ import {
   flowOf,
   heldUntil,
   inUse,
+  LEAK_SETTINGS,
   levelPct,
   localDay,
   mappedNumbers,
@@ -118,7 +119,26 @@ const HINTS: Record<keyof FeedSettings, string> = {
     "A gap before the first doser, once the pump runs, and between one doser and the next, so each mixes in before the next goes in.",
   mix_s:
     "The least the pump and recirculation run after the last dose. Normally the fill is still going, and they run until it ends.",
+  leak_factor:
+    "A shot is leaky when it takes the reservoir's level down this many times further than this room's shots usually do for their litres. 0 switches the leak check off.",
+  leak_min_l:
+    "And at least this many litres further, and 2% of the reservoir, so a small shot on a level that wobbles is never a leak.",
 };
+
+/** How far this room's shots usually take its reservoir down, as the leak check has learned it: in
+ * litres for each litre of shots once a refill has shown what 1% holds, else in points of the level. */
+function usualDrawWords(draft: FeedDraft, status: BatchStatus | null, plan: FeedPlan): string {
+  if (draft.leak_factor === 0) return "Off: no shot is judged.";
+  if (!(plan.full_mm > 0 && plan.full_mm < plan.empty_mm))
+    return "Needs the reservoir's level: set its distances when full and when empty, in Batch.";
+  const usual = status?.usualDraw ?? null;
+  if (usual === null)
+    return "Learning: the check judges shots once it has seen three of this room's shots go out with the level reading.";
+  const perPct = status?.litresPerPct ?? null;
+  return perPct
+    ? `Learned: this room's shots usually take about ${number(usual * perPct, 2)} L from the reservoir for each litre they give.`
+    : `Learned: this room's shots usually take its level down about ${number(usual, 2)}% for each litre they give.`;
+}
 
 /** `text` downloaded as the file `name`. */
 function download(text: string, name: string) {
@@ -1367,11 +1387,49 @@ export function Reservoir({
                   <h2>Batch</h2>
                   <div className="res-setting-grid">
                     {(Object.keys(SETTINGS) as (keyof FeedSettings)[])
+                      .filter((key) => !LEAK_SETTINGS.includes(key))
                       .filter((key) => key !== "remind_pct" || reminds)
                       .map(setting)}
                   </div>
                 </section>
               </div>
+              {typeof sensor === "string" && sensor && (
+                <section className="panel workspace-card res-leak" data-leak-check>
+                  <h2>Leak check</h2>
+                  <p className="muted small">
+                    After each shot, once the level settles, the controller compares how far the
+                    shot took the reservoir down with how far this room&apos;s shots usually do for
+                    their litres. A shot that takes far more says so: water may be escaping, from a
+                    burst line, a loose fitting or a lateral off its clip.
+                  </p>
+                  {status?.leakHold && (
+                    <p className="workspace-message res-leak-held" data-leak-held>
+                      Watering is held: two shots in a row took far more from the reservoir than
+                      usual. Fix the leak, then switch the room&apos;s watering off and back on.
+                    </p>
+                  )}
+                  <div className="res-setting-grid">{LEAK_SETTINGS.map(setting)}</div>
+                  <label className="res-check">
+                    <input
+                      type="checkbox"
+                      checked={draft.leak_hold}
+                      onChange={(event) => setDraft({ ...draft, leak_hold: event.target.checked })}
+                    />
+                    <span>
+                      Hold watering at the second leaky shot in a row
+                      <small className="muted">
+                        Rescue shots still run: for a zone at its rescue level, the watchdog&apos;s
+                        for a zone left dry too long, and a zone without a probe reading on its
+                        timer. Switching the room&apos;s watering off ends the hold. Unticked, the
+                        check only warns.
+                      </small>
+                    </span>
+                  </label>
+                  <p className="muted small" data-usual-draw>
+                    {usualDrawWords(draft, status, doc.plan)}
+                  </p>
+                </section>
+              )}
               <section className="panel workspace-card">
                 <div className="res-dosers-head">
                   <h2>Dosers</h2>

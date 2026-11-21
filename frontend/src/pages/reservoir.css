@@ -197,6 +197,37 @@
 .res-setting-note {
   color: var(--warning);
 }
+.res-leak {
+  margin-bottom: 20px;
+}
+.res-leak > p {
+  max-width: 76ch;
+  margin: 8px 0 0;
+  line-height: 1.5;
+}
+.res-leak .res-setting-grid {
+  max-width: 720px;
+}
+.res-check {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin-top: 16px;
+  max-width: 720px;
+}
+.res-check input {
+  margin-top: 3px;
+}
+.res-check span {
+  display: grid;
+  gap: 6px;
+}
+.res-check small {
+  line-height: 1.45;
+}
+.workspace-message.res-leak-held {
+  border-color: var(--attention);
+}
 .inline-link.inline-link {
   justify-self: start;
   height: auto;

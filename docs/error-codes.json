@@ -751,6 +751,43 @@
         "Switch the recirculation solenoid off in Home Assistant once you are done with it.",
         "If it comes on by itself, open the switch's Activity in Home Assistant to see what switched it on. For a device that comes back with it on, check what its switch does at start-up (ESPHome's restore_mode)."
       ]
+    },
+    {
+      "code": "CS-708",
+      "title": "A shot took far more from the reservoir than usual",
+      "source": "notification",
+      "severity": "warning",
+      "meaning": "Once the reservoir's level had settled after a shot, the shot had taken it down far further than this room's shots usually do for their litres: by default 3 times as far (Leak factor) and at least 10 L further (Leak litres), and 2% of the reservoir. What is usual is learned from the room's own shots, so drippers that give more than they are set to are no leak; until three shots have taught it, nothing is judged. A level that reads leaky is read again a minute later first, so one bad reading is no leak. Shots in a row, such as each zone's in a room with a valve for each, are judged together. The notification gives what the shot took, in litres once a refill has shown what 1% of the reservoir holds.",
+      "watering": "Carries on. If the next shot does the same, watering in the room is held (CS-709), unless its leak check is set only to warn. A shot that takes what is usual takes this down.",
+      "causes": [
+        "A line burst, or a fitting came loose.",
+        "A lateral or a dripper came off its clip or out of its pot, so the water runs to waste.",
+        "Water was drawn from the reservoir by hand while the shot ran.",
+        "The level sensor misread, twice in a row."
+      ],
+      "fixes": [
+        "Check the room's lines, fittings and laterals while a shot runs.",
+        "If nothing leaks and it keeps saying so, raise the Leak factor or Leak litres on the Feed → Reservoir page (Leak check), or set the factor to 0 to switch the check off."
+      ]
+    },
+    {
+      "code": "CS-709",
+      "title": "Watering held, a leak?",
+      "source": "notification",
+      "severity": "critical",
+      "meaning": "Two shots in a row took far more from the reservoir than this room's shots usually do (CS-708): water is probably escaping, and each shot would lose more of the feed.",
+      "watering": "Only rescue shots run in the room: for a zone that reads at or under its rescue level (its emergency floor), in any phase; the watchdog's, for a zone left without water for its watchdog hours in daylight; a zone without a probe reading, on its safety timer; and a test shot asked for by hand. Better some water, even leaking, than plants left to dry out. The hold stays until the room's watering is switched off (Watching only), or the room is; then watering can go back on. Unticking the hold, or switching the leak check off, ends it too. Meanwhile the room's line reads Not watering, with Switch watering off…, and Needs you lists the zones that are waiting.",
+      "causes": [
+        "A line burst, or a fitting came loose.",
+        "A lateral or a dripper came off its clip or out of its pot, so the water runs to waste.",
+        "Water was drawn from the reservoir by hand while the shot ran.",
+        "The level sensor misread, twice in a row."
+      ],
+      "fixes": [
+        "Find the leak and fix it: check the lines, fittings and laterals.",
+        "Then switch the room's watering off (Watching only) and back to Steering. That ends the hold, and the count of leaky shots starts again.",
+        "For a room that should only be warned, untick Hold watering at the second leaky shot in a row on the Feed → Reservoir page (Leak check)."
+      ]
     }
   ]
 }

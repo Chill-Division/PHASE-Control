@@ -20,7 +20,9 @@ import {
   controllerZoneLabel,
   holdWords,
   readHeartbeat,
+  LEAK_WORDS,
   RECIRC_WORDS,
+  leakHeld,
   recircHeld,
   RESTING,
   WATCHING_LABEL,
@@ -785,7 +787,10 @@ export function buildRoom(states: States, room: Room): RoomView {
             }
           : set
             ? { kind: "held" as const, detail: set }
-            : /fault|blocked|unsafe|error/i.test(zone.status) &&
+            : // Held for a leak (CS-709): a fault, not a hold someone set, in its words.
+              held !== undefined && leakHeld(held)
+              ? { kind: "status" as const, detail: LEAK_WORDS }
+              : /fault|blocked|unsafe|error/i.test(zone.status) &&
                 !(roomFault && /hardware fault/i.test(zone.status))
               ? { kind: "status" as const, detail: zone.status }
               : null;
@@ -1165,6 +1170,14 @@ export function roomStatus(states: States, room: Room, now = Date.now()): RoomSt
       "Not watering",
       blocked.join(" · ") || "The controller reports an error. Check its log.",
     );
+  // GR1, 21 Nov 2026: a lateral off its clip. Watering held for a leak (CS-709) stays held until
+  // someone switches watering off, so the line says so between shots too, with the way out.
+  if (readBatchStatus(states, room.prefix)?.leakHold || blocked.some(leakHeld))
+    return say("stopped", "Not watering", LEAK_WORDS, {
+      label: "Switch watering off…",
+      route: "overview",
+      mode: "watching",
+    });
   // GT1, 4 Nov 2026: at 4% with automatic refills off, its line said "Holding" all evening.
   const hold = reservoirHold(states, room);
   if (hold)

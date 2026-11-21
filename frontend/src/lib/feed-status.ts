@@ -70,7 +70,24 @@ export interface BatchStatus {
   /** Watering waits for the reservoir with nothing to refill it by itself: why, and why it can't
    * refill. Null when it doesn't, and from an older controller, which didn't say. */
   wateringHeld: { why: string; cannot: string } | null;
+  /** How far this room's shots usually take the level down, points a litre of shots, as the leak
+   * check has learned it; null until it has, and from an older controller. */
+  usualDraw: number | null;
+  /** Watering held for a leak (CS-709): two shots in a row took far more from the reservoir than
+   * usual. Null while it isn't, and from an older controller. */
+  leakHold: LeakHold | null;
   updated: number | null;
+}
+
+/** What the last of the two leaky shots took (controller.py _leaky_shot): its litres, how far it took
+ * the level down and how far this room's shots that size usually do (points), and what 1% holds
+ * (null before a refill has shown it). */
+export interface LeakHold {
+  at: number | null;
+  litres: number | null;
+  took: number | null;
+  usual: number | null;
+  perPct: number | null;
 }
 
 export const STEP_LABELS: Record<BatchStep, string> = {
@@ -95,6 +112,17 @@ const held = (value: unknown) => {
 const time = (value: unknown) => {
   const at = typeof value === "string" ? Date.parse(value) : NaN;
   return Number.isFinite(at) ? at : null;
+};
+const leak = (value: unknown): LeakHold | null => {
+  if (!value || typeof value !== "object") return null;
+  const item = value as Record<string, unknown>;
+  return {
+    at: time(item.at),
+    litres: finite(item.litres),
+    took: finite(item.took),
+    usual: finite(item.usual),
+    perPct: finite(item.per_pct),
+  };
 };
 
 export const batchStatusId = (prefix: string) => `sensor.crop_steering_${prefix}batch_status`;
@@ -175,6 +203,8 @@ export function readBatchStatus(states: States, prefix: string): BatchStatus | n
       : null,
     blocked: text(a.blocked),
     wateringHeld: held(a.watering_held),
+    usualDraw: finite(a.usual_draw),
+    leakHold: leak(a.leak_hold),
     updated: time(a.updated),
   };
 }
