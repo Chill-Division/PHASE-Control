@@ -164,6 +164,13 @@ def test_a_recipe_that_doses_nothing_says_so():
         ({"mix_s": True}, "mix s must be a number"),
         ({"min_pct": 60}, "min pct must be a number from 0 to 50"),
         ({"remind_pct": 95}, "remind pct must be a number from 0 to 90"),
+        ({"leak_factor": 25}, "leak factor must be a number from 0 to 20"),
+        (
+            {"leak_factor": 1.2},
+            "or at least 1.5: under that, ordinary shots would read as leaks",
+        ),
+        ({"leak_min_l": 600}, "leak min l must be a number from 0 to 500"),
+        ({"leak_hold": "yes"}, "Hold watering on a leak must be true or false"),
         (
             {"full_mm": 850, "empty_mm": 125},
             "The distance when full must be less than the distance when empty",
@@ -366,6 +373,43 @@ def test_the_refill_reminder_reaches_the_controllers_plan_and_an_older_room_gets
     assert store.error is None
     assert (store.data["remind_pct"], store.data["min_pct"]) == (20.0, 25)
     assert feed.plan(store.data, MAPPED)["remind_pct"] == 20.0
+
+
+def test_the_leak_check_reaches_the_controllers_plan_and_an_older_room_gets_its_defaults():
+    """The leak check's settings: a shot is leaky at the factor times what this room's shots usually
+    take from the reservoir and the litres more (CS-708), and the second in a row holds watering
+    (CS-709) unless the hold is off. A document stored before them loads at 3 times, 10 L and holding;
+    a factor of 0 switches it off."""
+    doc = feed.empty()
+    assert (doc["leak_factor"], doc["leak_min_l"], doc["leak_hold"]) == (
+        3.0,
+        10.0,
+        True,
+    )
+    sent = feed.plan(settings(leak_factor=4.5, leak_min_l=25, leak_hold=False), MAPPED)
+    assert (sent["leak_factor"], sent["leak_min_l"], sent["leak_hold"]) == (
+        4.5,
+        25,
+        False,
+    )
+    assert feed.plan(settings(leak_factor=0), MAPPED)["leak_factor"] == 0
+    store = rig({"revision": 4, "fill_s": 690, "batch_l": 145, "min_pct": 25})
+    assert store.error is None
+    assert (
+        store.data["leak_factor"],
+        store.data["leak_min_l"],
+        store.data["leak_hold"],
+    ) == (3.0, 10.0, True)
+    sent = feed.plan(store.data, MAPPED)
+    assert (sent["leak_factor"], sent["leak_min_l"], sent["leak_hold"]) == (
+        3.0,
+        10.0,
+        True,
+    )
+    kept = feed.clean(
+        {"leak_min_l": 15}, settings(leak_hold=False)
+    )  # an edit keeps what it leaves out
+    assert (kept["leak_min_l"], kept["leak_hold"]) == (15, False)
 
 
 def test_the_recipe_in_uses_feed_ec_reaches_the_controllers_plan():

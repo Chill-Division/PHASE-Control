@@ -14,6 +14,12 @@ keeps at least the minimum: a refill comes before a shot that would take it lowe
 it by itself (automatic refills off, or no refill switches mapped), the controller reminds a person to
 refill it by hand from the reminder level, above the minimum (CS-706).
 
+The leak check: once the level has settled after a shot, the controller compares what the shot took
+from the reservoir with what this room's shots usually take for their litres (learned from its own
+shots). A shot that takes the leak factor times that, and the leak litres more, is leaky (CS-708); at
+the second in a row watering is held (CS-709), unless the hold is off, until the room's watering is
+switched off. Rescue shots run all the same. A factor of 0 switches it off.
+
 The amounts: a feed recipe gives each nutrient a number of parts, and the stage a strength in mL per
 litre per part. The fill's litres scale them (what is left in the reservoir is already mixed): a doser
 gives parts x strength x fill litres, to the whole mL (a doser gives no finer), and runs for that at
@@ -77,6 +83,10 @@ SETTINGS = {
     ),  # without automatic refills, a reminder to refill by hand from here; 0 = off
     "pause_s": (0, 600, True),  # between one doser and the next
     "mix_s": (0, 7200, True),  # recirculating after the last dose
+    # the leak check: a shot is leaky at this many times what this room's shots usually take from the
+    # reservoir (0 = off, else LEAK_FACTOR_LOWEST or more)...
+    "leak_factor": (0, 20, False),
+    "leak_min_l": (0, 500, False),  # ...and at least this many litres more
 }
 DEFAULTS = {
     "fill_s": 600,
@@ -87,7 +97,11 @@ DEFAULTS = {
     "remind_pct": 20.0,
     "pause_s": 10,
     "mix_s": 10,
+    "leak_factor": 3.0,
+    "leak_min_l": 10.0,
 }
+# Under this, ordinary shots would read as leaky: a room's own shots vary that much.
+LEAK_FACTOR_LOWEST = 1.5
 FLOW = (1.0, 10000.0)  # mL/min
 STRENGTH = (0.0, 20.0)  # mL per litre per part
 PARTS = (0.0, 100.0)
@@ -101,6 +115,7 @@ def empty() -> dict:
     return {
         "revision": 0,
         **DEFAULTS,
+        "leak_hold": True,  # the second leaky shot in a row holds watering (CS-709); off = it only warns
         "dosers": {},
         # The room's dosing order, from before each recipe had its own: a recipe without one takes it.
         "order": [],
@@ -155,6 +170,15 @@ def clean(payload, old: dict | None = None) -> dict:
     for key, (low, high, whole) in SETTINGS.items():
         value = payload.get(key, old.get(key, DEFAULTS[key]))
         doc[key] = _number(value, low, high, whole, key.replace("_", " "))
+    if 0 < doc["leak_factor"] < LEAK_FACTOR_LOWEST:
+        raise ValueError(
+            f"The leak factor must be 0 (off) or at least {LEAK_FACTOR_LOWEST:g}: under that, ordinary "
+            "shots would read as leaks"
+        )
+    hold = payload.get("leak_hold", old.get("leak_hold", True))
+    if not isinstance(hold, bool):
+        raise ValueError("Hold watering on a leak must be true or false")
+    doc["leak_hold"] = hold
     if 0 < doc["empty_mm"] <= doc["full_mm"]:
         raise ValueError(
             "The distance when full must be less than the distance when empty: the level sensor "
@@ -409,6 +433,7 @@ def plan(doc: dict, mapped: dict[int, str], today: date | None = None) -> dict:
         "stage_id": stage["id"] if stage else None,
         "feed_ec": stage.get("ec") if stage else None,
         **{key: doc[key] for key in SETTINGS},
+        "leak_hold": doc.get("leak_hold", True),
         "doses": doses,
         "problem": problem,
         "week": now[0] if now else None,
