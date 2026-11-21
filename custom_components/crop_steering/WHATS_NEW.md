@@ -23,7 +23,7 @@ version being released.
 
 ## Unreleased
 
-- If two shots in a row drain far more from the tank than usual, such as from a line off its clip, watering now pauses and tells you, and rescue shots still run. Set how sensitive it is on the Reservoir page.
+- If two shots in a row drain far more from the tank than usual, watering now pauses and tells you; rescue shots still run. Tune it on the Reservoir page.
 
 ## 1.8.0 - 2026-11-21
 
