@@ -508,3 +508,57 @@ def test_a_refill_paused_by_the_app_stopping_loads_paused_not_as_a_crash(tmp_pat
     c = _make([1], p)
     c._load_state()
     assert c.rooms[0].batch["app_stopped"] is None and c.rooms[0]._batch_crashed
+
+
+def test_a_batch_record_from_before_the_leak_check_loads_learning_and_unheld(tmp_path):
+    """1.8's `_batch` block has none of the leak check: it loads with nothing learned (the room's
+    first three shots teach what is usual) and watering not held. A hold saved by this version stays
+    across a restart, what was learned with it; a damaged value is dropped."""
+    saved = {"step": "idle", "armed": True, "litres_per_pct": 2.07}
+    p = tmp_path / "state.json"
+    p.write_text(json.dumps({"default": {"1": {"phase": "P2"}, "_batch": saved}}))
+    c = _make([1], p)
+    c._load_state()
+    batch = c.rooms[0].batch
+    assert (
+        batch["draw_pct_per_l"],
+        batch["draw_n"],
+        batch["leaky"],
+        batch["leak_hold"],
+    ) == (
+        None,
+        0,
+        0,
+        None,
+    )
+    assert batch["litres_per_pct"] == 2.07
+
+    hold = {"at": "2026-11-21T11:00:30", "litres": 7.2, "took": 20.0, "usual": 5.04}
+    learned = {"draw_pct_per_l": 0.7, "draw_n": 12, "leaky": 2, "leak_hold": hold}
+    p.write_text(
+        json.dumps({"default": {"1": {"phase": "P2"}, "_batch": {**saved, **learned}}})
+    )
+    c = _make([1], p)
+    c._load_state()
+    batch = c.rooms[0].batch
+    assert (batch["draw_pct_per_l"], batch["draw_n"], batch["leaky"]) == (0.7, 12, 2)
+    assert batch["leak_hold"] == hold
+
+    damaged = {"draw_pct_per_l": -1, "draw_n": 2.5, "leaky": "two", "leak_hold": [1]}
+    p.write_text(
+        json.dumps({"default": {"1": {"phase": "P2"}, "_batch": {**saved, **damaged}}})
+    )
+    c = _make([1], p)
+    c._load_state()
+    batch = c.rooms[0].batch
+    assert (
+        batch["draw_pct_per_l"],
+        batch["draw_n"],
+        batch["leaky"],
+        batch["leak_hold"],
+    ) == (
+        None,
+        0,
+        0,
+        None,
+    )
