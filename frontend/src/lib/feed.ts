@@ -45,8 +45,16 @@ export interface FeedSettings {
   remind_pct: number;
   pause_s: number;
   mix_s: number;
+  /** The leak check: a shot is leaky at this many times how far this room's shots usually take the
+   * reservoir's level down (0 = off, else LEAK_FACTOR_LOWEST or more)... */
+  leak_factor: number;
+  /** ...and at least these litres more (feed.py SETTINGS). */
+  leak_min_l: number;
 }
 export interface FeedPlan extends FeedSettings {
+  /** Whether the second leaky shot in a row holds watering (CS-709); missing from an older
+   * integration, whose controller holds. */
+  leak_hold?: boolean;
   stage: string | null;
   stage_id: string | null;
   /** The stage's feed EC, mS/cm, or null when its recipe gives none. */
@@ -70,6 +78,8 @@ export interface FeedSchedule {
 }
 /** What the editor changes and feed_save takes. */
 export interface FeedDraft extends FeedSettings {
+  /** The second leaky shot in a row holds watering (CS-709); off, the leak check only warns. */
+  leak_hold: boolean;
   dosers: Record<string, { flow_ml_min: number }>;
   /** The room's dosing order from before each recipe had its own: a recipe without one takes it. */
   order: number[];
@@ -139,7 +149,13 @@ export const SETTINGS: Record<keyof FeedSettings, [string, string, number, numbe
   remind_pct: ["Remind me at", "%", 0, 90, false],
   pause_s: ["Pause between dosers", "s", 0, 600, true],
   mix_s: ["Recirculate after the last dose", "s", 0, 7200, true],
+  leak_factor: ["Leak factor", "×", 0, 20, false],
+  leak_min_l: ["Leak litres", "L", 0, 500, false],
 };
+/** The leak check's settings, shown in their own section: the rest are the refill's. */
+export const LEAK_SETTINGS: (keyof FeedSettings)[] = ["leak_factor", "leak_min_l"];
+/** Under this, ordinary shots would read as leaky (feed.py LEAK_FACTOR_LOWEST). */
+export const LEAK_FACTOR_LOWEST = 1.5;
 /** An integration older than the reservoir's level sends none of these: they start as feed.py's. */
 const SETTING_DEFAULTS: Partial<FeedSettings> = {
   full_mm: 0,
@@ -147,6 +163,8 @@ const SETTING_DEFAULTS: Partial<FeedSettings> = {
   min_pct: 5,
   remind_pct: 20,
   mix_s: 10,
+  leak_factor: 3,
+  leak_min_l: 10,
 };
 
 /** How full the reservoir is, %, as the controller works it out (controller.py level_pct): 100 at
@@ -174,6 +192,10 @@ export const draftOf = (doc: FeedDocument): FeedDraft =>
     remind_pct: doc.remind_pct ?? SETTING_DEFAULTS.remind_pct!,
     pause_s: doc.pause_s,
     mix_s: doc.mix_s ?? SETTING_DEFAULTS.mix_s!,
+    // An integration from before the leak check sends none: its controller checks at these.
+    leak_factor: doc.leak_factor ?? SETTING_DEFAULTS.leak_factor!,
+    leak_min_l: doc.leak_min_l ?? SETTING_DEFAULTS.leak_min_l!,
+    leak_hold: doc.leak_hold ?? true,
     dosers: doc.dosers,
     order: doc.order,
     // An integration from before each recipe had its own order sends the room's.
@@ -312,6 +334,7 @@ export function planOf(draft: FeedDraft, mapped: number[], today = localDay()): 
     stage_id: stage?.id ?? null,
     feed_ec: stage?.ec ?? null,
     ...Object.fromEntries(Object.keys(SETTINGS).map((k) => [k, draft[k as keyof FeedSettings]])),
+    leak_hold: draft.leak_hold,
     doses,
     problem,
     week: now?.week ?? null,
@@ -335,8 +358,12 @@ export function draftErrors(draft: FeedDraft, maxRecipes = 12): string[] {
   for (const [key, [label, unit, low, high, whole]] of Object.entries(SETTINGS))
     if (!inRange(draft[key as keyof FeedSettings], low, high, whole))
       errors.push(
-        `${label} must be ${whole ? "a whole number" : "a number"} from ${low} to ${high} ${unit}.`,
+        `${label} must be ${whole ? "a whole number" : "a number"} from ${low} to ${high}${unit === "×" ? "" : ` ${unit}`}.`,
       );
+  if (draft.leak_factor > 0 && draft.leak_factor < LEAK_FACTOR_LOWEST)
+    errors.push(
+      `The leak factor must be 0 (off) or at least ${LEAK_FACTOR_LOWEST}: under that, ordinary shots would read as leaks.`,
+    );
   if (draft.empty_mm > 0 && draft.full_mm >= draft.empty_mm)
     errors.push(
       "The distance when full must be less than the distance when empty: the level sensor is above the water, so it reads further as the reservoir empties.",

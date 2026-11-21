@@ -120,6 +120,9 @@ export function createDemo(now = Date.now()): States {
           remind_pct: 20,
           pause_s: 10,
           mix_s: 10,
+          leak_factor: 3,
+          leak_min_l: 10,
+          leak_hold: true,
           doses: [],
           problem: "No doser is mapped in Settings → Rooms & hardware.",
         };
@@ -151,6 +154,8 @@ export function createDemo(now = Date.now()): States {
         empty_mm: plan.empty_mm,
         min_pct: plan.min_pct,
         litres_per_pct: 2.07,
+        usual_draw: 0.7,
+        leak_hold: null,
         due: false,
         next_round_l: 7.7,
         auto: true,

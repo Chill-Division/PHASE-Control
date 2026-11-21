@@ -48,6 +48,9 @@ const flower = (change: Partial<FeedDraft> = {}): FeedDraft => ({
   remind_pct: 20,
   pause_s: 10,
   mix_s: 10,
+  leak_factor: 3,
+  leak_min_l: 10,
+  leak_hold: true,
   dosers: {},
   order: [4, 3, 2, 1],
   recipes: [
@@ -331,6 +334,30 @@ describe("batch status", () => {
       null,
       null,
     ]);
+    // Nor of the leak check, whose learned draw and hold come with it.
+    expect([old.usualDraw, old.leakHold]).toEqual([null, null]);
+    const held = readBatchStatus(
+      states("idle", {
+        usual_draw: 0.7,
+        leak_hold: {
+          at: "2026-11-21T11:00:30",
+          litres: 7.2,
+          shots: 1,
+          took: 20,
+          usual: 5.04,
+          per_pct: 2.07,
+        },
+      }),
+      "",
+    )!;
+    expect(held.usualDraw).toBe(0.7);
+    expect(held.leakHold).toEqual({
+      at: Date.parse("2026-11-21T11:00:30"),
+      litres: 7.2,
+      took: 20,
+      usual: 5.04,
+      perPct: 2.07,
+    });
   });
 
   it("reads the level sensor in mm as the controller does, before the controller reports", () => {
@@ -379,6 +406,31 @@ describe("batch status", () => {
     const old = { ...documentOf(flower()), full_mm: undefined, min_pct: undefined } as never;
     const draft = draftOf(old);
     expect([draft.full_mm, draft.min_pct, draft.empty_mm]).toEqual([0, 5, 850]);
+    // One from before the leak check: its controller checks at 3 times, 10 L, and holds.
+    const before = {
+      ...documentOf(flower()),
+      leak_factor: undefined,
+      leak_min_l: undefined,
+      leak_hold: undefined,
+    } as never;
+    const leak = draftOf(before);
+    expect([leak.leak_factor, leak.leak_min_l, leak.leak_hold]).toEqual([3, 10, true]);
+  });
+
+  it("refuses a leak factor that would call ordinary shots leaks, and carries the hold to the plan", () => {
+    expect(draftErrors(flower({ leak_factor: 1.2 }))).toContain(
+      "The leak factor must be 0 (off) or at least 1.5: under that, ordinary shots would read as leaks.",
+    );
+    expect(draftErrors(flower({ leak_factor: 0 }))).toEqual([]);
+    expect(draftErrors(flower({ leak_factor: 1.5 }))).toEqual([]);
+    expect(draftErrors(flower({ leak_factor: 25 }))).toContain(
+      "Leak factor must be a number from 0 to 20.",
+    );
+    expect(draftErrors(flower({ leak_min_l: 600 }))).toContain(
+      "Leak litres must be a number from 0 to 500 L.",
+    );
+    const plan = planOf(flower({ leak_factor: 4, leak_min_l: 20, leak_hold: false }), [1, 2, 3, 4]);
+    expect([plan.leak_factor, plan.leak_min_l, plan.leak_hold]).toEqual([4, 20, false]);
   });
 
   it("says when the distance when full is not the smaller one", () => {

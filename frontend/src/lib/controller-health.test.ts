@@ -521,6 +521,18 @@ describe("zone status text", () => {
           detail,
         }),
       ]);
+    // GR1, 21 Nov 2026: a lateral off its clip took about 40 L a shot. Held for a leak (CS-709) is a
+    // fault: Critical, in its own words.
+    expect(
+      held("leak suspected: two shots took far more from the reservoir than usual").alerts,
+    ).toEqual([
+      expect.objectContaining({
+        title: "Zone 1 needs attention",
+        severity: "critical",
+        detail:
+          "Leak suspected: two shots in a row took far more from the reservoir than usual. Fix the leak, then switch watering off and back on to carry on. Until then, only rescue shots run.",
+      }),
+    ]);
     // A fault, and any hold this dashboard doesn't know, stays Critical.
     for (const words of [
       "switch.gr2_valve offline (reads neither on nor off)",
@@ -643,6 +655,39 @@ describe("room status line", () => {
       detail:
         "Recirculation on: a shot would only go back into the reservoir. Switch it off, and watering carries on by itself.",
     });
+  });
+  it("says Not watering while held for a leak, between shots too, with the way out", () => {
+    // GR1, 21 Nov 2026: a lateral off its clip took about 40 L a shot until the tank ran dry (CS-709).
+    const words =
+      "Leak suspected: two shots in a row took far more from the reservoir than usual. Fix the leak, then switch watering off and back on to carry on. Until then, only rescue shots run.";
+    const leak = "leak suspected: two shots took far more from the reservoir than usual";
+    const blocked = [`Z1 P2 ${leak}`, "Z2 P2 manual override"];
+    const expected = {
+      tone: "stopped",
+      text: "Not watering",
+      detail: words,
+      action: { label: "Switch watering off…", route: "overview", mode: "watching" },
+    };
+    expect(status(fixture([entity(DECISION, blocked[0], { fired: [], blocked })]))).toMatchObject(
+      expected,
+    );
+    // No shot due: the batch status says it holds.
+    const between = fixture([
+      entity(DECISION, "Holding — all zones in band", { fired: [], blocked: [] }),
+      entity("sensor.crop_steering_batch_status", "idle", {
+        leak_hold: { at: "2026-11-21T11:00:30", litres: 7.2, took: 20, usual: 5.04 },
+      }),
+    ]);
+    expect(status(between)).toMatchObject(expected);
+    // A rescue shot through the hold is watering.
+    const rescue = fixture([
+      entity(DECISION, "Z1 P2 P3 emergency VWC 39<40", {
+        fired: ["Z1 P2 P3 emergency VWC 39<40"],
+        blocked: [],
+      }),
+      entity("sensor.crop_steering_batch_status", "idle", { leak_hold: { took: 20 } }),
+    ]);
+    expect(status(rescue)).toMatchObject({ text: "Watering" });
   });
   it("says a zone without a moisture reading, and whose shots it takes", () => {
     const blind = ["Z2 P2 no moisture reading: watered with Z1's shots"];
@@ -927,6 +972,7 @@ describe("holds the clock draws in red", () => {
       "external hold (switch.flood_sensor)",
       "reservoir too low (12% with 5% minimum; next shots need 9%)",
       "recirculation on (a shot would only go back into the reservoir)",
+      "leak suspected: two shots took far more from the reservoir than usual",
       "BLOCK high EC 8.7 — slab saturated (self-clears)",
       "daily-cap 4.0 L of 4.0 L",
       "watering switch unavailable",

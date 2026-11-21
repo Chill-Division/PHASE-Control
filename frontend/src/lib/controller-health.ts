@@ -97,6 +97,14 @@ const RECIRC_HOLD = /^recirculation on \(/;
 export const recircHeld = (entry: string) => RECIRC_HOLD.test(entry.replace(/^Z\d+ \S+ /, ""));
 export const RECIRC_WORDS =
   "Recirculation on: a shot would only go back into the reservoir. Switch it off, and watering carries on by itself.";
+/** A shot held because two shots in a row took far more from the reservoir than this room's shots
+ * usually do (the controller's LEAK_HOLD, CS-709). GR1, 21 Nov 2026: a lateral off its clip took about
+ * 40 L a shot until the reservoir ran dry. */
+const LEAK_HOLD = /^leak suspected: /;
+/** Whether a hold, or a decision's "Z<zone> <phase> <hold>" entry, is the leak check's. */
+export const leakHeld = (entry: string) => LEAK_HOLD.test(entry.replace(/^Z\d+ \S+ /, ""));
+export const LEAK_WORDS =
+  "Leak suspected: two shots in a row took far more from the reservoir than usual. Fix the leak, then switch watering off and back on to carry on. Until then, only rescue shots run.";
 /** What a hold someone set on purpose means, in the dashboard's words: it stays until it is undone.
  * Null for any other hold. */
 export function setHoldWords(hold: string): string | null {
