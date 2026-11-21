@@ -10,7 +10,9 @@ and code-level detail for developers and AI agents working on the repo.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.9.0] - 2026-11-21
+
+Integration and controller **1.9.0**.
 
 - **A leak check after every shot.** A lateral that comes off its clip, a burst line or a loose
   fitting can empty the reservoir in a few shots: in one room, from one morning shot on, each 7.2 L

@@ -21,7 +21,7 @@ people who build the system:
 `tests/test_whats_new.py` checks the shape and the plain words, and that the newest section is the
 version being released.
 
-## Unreleased
+## 1.9.0 - 2026-11-21
 
 - If two shots in a row drain far more from the tank than usual, watering now pauses and tells you; rescue shots still run. Tune it on the Reservoir page.
 
