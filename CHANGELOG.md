@@ -10,6 +10,33 @@ and code-level detail for developers and AI agents working on the repo.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+- **A steady EC keeps steering.** A zone's EC that hadn't changed for 20 minutes counted as gone, as
+  moisture does: EC shot sizing, dilution, flushes and EC learning paused, and a notification said
+  the EC wasn't available (CS-104). But a root-zone EC holds still for hours, and some probes, such
+  as the THC-S, report it in coarse steps: in one room the EC was dropped for 40% of the day, though
+  the probe was fine. Now a zone's EC may stay the same for up to 6 hours and still count; moisture
+  keeps its 20 minutes. An EC that is missing, unavailable or out of range still counts as gone
+  straight away, and the notification now goes by itself once the EC reads again, instead of staying
+  up until it is dismissed.
+
+### 🔧 Technical notes
+
+- Controller: `EC_STILL_KEEP_MIN` (360): a zone's EC is read with that age limit (`_snapshot`, and
+  `_group_readings` for a one-valve room); moisture keeps `_read_sensor`'s 20 minutes. CS-104 says
+  "hasn't changed for 6 hours", and `_ec_reads_again` dismisses its card once the EC reads again,
+  and once for each zone at its first reading after a start (a card raised before it). The card's
+  30-minute window (`_alerted`) stays, so an EC that comes and goes is said no more often than
+  before. The heartbeat publishes `max_ec_age_s`. GT site log, 20-22 Nov 2026: GT3's EC held still
+  for up to 3.9 h and was dropped on 41% of passes (40% of its P2), GT1's on 29%; a 6-hour limit
+  would have dropped neither. `test_ec_holds_still.py`.
+- Dashboard: `buildRoom` keeps a zone's EC current for the heartbeat's `max_ec_age_s` while the
+  controller reports (an older controller: the room's sensor age, as before), and Needs you's stale
+  detail uses the same limit. `review-regressions.test.ts`.
+- Docs: CS-104 in `docs/error-codes.json` and `ERROR_CODES.md` (the dashboard's Help, rebuilt),
+  `USER_GUIDE.md` and `ENTITIES.md`.
+
 ## [1.9.0] - 2026-11-21
 
 Integration and controller **1.9.0**.

@@ -53,7 +53,7 @@ describe("adapter review regressions", () => {
     const states = createDemo();
     states["sensor.crop_steering_vwc_zone_1"].last_updated = "2020-01-01T00:00:00Z";
     states["sensor.crop_steering_ec_zone_1"].last_updated = new Date(
-      Date.now() - 21 * 60_000,
+      Date.now() - (6 * 60 + 1) * 60_000,
     ).toISOString();
     states["number.crop_steering_zone_1_p1_target_vwc"].last_updated = "2020-01-01T00:00:00Z";
     states["switch.crop_steering_zone_1_enabled"].last_updated = "2020-01-01T00:00:00Z";
@@ -89,6 +89,31 @@ describe("adapter review regressions", () => {
     expect(buildRoom(states, room).zones[0].vwc.value).toBe(56);
     states["sensor.crop_steering_ai_heartbeat"].attributes.max_sensor_age_s = 60;
     expect(buildRoom(states, room).zones[0].vwc.value).toBeNull();
+  });
+
+  it("keeps an EC that has held still for hours current, as long as the controller says", () => {
+    // GT3, 20-22 Nov 2026: its THC-S EC held still for up to 3.9 hours, and was dropped at 20 minutes.
+    const states = createDemo();
+    const room = discoverRooms(states)[0];
+    const ago = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString();
+    const ec = () => buildRoom(states, room).zones[0].ec;
+    states["sensor.crop_steering_ec_zone_1"].last_updated = ago(3 * 60 + 54);
+    expect(ec().value).not.toBeNull();
+    states["sensor.crop_steering_ec_zone_1"].last_updated = ago(6 * 60 + 1);
+    expect(ec().value).toBeNull();
+    const view = buildRoom(states, room);
+    expect(view.alerts.find((alert) => /EC: stale/.test(alert.detail))?.detail).toContain(
+      "EC: stale (older than 360 minutes).",
+    );
+    // A controller from before it says nothing: EC goes after 20 minutes, as moisture does.
+    delete states["sensor.crop_steering_ai_heartbeat"].attributes.max_ec_age_s;
+    states["sensor.crop_steering_ec_zone_1"].last_updated = ago(21);
+    expect(ec().value).toBeNull();
+    // Nor while the controller is stopped.
+    states["sensor.crop_steering_ai_heartbeat"].attributes.max_ec_age_s = 6 * 3600;
+    expect(ec().value).not.toBeNull();
+    states["sensor.crop_steering_ai_heartbeat"].last_updated = ago(60);
+    expect(ec().value).toBeNull();
   });
 
   it("keeps a still moisture reading current in a one-valve room while the controller steers by it", () => {

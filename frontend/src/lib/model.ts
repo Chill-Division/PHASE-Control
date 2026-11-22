@@ -548,6 +548,15 @@ export function buildRoom(states: States, room: Room): RoomView {
   const now = Date.now();
   const beat = readHeartbeat(heartbeat, now);
   const live = beat.health === "fresh";
+  // A zone's EC may stay the same for as long as the controller says (its EC_STILL_KEEP_MIN, 6 hours) and
+  // still count: a root-zone EC holds still for hours, and the THC-S reports it in coarse steps (GT3,
+  // 20-22 Nov 2026: dropped for 40% of its P2 time at 20 minutes). A controller from before it says
+  // nothing, and drops EC after the room's sensor age, as moisture.
+  const ecHoldS = heartbeat?.attributes.max_ec_age_s;
+  const ecAgeS =
+    live && typeof ecHoldS === "number" && Number.isFinite(ecHoldS) && ecHoldS > 0
+      ? Math.max(maxAgeS, ecHoldS)
+      : maxAgeS;
   const decision = resolve(states, room, "sensor", "current_decision");
   const flag = heartbeat?.attributes.enable_flag ?? config?.attributes.enable_flag;
   const engineEntity =
@@ -660,7 +669,7 @@ export function buildRoom(states: States, room: Room): RoomView {
       ),
       phase: readable(phase) ? phase!.state : "Unavailable",
       vwc: readingMetric(vwcSensor, "VWC", "%", vwcAgeS, now),
-      ec: readingMetric(ecSensor, "EC", "mS/cm", maxAgeS, now),
+      ec: readingMetric(ecSensor, "EC", "mS/cm", ecAgeS, now),
       probes: {
         vwc: readProbes(states, vwcSensor, resolve(states, room, "select", `${z}vwc_method`)),
         ec: readProbes(states, ecSensor, resolve(states, room, "select", `${z}ec_method`)),
@@ -771,7 +780,7 @@ export function buildRoom(states: States, room: Room): RoomView {
                 .flatMap((reading) => {
                   const issue = telemetryIssue(
                     reading.entityId ? states[reading.entityId] : undefined,
-                    maxAgeS,
+                    reading === zone.ec ? ecAgeS : maxAgeS,
                     now,
                   );
                   return issue ? [`${reading.label}: ${issue}.`] : [];
