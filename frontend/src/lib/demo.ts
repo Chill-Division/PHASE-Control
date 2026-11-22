@@ -187,6 +187,8 @@ export function createDemo(now = Date.now()): States {
       last_beat: new Date(now - 18_000).toISOString(),
       // The setup it has taken on (the descriptor's setup_revision).
       setup_revision: 1,
+      // How long a zone's EC may stay the same and still count (the controller's EC_STILL_KEEP_MIN).
+      max_ec_age_s: 6 * 3600,
     });
     put(`sensor.crop_steering_${prefix}app_status`, "safe_idle");
     const fired = index ? [] : ["Z1 P1 ramp shot 3/6 (demo)"];
