@@ -21,7 +21,7 @@ people who build the system:
 `tests/test_whats_new.py` checks the shape and the plain words, and that the newest section is the
 version being released.
 
-## Unreleased
+## 1.9.1 - 2026-11-22
 
 - A steady root-zone EC is no longer taken for a dead probe: it keeps steering, and its warning only comes when the probe really can't be read.
 
