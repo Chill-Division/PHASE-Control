@@ -21,6 +21,10 @@ people who build the system:
 `tests/test_whats_new.py` checks the shape and the plain words, and that the newest section is the
 version being released.
 
+## Unreleased
+
+- A steady root-zone EC is no longer taken for a dead probe: it keeps steering, and its warning only comes when the probe really can't be read.
+
 ## 1.9.0 - 2026-11-21
 
 - If two shots in a row drain far more from the tank than usual, watering now pauses and tells you; rescue shots still run. Tune it on the Reservoir page.

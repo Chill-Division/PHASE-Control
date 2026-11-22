@@ -1,3 +1,7 @@
+# Unreleased
+
+- A zone's EC may stay the same for up to 6 hours and still steer (moisture keeps its 20 minutes): a steady root-zone EC is no longer dropped as if its probe were gone. The EC notification (CS-104) goes by itself once the EC reads again.
+
 # 1.9.0
 
 Pair with integration 1.9.0.
