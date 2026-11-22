@@ -507,6 +507,14 @@ ONE_VALVE_LAYOUTS = frozenset({"pump_one_valve"})
 # top of the scale, which a probe sitting in water reads, and one under the room's rescue level, which
 # would fire rescue shots that no daily limit stops.
 STILL_KEEP_MIN = 120
+# How long a zone's EC may stay the same and still be steered by, in minutes. Moisture that hasn't changed
+# for 20 minutes is not steered by (_read_sensor), but a root-zone EC holds still for hours: a THC-S
+# reports it in coarse steps, and Home Assistant keeps no reading that repeats the last, so a steady EC
+# looked like a dead probe. GT3's held still for up to 3.9 hours (20-22 Nov 2026), and at 20 minutes it
+# was dropped for 40% of its P2 time: EC shot sizing, dilution, flushes and EC learning all paused, and
+# CS-104 was raised each time. An EC correction already waits EC_SETTLE_MIN for a settled reading, so
+# trusting a still one longer can't make corrections come closer together.
+EC_STILL_KEEP_MIN = 360
 
 
 def combine_readings(values, method="Average"):
@@ -2209,7 +2217,8 @@ class Controller:
                 else:
                     still.add(zone)
             ec = self._read_sensor(
-                self._fused_id(room.prefix, "ec", zone, room.zones[zone].get("ec")), lo=0, hi=20
+                self._fused_id(room.prefix, "ec", zone, room.zones[zone].get("ec")), lo=0, hi=20,
+                max_age_min=EC_STILL_KEEP_MIN,
             )
             own[zone] = (vwc, ec)
         made = []
@@ -2324,6 +2333,7 @@ class Controller:
                 self._fused_id(room.prefix, "ec", zone, room.zones[zone].get("ec")),
                 lo=0,
                 hi=20,
+                max_age_min=EC_STILL_KEEP_MIN,  # a root-zone EC holds still for hours; moisture doesn't
             )
         if vwc is None:
             return None, self._params(room, zone)
@@ -3819,6 +3829,26 @@ class Controller:
     # hold one round for 50 s, the kill switch unread and the valve open.
     KEEP_ALIVE_WRITES = 2
 
+    @staticmethod
+    def _ec_cards(room):
+        """The room's zones whose CS-104 card this process put up and hasn't taken down, and those whose
+        EC it has read since it started: (up, read)."""
+        if getattr(room, "_ec_up", None) is None:
+            room._ec_up, room._ec_read = set(), set()
+        return room._ec_up, room._ec_read
+
+    def _ec_reads_again(self, room, zone):
+        """The zone's EC reads again: its CS-104 card goes, and so, at its first reading after a start,
+        does one raised before it (a notification stays in Home Assistant until it is dismissed). The
+        card's 30-minute window stays (_alerted), so an EC that comes and goes is said no more often than
+        it was while its card stayed up."""
+        up, read = self._ec_cards(room)
+        if zone not in up and zone in read:
+            return
+        up.discard(zone)
+        read.add(zone)
+        ha_call("persistent_notification", "dismiss", notification_id=f"f2_ec_unknown_{room.slug}_z{zone}")
+
     def _heartbeat(self, room, now, hardware_fault, room_active=True, timeout=None):
         room._beat, room._beat_at = (hardware_fault, room_active), time.monotonic()
         ha_set(
@@ -3841,6 +3871,9 @@ class Controller:
                 "setup_active": getattr(room, "setup_active", True),
                 "setup_pending": getattr(room, "_setup_pending", None),
                 "room_active": room_active,
+                # how long a zone's EC may stay the same and still count (EC_STILL_KEEP_MIN): the
+                # dashboard shows it as current that long; moisture keeps its 20 minutes
+                "max_ec_age_s": EC_STILL_KEEP_MIN * 60,
             },
             **({"timeout": timeout} if timeout else {}),
         )
@@ -5634,18 +5667,21 @@ class Controller:
             room._blind_since.pop(zone, None)
             snaps[zone] = snap
             if snap.ec is None:
-                self._alert(
+                if self._alert(
                     f"ec_unknown_{room.slug}_z{zone}",
                     "CS-104",
                     "root-zone EC not available",
                     "There is no usable root-zone EC reading for this zone: it is missing, "
-                    "unavailable, out of range, or hasn't changed for 20 minutes. Watering carries on "
-                    "by moisture alone; EC-based shot sizing and EC learning are paused, and salt "
-                    "build-up can't be checked or flushed."
+                    f"unavailable, out of range, or hasn't changed for {EC_STILL_KEEP_MIN // 60} hours. "
+                    "Watering carries on by moisture alone; EC-based shot sizing and EC learning are "
+                    "paused, and salt build-up can't be checked or flushed."
                     f"\n\nSensor: {self._fused_id(room.prefix, 'ec', zone, room.zones[zone].get('ec'))}",
                     room=room,
                     zone=zone,
-                )
+                ):
+                    self._ec_cards(room)[0].add(zone)
+            else:
+                self._ec_reads_again(room, zone)
             healthy.append((zone, p.p1_target))
             new_phase, new_thr, fire, size, reason = decide(snap, p)
             if fire and not getattr(reason, "cap_exempt", False) and self._budget_spent(room, zone, p, st):

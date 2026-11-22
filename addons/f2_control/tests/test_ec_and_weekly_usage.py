@@ -56,7 +56,7 @@ def probe(fake, entity, value, timestamp="current"):
     ("unavailable", "current"), ("unknown", "current"), ("NaN", "current"),
     ("inf", "current"), ("-inf", "current"), ("21", "current"),
     ("6", None), ("6", "bad timestamp"), ("6", "2026-09-08T12:00:00"),
-    ("6", "2026-09-08T11:39:00+00:00"), ("6", "2026-09-08T12:01:01+00:00"),
+    ("6", "2026-09-08T05:59:00+00:00"), ("6", "2026-09-08T12:01:01+00:00"),
 ])
 def test_invalid_ec_real_loop_uses_base_vwc_and_pauses_learning(rig, value, stamp):
     c, fake, room, _ = rig

@@ -101,11 +101,11 @@
       "title": "Root-zone EC not available",
       "source": "notification",
       "severity": "warning",
-      "meaning": "There is no usable root-zone EC reading for the zone: it is missing, unavailable, out of range, or hasn't changed for 20 minutes.",
-      "watering": "Carries on by moisture alone. EC-based shot sizing and EC learning are paused, and salt build-up can't be checked or flushed.",
+      "meaning": "There is no usable root-zone EC reading for the zone: it is missing, unavailable, out of range, or hasn't changed for 6 hours. A root-zone EC holds still for hours, and some probes report it in coarse steps, so it may stay the same that long and still count; moisture only 20 minutes.",
+      "watering": "Carries on by moisture alone. EC-based shot sizing and EC learning are paused, and salt build-up can't be checked or flushed. The notification goes by itself once the EC reads again.",
       "causes": [
         "No EC probe is mapped to the zone.",
-        "The EC probe is offline, or reads the same number for more than 20 minutes (a cube with no plant in it, as for CS-101)."
+        "The EC probe is offline, or reads the same number for more than 6 hours (a cube with no plant in it, as for CS-101)."
       ],
       "fixes": [
         "Map an EC probe to the zone in PHASE Control → Settings → Rooms & hardware, if the zone has one.",

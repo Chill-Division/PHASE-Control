@@ -153,14 +153,14 @@ setup change (CS-201) and a hardware hold (CS-301, CS-308, CS-309) are still rep
 
 *Warning · Notification*
 
-**What it means.** There is no usable root-zone EC reading for the zone: it is missing, unavailable, out of range, or hasn't changed for 20 minutes.
+**What it means.** There is no usable root-zone EC reading for the zone: it is missing, unavailable, out of range, or hasn't changed for 6 hours. A root-zone EC holds still for hours, and some probes report it in coarse steps, so it may stay the same that long and still count; moisture only 20 minutes.
 
-**Watering meanwhile.** Carries on by moisture alone. EC-based shot sizing and EC learning are paused, and salt build-up can't be checked or flushed.
+**Watering meanwhile.** Carries on by moisture alone. EC-based shot sizing and EC learning are paused, and salt build-up can't be checked or flushed. The notification goes by itself once the EC reads again.
 
 **Likely causes**
 
 - No EC probe is mapped to the zone.
-- The EC probe is offline, or reads the same number for more than 20 minutes (a cube with no plant in it, as for CS-101).
+- The EC probe is offline, or reads the same number for more than 6 hours (a cube with no plant in it, as for CS-101).
 
 **Suggested fixes**
 
