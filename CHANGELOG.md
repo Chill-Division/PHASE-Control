@@ -10,7 +10,9 @@ and code-level detail for developers and AI agents working on the repo.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.9.2] - 2026-11-23
+
+Integration and controller **1.9.2**.
 
 - **Needs you says when the integration and the controller app don't match.** The two are released
   as a pair, but each one updates on its own, and the integration only runs its update once Home
