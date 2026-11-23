@@ -63,8 +63,8 @@ for (const prefix of ["", "f1_"]) {
     num_zones: 2,
     friendly_name: `${name} engine config`,
     enable_flag: flag,
-    // F1 runs a pair that reports its versions; the default room models an older pair that does not
-    ...(prefix ? { integration_version: "2.19.1" } : {}),
+    // F1 runs a matching pair that reports its versions; the default room models an older pair that does not
+    ...(prefix ? { integration_version: "1.9.1" } : {}),
     // F1's pump is mapped: the Overview's reservoir card then shows a reading that can go stale.
     ...(prefix ? { pump: "switch.f1_irrigation_pump" } : {}),
   });
@@ -72,7 +72,7 @@ for (const prefix of ["", "f1_"]) {
   put(`sensor.crop_steering_${prefix}ai_heartbeat`, "online", {
     enable_flag: flag,
     last_beat: new Date().toISOString(),
-    ...(prefix ? { controller_version: "0.16.1" } : {}),
+    ...(prefix ? { controller_version: "1.9.1" } : {}),
   });
   put(flag, "on");
   put(`sensor.crop_steering_${prefix}activity_log`, "active", {
@@ -318,14 +318,42 @@ try {
       await openSection("Help");
       const versions = page.locator('dl.running-versions[aria-label="Running versions"]');
       await visible(versions);
-      assert.match(await versions.innerText(), /Integration\s+2\.19\.1/);
-      assert.match(await versions.innerText(), /Controller\s+0\.16\.1/);
+      assert.match(await versions.innerText(), /Integration\s+1\.9\.1/);
+      assert.match(await versions.innerText(), /Controller\s+1\.9\.1/);
       // An older pair reports nothing: say so, never show a number this page made up.
       await chooseRoom("Flower 2");
       await visible(versions.getByText("not reported").first());
       assert.equal((await versions.innerText()).match(/not reported/g).length, 2);
       await chooseRoom("Flower 1");
-      await visible(versions.getByText("2.19.1"));
+      await visible(versions.getByText("1.9.1").first());
+    },
+  );
+  await check(
+    "Needs you says which half is out of date while the two differ, and nothing once they match",
+    async () => {
+      const beat = states["sensor.crop_steering_f1_ai_heartbeat"];
+      const notice = page.locator('[data-needs-you] [data-notice="room:f1_-versions"]');
+      const refresh = () => page.getByRole("button", { name: "Refresh controller data" }).click();
+      await openSection("Overview");
+      await visible(page.locator("[data-overview]"));
+      assert.equal(await notice.count(), 0, "a matching pair raises nothing");
+      // The integration updated first: the controller app is behind until it updates too.
+      beat.attributes = { ...beat.attributes, controller_version: "1.9.0" };
+      await refresh();
+      await visible(notice);
+      assert.equal(await notice.getAttribute("data-severity"), "warning");
+      assert.match(await notice.innerText(), /Controller app out of date/);
+      assert.match(
+        await notice.innerText(),
+        /The integration is 1\.9\.1 and the controller app is 1\.9\.0\./,
+      );
+      // The app updated first, as on the GT site on 22 Nov 2026: the integration is behind.
+      beat.attributes = { ...beat.attributes, controller_version: "1.9.2" };
+      await refresh();
+      await visible(notice.getByText("Integration out of date", { exact: true }));
+      beat.attributes = { ...beat.attributes, controller_version: "1.9.1" };
+      await refresh();
+      await notice.waitFor({ state: "detached" });
     },
   );
   await check(
@@ -362,7 +390,7 @@ try {
           box && tabsBox && box.y >= 0 && box.y + box.height <= tabsBox.y,
           `versions must be reachable above the tabs (${JSON.stringify({ box, tabsBox })})`,
         );
-        assert.match(await versions.innerText(), /Controller\s+0\.16\.1/);
+        assert.match(await versions.innerText(), /Controller\s+1\.9\.1/);
         assert.ok((await phone.evaluate(() => window.scrollY)) > 0, "it really scrolled");
         // and the first item is still reachable on the way back
         await phone
@@ -391,7 +419,7 @@ try {
         await versions.scrollIntoViewIfNeeded();
         const box = await versions.boundingBox();
         assert.ok(box && box.y + box.height <= 480, "versions must be reachable in a short window");
-        assert.match(await versions.innerText(), /Controller\s+0\.16\.1/);
+        assert.match(await versions.innerText(), /Controller\s+1\.9\.1/);
       } finally {
         await short.close();
       }
