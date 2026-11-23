@@ -10,6 +10,29 @@ and code-level detail for developers and AI agents working on the repo.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+- **Needs you says when the integration and the controller app don't match.** The two are released
+  as a pair, but each one updates on its own, and the integration only runs its update once Home
+  Assistant restarts. Until both match, a newer setting can do nothing, and the dashboard can
+  describe the controller wrongly. With the 1.9.0 integration and the 1.9.1 controller, for
+  instance, the dashboard still blanked a steady EC after 20 minutes while the controller went on
+  steering by it. Now Needs you shows a warning that names the half that's behind and how to update
+  it, and the warning goes once both match. It doesn't stop watering, and it waits while the
+  controller app is stopped or updating.
+
+### 🔧 Technical notes
+
+- The dashboard's `versionNotice` (`model.ts`) compares the versions the running halves report, the
+  room descriptor's `integration_version` and the heartbeat's `controller_version`
+  (`runningVersions`). `versionGap` orders them part by part (1.10.0 comes after 1.9.1), and a
+  version it can't order only counts as different. `buildRoom` adds the Warning (`<room>-versions`)
+  only while the heartbeat is fresh or a shot is running, so a stopped controller's last version
+  never raises it, and raises nothing while either half reports no version. Tests in
+  `controller-health.test.ts` and `versions.test.ts`. `verify-live.mjs` now runs Flower 1 on a
+  matching pair, and checks the notice both ways and that it clears.
+- `docs/troubleshooting.md` has a row for the notice.
+
 ## [1.9.1] - 2026-11-22
 
 Integration and controller **1.9.1**.
