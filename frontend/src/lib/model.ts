@@ -274,6 +274,50 @@ export function runningVersions(
     ),
   };
 }
+type Versions = ReturnType<typeof runningVersions>;
+/** Which half is behind when the two report different versions, part by part (1.10.0 is after
+ * 1.9.1), or "unknown" when the two can't be put in order. `null` while they match, or while
+ * either reports none. */
+export function versionGap(versions: Versions): "integration" | "controller" | "unknown" | null {
+  const { integration, controller } = versions;
+  if (!integration || !controller) return null;
+  const parts = (v: string) => (/^\d+(\.\d+)*$/.test(v) ? v.split(".").map(Number) : null);
+  const ours = parts(integration),
+    theirs = parts(controller);
+  if (!ours || !theirs) return integration === controller ? null : "unknown";
+  for (let i = 0; i < Math.max(ours.length, theirs.length); i++) {
+    const step = (ours[i] ?? 0) - (theirs[i] ?? 0);
+    if (step) return step < 0 ? "integration" : "controller";
+  }
+  return null;
+}
+const VERSION_FIX = {
+  integration:
+    "Update PHASE Control in Settings → Updates and restart Home Assistant. A downloaded update only runs once Home Assistant restarts.",
+  controller:
+    "Update the PHASE Controller app in Settings → Updates. Restarting the app alone keeps the old version.",
+  unknown:
+    "Update both to the same version in Settings → Updates, and restart Home Assistant after updating the integration.",
+};
+/** The integration and the controller are released as a pair, one version number for both. A
+ * Warning, not a Critical: a mismatch doesn't stop watering (each half reads what the other added
+ * later with a default), but a newer setting can do nothing, and this page can misjudge the
+ * controller. 1.9.0's dashboard blanked an EC that the 1.9.1 controller still steered by. */
+export function versionNotice(roomId: string, versions: Versions): Notice | null {
+  const behind = versionGap(versions);
+  if (!behind) return null;
+  return {
+    id: `${roomId}-versions`,
+    severity: "warning",
+    title:
+      behind === "integration"
+        ? "Integration out of date"
+        : behind === "controller"
+          ? "Controller app out of date"
+          : "Integration and controller app don't match",
+    detail: `The integration is ${versions.integration} and the controller app is ${versions.controller}. They're released as a pair, and until they match, a newer setting may do nothing and this page may describe the controller wrongly. It doesn't stop watering. ${VERSION_FIX[behind]}`,
+  };
+}
 export function roomEntities(states: States, room: Room): EntityState[] {
   if (!room.id) return [];
   const prefixes = [
@@ -895,6 +939,11 @@ export function buildRoom(states: States, room: Room): RoomView {
         (beat.health === "missing" ? ` ${JUST_STARTED} If it lasts longer, start` : " Start") +
         " or restart the controller app and check its log. Zone phases and statuses are its last report, not live.",
     });
+  // Only a running controller's version counts. A stopped one reports the version it last ran,
+  // which an update under way replaces, and the notice above says the more urgent thing.
+  const versions =
+    config && (live || shot) ? versionNotice(room.id, runningVersions(states, room)) : null;
+  if (versions) alerts.push(versions);
   if (config && boolean(engineEntity) === null)
     alerts.unshift({
       id: `${room.id}-engine-unavailable`,

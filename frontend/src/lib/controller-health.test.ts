@@ -993,3 +993,89 @@ describe("holds the clock draws in red", () => {
       expect(holdNeedsSomeone(hold), hold).toBe(false);
   });
 });
+
+describe("integration and controller versions", () => {
+  /** The healthy room, its integration and controller reporting these versions. */
+  const paired = (integration?: string, controller?: string, beat = entity(HEARTBEAT, "healthy")) =>
+    fixture([
+      entity("sensor.crop_steering_engine_config", "ready", {
+        prefix: "",
+        slug: "",
+        num_zones: 2,
+        enable_flag: "input_boolean.f2_control_enabled",
+        ...(integration ? { integration_version: integration } : {}),
+      }),
+      {
+        ...beat,
+        attributes: {
+          enable_flag: "input_boolean.f2_control_enabled",
+          ...beat.attributes,
+          ...(controller ? { controller_version: controller } : {}),
+        },
+      },
+    ]);
+  const notice = (states: States) =>
+    view(states).alerts.find((alert) => alert.id === "room:-versions");
+
+  it("says nothing while the two match, or while either reports none", () => {
+    expect(view(paired("1.9.1", "1.9.1")).alerts).toEqual([]);
+    expect(notice(paired("1.9.1"))).toBeUndefined();
+    expect(notice(paired(undefined, "1.9.1"))).toBeUndefined();
+  });
+  it("names the integration when it is behind, as on the GT site on 22 Nov 2026", () => {
+    expect(notice(paired("1.9.0", "1.9.1"))).toEqual({
+      id: "room:-versions",
+      severity: "warning",
+      title: "Integration out of date",
+      detail:
+        "The integration is 1.9.0 and the controller app is 1.9.1. They're released as a pair, and until they match, a newer setting may do nothing and this page may describe the controller wrongly. It doesn't stop watering. Update PHASE Control in Settings → Updates and restart Home Assistant. A downloaded update only runs once Home Assistant restarts.",
+    });
+  });
+  it("names the controller app when it is behind", () => {
+    expect(notice(paired("1.9.1", "1.9.0"))).toMatchObject({
+      severity: "warning",
+      title: "Controller app out of date",
+    });
+    expect(notice(paired("1.9.1", "1.9.0"))!.detail).toMatch(
+      /^The integration is 1\.9\.1 and the controller app is 1\.9\.0\. .* Update the PHASE Controller app in Settings → Updates\. Restarting the app alone keeps the old version\.$/,
+    );
+  });
+  it("puts the numbers in order part by part, and a version the other can't be ordered with is only different", () => {
+    expect(notice(paired("1.10.0", "1.9.1"))!.title).toBe("Controller app out of date");
+    expect(notice(paired("1.9", "1.10.0"))!.title).toBe("Integration out of date");
+    expect(notice(paired("1.9", "1.9.0"))).toBeUndefined();
+    expect(notice(paired("1.9.1", "1.9.1-dev"))).toMatchObject({
+      title: "Integration and controller app don't match",
+    });
+    expect(notice(paired("1.9.1", "1.9.1-dev"))!.detail).toMatch(
+      /Update both to the same version in Settings → Updates, and restart Home Assistant after updating the integration\.$/,
+    );
+  });
+  it("waits for a running controller: a stopped or silent one says the more urgent thing", () => {
+    // An app update stops the old controller first, which still reports the version it ran.
+    const stopped = entity(HEARTBEAT, "stopped", { stopped_at: ago(60_000) }, ago(60_000));
+    expect(view(paired("1.9.1", "1.9.0", stopped)).alerts.map((alert) => alert.title)).toEqual([
+      "Controller stopped",
+    ]);
+    const silent = entity(HEARTBEAT, "healthy", {}, ago(60 * 60_000));
+    expect(view(paired("1.9.1", "1.9.0", silent)).alerts.map((alert) => alert.title)).toEqual([
+      "Controller not running",
+    ]);
+  });
+  it("comes after the criticals in Needs you, and an off room says nothing", () => {
+    const states = paired("1.9.0", "1.9.1");
+    states["sensor.crop_steering_vwc_zone_1"] = entity(
+      "sensor.crop_steering_vwc_zone_1",
+      "unavailable",
+    );
+    states[HEARTBEAT].attributes.hardware_fault = "hardware fault (CS-301): pump stuck on";
+    expect(view(states).alerts.map((alert) => [alert.severity, alert.title])).toEqual([
+      ["critical", "Watering stopped: a pump or valve didn’t switch off (CS-301)"],
+      ["warning", "Zone 1: sensor data unavailable"],
+      ["warning", "Integration out of date"],
+    ]);
+    const off = paired("1.9.0", "1.9.1");
+    off["switch.crop_steering_room_active"] = entity("switch.crop_steering_room_active", "off");
+    expect(notice(off)).toBeUndefined();
+  });
+});

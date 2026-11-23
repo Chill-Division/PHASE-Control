@@ -1,3 +1,7 @@
+# Unreleased
+
+- Needs you, on the Overview, says when the integration and the controller app are on different versions, and which one to update. It doesn't stop watering.
+
 # 1.9.1
 
 Pair with integration 1.9.1.

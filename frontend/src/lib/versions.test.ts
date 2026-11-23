@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { discoverRooms, runningVersions } from "./model";
+import { discoverRooms, runningVersions, versionGap } from "./model";
 import type { States } from "./types";
 
 const entity = (entity_id: string, attributes: Record<string, unknown>) => ({
@@ -47,5 +47,28 @@ describe("running versions", () => {
       integration: null,
       controller: null,
     });
+  });
+});
+
+describe("which half is behind", () => {
+  const gap = (integration: string | null, controller: string | null) =>
+    versionGap({ integration, controller });
+  it("orders the two part by part", () => {
+    expect(gap("1.9.0", "1.9.1")).toBe("integration");
+    expect(gap("1.9.1", "1.9.0")).toBe("controller");
+    expect(gap("1.10.0", "1.9.9")).toBe("controller");
+    expect(gap("2.0.0", "1.99.0")).toBe("controller");
+    expect(gap("1.9", "1.9.1")).toBe("integration");
+  });
+  it("is nothing while they match, or while either reports none", () => {
+    expect(gap("1.9.1", "1.9.1")).toBeNull();
+    expect(gap("1.9", "1.9.0")).toBeNull();
+    expect(gap(null, "1.9.1")).toBeNull();
+    expect(gap("1.9.1", null)).toBeNull();
+    expect(gap("1.9.1b0", "1.9.1b0")).toBeNull();
+  });
+  it("only says they differ when a version can't be put in order", () => {
+    expect(gap("1.9.1", "1.9.1b0")).toBe("unknown");
+    expect(gap("v1.9.1", "1.9.1")).toBe("unknown");
   });
 });
