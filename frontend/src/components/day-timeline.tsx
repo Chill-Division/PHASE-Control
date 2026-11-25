@@ -58,6 +58,7 @@ import {
   type Shot,
   type Span,
   type TargetStep,
+  type TimelineRow,
   type TimelineRows,
   type TypicalPoint,
 } from "@/lib/day-timeline";
@@ -300,12 +301,12 @@ function useEarlierDays(controller: Controller, day: GrowDay | null, ready: bool
   return earlier?.key === key ? earlier : null;
 }
 
-/** Who made the day's setting changes, from Home Assistant's logbook: read once the changes are
+/** Who made a day's setting changes, from Home Assistant's logbook: read once the changes are
  * known and again whenever another appears. Null until read; after a failed read, none, so the
- * changes show without who made them. */
+ * changes show without who made them. A day still going (`end` null) is read up to now. */
 function useChangeAuthors(
   controller: Controller,
-  day: GrowDay,
+  day: { start: number; end: number | null },
   changes: SetpointChange[],
 ): LogbookEntry[] | null {
   const ids = [...new Set(changes.map((change) => change.entityId))].sort();
@@ -313,14 +314,14 @@ function useChangeAuthors(
     ? [controller.roomId, day.start, changes.length, changes.at(-1)!.time, ...ids].join(" ")
     : "";
   const [read, setRead] = useState<{ key: string; entries: LogbookEntry[] } | null>(null);
-  const latest = useRef({ ids, start: day.start });
-  latest.current = { ids, start: day.start };
+  const latest = useRef({ ids, day });
+  latest.current = { ids, day };
   const load = controller.logbook;
   useEffect(() => {
     if (!key) return;
-    const { ids, start } = latest.current;
+    const { ids, day } = latest.current;
     let current = true;
-    load({ entityIds: ids, start, end: Date.now() + 60_000 }).then(
+    load({ entityIds: ids, start: day.start, end: (day.end ?? Date.now()) + 60_000 }).then(
       (entries) => current && setRead({ key, entries }),
       () => current && setRead({ key, entries: [] }),
     );
@@ -564,23 +565,9 @@ export function useLanes(
   const shared = oneValveRoom(states, room.room);
   const { view } = useWaterView();
   const decisions = rows[entities.attributeIds[0]] ?? [];
-  const settings = new Map(room.settings.map((setting) => [setting.entityId, setting]));
-  const found = setpointChanges(rows, [...settings.keys()], day.start, now);
-  const authors = useChangeAuthors(controller, day, found);
-  const people = peopleByUser(states, controller.viewer);
-  const changes = found.map((change): Change => {
-    const setting = settings.get(change.entityId) as Setting;
-    const zone = room.zones.find((item) => item.id === setting.zoneId);
-    return {
-      ...change,
-      name: setting.short ?? setting.label,
-      unit: setting.unit,
-      zoneId: setting.zoneId,
-      place:
-        setting.zoneId === undefined ? room.room.name : (zone?.name ?? `Zone ${setting.zoneId}`),
-      by: authors && changedBy(change, authors, people),
-    };
-  });
+  const found = setpointChanges(rows, settingIds(controller), day.start, now);
+  const authors = useChangeAuthors(controller, { start: day.start, end: null }, found);
+  const changes = namedChanges(controller, found, authors);
   const settingId = (zone: Zone, key: string) => {
     // Like the controller: the zone's own setpoint when it has one, else the room's.
     const own = `number.crop_steering_${room.room.prefix}zone_${zone.id}_${key}`;
@@ -594,9 +581,7 @@ export function useLanes(
   const revision = descriptor(states, room.room)?.attributes.setup_revision;
   const lanes = room.zones.map((zone): Lane => {
     const ids = entities.zones.find((item) => item.id === zone.id);
-    const shots = valveShots(ids?.valve ? rows[ids.valve] : [], decisions, zone.id, day.start, now);
-    const bands = alignBands(phaseBands(ids && rows[ids.phase], day.start, now), shots);
-    const blocks = zoneBlocks(decisions, zone.id, day.start, now);
+    const { shots, bands, blocks } = zoneRecord(rows, decisions, ids, zone.id, day.start, now);
     const points = ids?.vwc ? readings(rows[ids.vwc], day.start, now) : [];
     const gaps = ids?.vwc ? recordedGaps(rows[ids.vwc], day.start, now) : [];
     const water = waterParameters(controller, zone.id);
@@ -760,10 +745,7 @@ export function useLanes(
       stopped,
       next,
       p1Shots,
-      water: (seconds) => {
-        const given = estimateRuntime(flowInputs(water), seconds).requested;
-        return (view === "plant" ? given?.mlPerPlant : given?.zoneL) ?? null;
-      },
+      water: waterOf(water, view),
       view,
       targets: stoppedTargets(
         phaseTargets([...bands, ...ahead.filter((band) => band.end > band.start)], setpoint, [
@@ -805,15 +787,156 @@ export function useLanes(
     };
   });
   const roomChanges = changes.filter((change) => change.zoneId === undefined);
-  const events = [
-    ...lanes.flatMap((lane) => laneEvents(lane, day)),
-    ...roomChanges.map((change) => ({ time: change.time, text: changeText(change) })),
-  ].sort((a, b) => a.time - b.time);
+  const events = dayEvents(lanes, roomChanges, day);
   const lines = lanes.map((lane) => ({
     lane,
     ...tracking(lane, day, now, layers.compare, earlier),
   }));
   return { lanes, roomChanges, events, lines };
+}
+
+/** A past grow-day's record does not change: each is loaded once while the page is open. */
+const pastLoads = new Map<string, Promise<TimelineRows>>();
+/** The grow-day before today, from its lights-on to today's, with the events Earlier today lists
+ * for today: phase changes, shots, holds and setting changes with who made them, oldest first.
+ * Loaded the first time it is `wanted`. `events` is null while it is not, while it loads, and
+ * after a failed load (`error`). */
+export function useYesterday(controller: Controller, data: DayData, wanted: boolean) {
+  const { room, states } = controller;
+  const { view } = useWaterView();
+  const prefix = room.room.prefix;
+  const hours = {
+    on: numeric(states[`number.crop_steering_${prefix}lights_on_hour`]),
+    off: numeric(states[`number.crop_steering_${prefix}lights_off_hour`]),
+  };
+  const day = (data.day && earlierDays(data.day, 1, () => hours)[0]) || null;
+  const { entities, ready } = data;
+  const key =
+    day && entities.entityIds.length
+      ? [controller.demo, room.room.id, day.start, day.end, ...entities.entityIds, "|"]
+          .concat(entities.attributeIds)
+          .join(" ")
+      : "";
+  const [loaded, setLoaded] = useState<{ key: string; rows: TimelineRows | null; error: string }>();
+  const [attempt, setAttempt] = useState(0);
+  const latest = useRef({ entities, day });
+  latest.current = { entities, day };
+  const load = controller.timeline;
+  useEffect(() => {
+    const { entities: ids, day } = latest.current;
+    if (!key || !wanted || !ready || !day) return;
+    let current = true;
+    let pending = pastLoads.get(key);
+    if (!pending) {
+      pending = load({ ...ids, start: day.start, end: day.end });
+      // A page left open for days keeps only its latest few.
+      if (pastLoads.size >= 4) pastLoads.delete(pastLoads.keys().next().value!);
+      pastLoads.set(key, pending);
+      pending.catch(() => pastLoads.delete(key));
+    }
+    pending.then(
+      (rows) => current && setLoaded({ key, rows, error: "" }),
+      (reason) => current && setLoaded({ key, rows: null, error: errorText(reason) }),
+    );
+    return () => {
+      current = false;
+    };
+  }, [key, wanted, ready, load, attempt]);
+  const read = loaded?.key === key ? loaded : null;
+  // Worked out only while it is shown: the page redraws with every live update.
+  const rows = (wanted && read?.rows) || null;
+  const found =
+    rows && day ? setpointChanges(rows, settingIds(controller), day.start, day.end) : [];
+  const authors = useChangeAuthors(
+    controller,
+    { start: day?.start ?? 0, end: day?.end ?? 0 },
+    found,
+  );
+  const changes = namedChanges(controller, found, authors);
+  const decisions = rows?.[entities.attributeIds[0]] ?? [];
+  const lanes =
+    rows && day
+      ? room.zones.map((zone) => {
+          const ids = entities.zones.find((item) => item.id === zone.id);
+          const record = zoneRecord(rows, decisions, ids, zone.id, day.start, day.end);
+          return {
+            zone,
+            bands: record.bands,
+            // The day ended at today's lights-on: a shot or a hold still going then ended there.
+            shots: record.shots.map((shot) => ({ ...shot, open: false })),
+            blocks: record.blocks.map((block) => ({ ...block, open: false })),
+            changes: changes.filter((change) => change.zoneId === zone.id),
+            water: waterOf(waterParameters(controller, zone.id), view),
+            view,
+          };
+        })
+      : [];
+  return {
+    day,
+    events:
+      rows && day
+        ? dayEvents(
+            lanes,
+            changes.filter((change) => change.zoneId === undefined),
+            day,
+          )
+        : null,
+    error: wanted ? (read?.error ?? "") : "",
+    retry: () => setAttempt((value) => value + 1),
+  };
+}
+
+/** Every setting the day timeline follows: the room's, and each zone's own. */
+const settingIds = (controller: Controller) =>
+  controller.room.settings.map((setting) => setting.entityId);
+/** Setting changes as the events list them: the setting's short name and unit, the zone or room it
+ * belongs to, and who made it, once the logbook has said (`authors`). */
+function namedChanges(
+  controller: Controller,
+  found: SetpointChange[],
+  authors: LogbookEntry[] | null,
+): Change[] {
+  const { room, states } = controller;
+  const settings = new Map(room.settings.map((setting) => [setting.entityId, setting]));
+  const people = peopleByUser(states, controller.viewer);
+  return found.map((change): Change => {
+    const setting = settings.get(change.entityId) as Setting;
+    const zone = room.zones.find((item) => item.id === setting.zoneId);
+    return {
+      ...change,
+      name: setting.short ?? setting.label,
+      unit: setting.unit,
+      zoneId: setting.zoneId,
+      place:
+        setting.zoneId === undefined ? room.room.name : (zone?.name ?? `Zone ${setting.zoneId}`),
+      by: authors && changedBy(change, authors, people),
+    };
+  });
+}
+/** A zone's record over a window: its valve's shots, named by the controller's decisions, its
+ * phases (aligned to those shots) and what held it back. */
+function zoneRecord(
+  rows: TimelineRows,
+  decisions: TimelineRow[],
+  ids: { phase: string; valve: string | null } | undefined,
+  zoneId: number,
+  from: number,
+  to: number,
+) {
+  const shots = valveShots(ids?.valve ? rows[ids.valve] : [], decisions, zoneId, from, to);
+  return {
+    shots,
+    bands: alignBands(phaseBands(ids && rows[ids.phase], from, to), shots),
+    blocks: zoneBlocks(decisions, zoneId, from, to),
+  };
+}
+/** The water `seconds` of a zone's valve gives at its configured flow, as Water today reads it:
+ * the zone's litres, or each plant's mL. Null without the flow. */
+function waterOf(water: ReturnType<typeof waterParameters>, view: WaterView) {
+  return (seconds: number) => {
+    const given = estimateRuntime(flowInputs(water), seconds).requested;
+    return (view === "plant" ? given?.mlPerPlant : given?.zoneL) ?? null;
+  };
 }
 
 function Timeline({
@@ -854,13 +977,7 @@ function Timeline({
   const lines =
     only === undefined ? all.lines : all.lines.filter((line) => line.lane.zone.id === only);
   const lanes = lines.map((line) => line.lane);
-  const events =
-    only === undefined
-      ? all.events
-      : [
-          ...lanes.flatMap((lane) => laneEvents(lane, day)),
-          ...roomChanges.map((change) => ({ time: change.time, text: changeText(change) })),
-        ].sort((a, b) => a.time - b.time);
+  const events = only === undefined ? all.events : dayEvents(lanes, roomChanges, day);
   const plot = Math.max(160, width - 48);
   const x = (time: number) =>
     Math.max(0, Math.min(plot, ((time - day.start) / (day.end - day.start)) * plot));
@@ -1785,7 +1902,7 @@ function changeText(change: Change): string {
   return `${clock(change.time)} · ${change.place} · ${changeSentence(change.name, change.unit, change.from, change.to, change.by)}`;
 }
 /** Water as the lane gives it: "1.6 L" for the zone, or "400 mL per plant". */
-function amount(lane: Lane, value: number): string {
+function amount(lane: EventLane, value: number): string {
   return lane.view === "plant" ? `${plantText(value)} per plant` : `${number(value)} L`;
 }
 /** A difference in it, against yesterday or the typical day: "+0.4 L", "−120 mL". */
@@ -1796,11 +1913,11 @@ function signedAmount(lane: Lane, value: number): string {
     : `${value > 0 ? "+" : "−"}${plantText(Math.abs(value))}`;
 }
 /** What a shot gave at the configured flow, when the flow is known. */
-function flowText(lane: Lane, shot: { start: number; end: number }): string[] {
+function flowText(lane: EventLane, shot: { start: number; end: number }): string[] {
   const given = lane.water((shot.end - shot.start) / 1000);
   return given === null ? [] : [`≈${amount(lane, given)} at the configured flow`];
 }
-function shotText(shot: Shot, lane: Lane): string {
+function shotText(shot: Shot, lane: EventLane): string {
   return [
     `${clock(shot.start)}–${shot.open ? "now" : clock(shot.end)}`,
     lane.zone.name,
@@ -1809,10 +1926,12 @@ function shotText(shot: Shot, lane: Lane): string {
     ...(shot.reason ? [shot.reason] : []),
   ].join(" · ");
 }
-function blockText(block: Block, lane: Lane): string {
+function blockText(block: Block, lane: EventLane): string {
   return `${clock(block.start)}–${block.open ? "now" : clock(block.end)} · ${lane.zone.name} · ${HELD[block.kind]} for ${duration(block.end - block.start)}: ${block.text}`;
 }
-export function laneEvents(lane: Lane, day: GrowDay) {
+/** What a zone's events are told from: its lane today, or its record of a past day. */
+type EventLane = Pick<Lane, "zone" | "bands" | "shots" | "blocks" | "changes" | "water" | "view">;
+export function laneEvents(lane: EventLane, day: GrowDay) {
   const name = lane.zone.name;
   return [
     ...lane.bands.flatMap((band, index) =>
@@ -1829,4 +1948,11 @@ export function laneEvents(lane: Lane, day: GrowDay) {
     ...lane.blocks.map((block) => ({ time: block.start, text: blockText(block, lane) })),
     ...lane.changes.map((change) => ({ time: change.time, text: changeText(change) })),
   ];
+}
+/** A grow-day's events in time order: each zone's, then the room's own setting changes. */
+function dayEvents(lanes: EventLane[], roomChanges: Change[], day: GrowDay) {
+  return [
+    ...lanes.flatMap((lane) => laneEvents(lane, day)),
+    ...roomChanges.map((change) => ({ time: change.time, text: changeText(change) })),
+  ].sort((a, b) => a.time - b.time);
 }
