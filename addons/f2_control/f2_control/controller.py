@@ -2617,22 +2617,61 @@ class Controller:
             litres += size / 100.0 * substrate if math.isfinite(substrate) and substrate > 0 else 0.0
         return litres
 
+    def _draw_rate(self, room):
+        """How far a litre of this room's shots takes its reservoir's level down, in points: what its
+        shots have really taken (the leak check's usual, _usual_draw), or what a refill showed 1% holds,
+        whichever is more, so a shot planned to fit never takes it further than planned. None before
+        either is known. GR1, 26 Nov 2026: its shots took about 1.3 times their litres from the
+        reservoir, and four of its eight refills from 23 Nov started at 0% to 4%, under its 5% minimum."""
+        batch = room.batch
+        per_pct = batch.get("litres_per_pct")
+        rates = [rate for rate in (self._usual_draw(batch), 1.0 / per_pct if per_pct else None) if rate]
+        return max(rates) if rates else None
+
+    def _reservoir_part(self, room, zone, size, reason):
+        """The part of a shot its reservoir has room for, as (size, reason), or None. A shot that would
+        take the reservoir under its minimum waits for a refill (_reservoir_block), but a refill can't
+        start while the reservoir is too full for its fill (_fill_overflow), and only a shot takes it
+        lower. GR1, 26 Nov 2026: at 13%, with its 145 L fill adding about 88%, nothing was watered from
+        08:19, and CS-703 said every half hour that the refill could not start. So the shot gives what
+        the reservoir has above its minimum, and the refill starts once it reads that low (_batch_idle). Not a test shot, which runs
+        its 10 s to test the drippers, and not when the fill is too big even at the minimum
+        (_refill_cannot: watering is held and said so, CS-704)."""
+        reading, per_pct, rate = getattr(room, "_res", None), room.batch.get("litres_per_pct"), self._draw_rate(room)
+        if (getattr(reason, "kind", None) == "test_shot" or not reading or reading["pct"] is None
+                or reading["min"] <= 0 or not per_pct or not rate or not reading.get("plan")):
+            return None
+        left = reading["pct"] - (getattr(room, "_drawn_l", 0.0) or 0.0) * rate  # after this pass's shots
+        whole = self._shot_litres(room, zone, size)
+        if whole <= 0 or left <= reading["min"] or left - whole * rate >= reading["min"]:
+            return None  # nothing to give, or it fits as it is
+        if left + reading["plan"]["batch_l"] / per_pct <= 100.0 or self._refill_cannot(room):
+            return None  # it waits for the refill, which fits now, or no refill can start (CS-704)
+        part = max(math.floor(size * (left - reading["min"]) / (whole * rate) * 100.0) / 100.0, 0.01)
+        note = (f"reservoir {left:.0f}%, too low for this shot and too full for its refill: "
+                f"{log_words.amount(size)}% cut to {log_words.amount(part)}%")
+        cut = Reason(f"{reason} | {note}", getattr(reason, "kind", "idle"), getattr(reason, "cap_exempt", False))
+        if hasattr(reason, "copies"):
+            cut.copies = reason.copies
+        return part, cut
+
     def _reservoir_block(self, room, zone, size):
         """Why a shot waits for the reservoir, or None: it would take the reservoir under its minimum,
-        with what this pass's shots have taken (or, before a refill has shown what 1% holds, the
-        reservoir already reads under it). With automatic refills on the shot waits for one, which the
-        next passes start (_refill_due counts the litres waiting); without, or when one cannot start,
-        watering is held, and said so (CS-704), until it reads enough again."""
+        with what this pass's shots have taken (or, before the room's shots or a refill have shown how
+        far a litre takes its level, the reservoir already reads under it). With automatic refills on
+        the shot waits for one, which the next passes start (_refill_due counts the litres waiting).
+        Without, or when one cannot start, watering is held, and said so (CS-704), until it reads
+        enough again. One too full for its fill is cut first (_reservoir_part)."""
         reading = getattr(room, "_res", None)
         if not reading or reading["pct"] is None or reading["min"] <= 0:
             return None
-        per_pct = room.batch.get("litres_per_pct")
+        rate = self._draw_rate(room)
         litres = (getattr(room, "_drawn_l", 0.0) or 0.0) + self._shot_litres(room, zone, size)
-        if reading["pct"] - (litres / per_pct if per_pct else 0.0) >= reading["min"]:
+        if reading["pct"] - litres * (rate or 0.0) >= reading["min"]:
             return None
         room._waiting_l = max(getattr(room, "_waiting_l", 0.0) or 0.0, litres)
         level = f"the reservoir reads {reading['pct']:.0f}%"
-        why = (f"{level}, and this shot would take it under its {reading['min']:g}% minimum" if per_pct
+        why = (f"{level}, and this shot would take it under its {reading['min']:g}% minimum" if rate
                else f"{level}, under its {reading['min']:g}% minimum")
         cannot = self._refill_cannot(room)
         if cannot is None:
@@ -2886,12 +2925,35 @@ class Controller:
 
     def _refill_cannot(self, room):
         """Why the reservoir can't be refilled by itself now, or None: automatic refills off, the last
-        refill not raising it, or a batch that can't start (_batch_refusal)."""
+        refill not raising it, a batch that can't start (_batch_refusal), or a fill too big for the
+        reservoir even at its minimum (_fill_too_big)."""
         if not self._on(f"switch.crop_steering_{room.prefix}auto_batches", False):
             return "automatic refills are off"
         if not room.batch["armed"]:
             return "the last refill did not raise it"
-        return self._batch_refusal(room, room.hw["reservoir"], room._res["plan"])
+        return self._batch_refusal(room, room.hw["reservoir"], room._res["plan"]) or self._fill_too_big(room)
+
+    def _fill_too_big(self, room):
+        """Why the room's fill can't go into its reservoir even once shots have taken it down to its
+        minimum, or None: the fill adds more than the reservoir holds above its minimum, as a refill has
+        shown, so a refill could overflow it there too, and no shot takes it lower."""
+        reading, per_pct = getattr(room, "_res", None) or {}, room.batch.get("litres_per_pct")
+        plan, minimum = reading.get("plan"), reading.get("min") or 0.0
+        if not plan or not per_pct or minimum <= 0:
+            return None
+        rise = plan["batch_l"] / per_pct
+        if minimum + rise <= 100.0:
+            return None
+        return (f"its {plan['batch_l']:g} L fill adds about {rise:.0f}%, more than the {100.0 - minimum:g}% "
+                f"above its {minimum:g}% minimum, so even there a refill could overflow it")
+
+    def _fill_fits_at_minimum(self, room, plan):
+        """Would the room's fill go into its reservoir once shots have taken it down to its minimum, as a
+        refill has shown what 1% holds: then a refill too full to start now starts after the next shot,
+        cut to what the reservoir has above its minimum if it must be (_reservoir_part)."""
+        reading, per_pct = getattr(room, "_res", None) or {}, room.batch.get("litres_per_pct")
+        minimum = reading.get("min") or 0.0
+        return bool(plan and per_pct and minimum > 0 and minimum + plan["batch_l"] / per_pct <= 100.0)
 
     def _watering_held(self, room):
         """The room's shots wait for its reservoir with nothing to refill it by itself: why, and why it
@@ -3025,8 +3087,8 @@ class Controller:
         held = f" (about {pct * per_pct:.0f} L)" if per_pct else ""
         minimum = reading["min"]
         if minimum > 0:
-            need = getattr(room, "_next_round_l", 0.0) or 0.0
-            rounds = int((pct - minimum) * per_pct // need) if per_pct and need else None
+            need, rate = getattr(room, "_next_round_l", 0.0) or 0.0, self._draw_rate(room)
+            rounds = int((pct - minimum) // (need * rate)) if rate and need else None
             stop = f"Watering stops at its {minimum:g}% minimum" + (
                 "" if rounds is None
                 else ", within the next round of shots" if rounds < 1
@@ -3069,15 +3131,15 @@ class Controller:
     def _refill_due(self, room):
         """Would the room's next round of shots take its reservoir under its minimum: True or False,
         None when it can't tell (no level, or no minimum). The round is every zone's next shot
-        (_plan_next_round), in % of the reservoir once a refill has shown what 1% holds; before that,
-        the level alone: due once it reads under the minimum."""
+        (_plan_next_round), in % of the reservoir once the room's shots or a refill have shown how far a
+        litre takes its level (_draw_rate). Before that, the level alone: due once it reads under the
+        minimum."""
         reading = getattr(room, "_res", None)
         if not reading or reading["pct"] is None or reading["min"] <= 0:
             return None
-        per_pct = room.batch.get("litres_per_pct")
+        rate = self._draw_rate(room)
         litres = max(getattr(room, "_next_round_l", 0.0) or 0.0, getattr(room, "_waiting_l", 0.0) or 0.0)
-        need = litres / per_pct if per_pct else 0.0
-        return reading["pct"] - need < reading["min"]
+        return reading["pct"] - litres * (rate or 0.0) < reading["min"]
 
     def _fill_overflow(self, room, plan, requested, forced=False):
         """Why the fill could overflow the reservoir now, or None. Once a refill has shown what 1%
@@ -3118,6 +3180,7 @@ class Controller:
         due = self._refill_due(room)
         if not due:
             self._resolve_alert(f"res_low_{room.slug}")  # watering is not held for it (any more)
+            room._overflow_said = False  # the next time a refill waits for a shot to make room, say so
         if due is False:
             if not batch["armed"]:
                 batch["armed"] = True  # the next time it runs short may start a batch
@@ -3155,7 +3218,19 @@ class Controller:
         if wait:
             # Due while another room fills: it stays due, and starts at the first pass after.
             return self._fill_waits(room, now, wait)
-        why = self._batch_refusal(room, res, plan) or self._fill_overflow(room, plan, requested, forced)
+        refusal = self._batch_refusal(room, res, plan)
+        overflow = None if refusal else self._fill_overflow(room, plan, requested, forced)
+        if overflow and not requested and self._fill_fits_at_minimum(room, plan):
+            # Too full for its fill now, but not once shots have taken it down to its minimum: the next
+            # shot makes the room, cut to what the reservoir has above its minimum if it must be
+            # (_reservoir_part), and this starts after it. Nothing to raise: GR1, 26 Nov 2026, said
+            # CS-703 every half hour from 08:24 while nothing was watered.
+            batch["low_seen"] = 0
+            if not getattr(room, "_overflow_said", False):
+                room._overflow_said = True
+                self._batch_note(room, now, f"reservoir refill waits for the next shot to make room: {overflow}")
+            return
+        why = refusal or overflow
         if why:
             batch["low_seen"] = 0
             self._alert(
@@ -3193,7 +3268,7 @@ class Controller:
         """Why an automatic refill starts, in words: the level and what the next round needs."""
         reading = room._res
         need = getattr(room, "_next_round_l", 0.0) or 0.0
-        if room.batch.get("litres_per_pct") and need:
+        if self._draw_rate(room) and need:
             return (f"the reservoir reads {reading['pct']:.0f}%, and the next round of shots ({need:.1f} L) "
                     f"would take it under its {reading['min']:g}% minimum")
         return f"the reservoir reads {reading['pct']:.0f}%, under its {reading['min']:g}% minimum"
@@ -5841,7 +5916,12 @@ class Controller:
             if fire and not block:
                 block = self._leak_block(room, zone, snaps, params, reason)
             if fire and not block:
-                block = self._reservoir_block(room, zone, size)
+                part = self._reservoir_part(room, zone, size, reason)
+                if part is not None:  # what the reservoir has above its minimum: its refill follows
+                    size, reason = part
+                    decisions[zone] = (fire, size, reason)
+                else:
+                    block = self._reservoir_block(room, zone, size)
             acted = self._act_zone(
                 room,
                 zone,
