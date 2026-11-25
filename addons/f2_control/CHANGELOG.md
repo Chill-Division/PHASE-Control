@@ -1,3 +1,7 @@
+# Unreleased
+
+- Earlier today, on the Overview, has Today and Yesterday buttons. Yesterday lists the grow-day before, from its lights-on to today's, so what happened in the night can still be seen once the lights are on.
+
 # 1.9.2
 
 Pair with integration 1.9.2.

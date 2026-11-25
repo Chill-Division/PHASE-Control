@@ -10,6 +10,27 @@ and code-level detail for developers and AI agents working on the repo.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+- **Earlier today has a Yesterday button.** Earlier today, on the Overview, lists the grow-day from
+  lights-on, so by the time the lights come on, the night's events have gone from it. A shot at
+  04:29 was out of sight by 07:00. Its new Today and Yesterday buttons switch it to the grow-day
+  before, from its lights-on to today's, the night included, newest first and in the same words:
+  phase changes, shots, holds, and setting changes with who made them. Yesterday is read from Home
+  Assistant's history the first time it's opened.
+
+### 🔧 Technical notes
+
+- `useYesterday` (`day-timeline.tsx`) loads the grow-day before today (`earlierDays(day, 1)`, at the
+  lights hours in force now) from the recorder the first time it's wanted, keeps it for the page
+  (`pastLoads`), and builds its events with the code today's use, now taken out of `useLanes`:
+  `zoneRecord`, `namedChanges` with the logbook (`useChangeAuthors` now takes the day's end),
+  `waterOf` and `dayEvents`. A shot or a hold still going at today's lights-on ends there. Nothing
+  is worked out while Today is shown. `EarlierToday` (`overview-parts.tsx`) has the two buttons
+  (`aria-pressed`), its heading follows them, and Yesterday shows its span. `verify-dashboard.mjs`
+  checks both days in the demo at 10:40, just after its lights-on.
+- `USER_GUIDE.md`.
+
 ## [1.9.2] - 2026-11-23
 
 Integration and controller **1.9.2**.
