@@ -21,6 +21,10 @@ people who build the system:
 `tests/test_whats_new.py` checks the shape and the plain words, and that the newest section is the
 version being released.
 
+## Unreleased
+
+- When the reservoir is too low for the next shot but too full to refill, that shot now gives what the reservoir has above its minimum and the refill follows, instead of watering stopping.
+
 ## 1.9.2 - 2026-11-23
 
 - If the integration and the controller app are on different versions, Needs you now says which one to update.

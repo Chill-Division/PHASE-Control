@@ -10,6 +10,42 @@ and code-level detail for developers and AI agents working on the repo.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+- **A reservoir too low for the next shot and too full for its refill no longer stops watering.** In
+  one room a 145 L fill adds about 88% to the reservoir, so a refill fits only from about 12%, and
+  shots stop at its 5% minimum. A ramp shot left it at 13%. The next one, about 17 L, would have taken
+  it under the minimum, so it waited for a refill, and the refill was refused because it could
+  overflow. Only a shot lowers the level, so nothing was watered from then on, and every half hour a
+  notification said the refill could not start. Now that shot gives what the reservoir has above its
+  minimum, about 10 L there, and the refill starts once it reads that low, with nothing to raise. A
+  fill that adds more than the reservoir holds above its minimum can't go in even there, so watering
+  is held and the Overview says why, as for any refill that can't start.
+- **Shots are planned with what they really take from the reservoir.** Shots and refills were
+  planned with what a refill showed 1% of the reservoir holds. Now they use what the room's shots
+  really take, as the leak check learns it, whenever that is more. In that room the shots took about
+  1.3 times their litres, and four of its eight refills in four days started under its 5% minimum, at
+  0% to 4%.
+
+### 🔧 Technical notes
+
+- Controller: `_reservoir_part` runs before `_reservoir_block` for any shot but a test shot. When a
+  shot would take the reservoir under its minimum, a refill could start by itself (`_refill_cannot`),
+  and the fill doesn't fit now (the level after this pass's shots plus `batch_l / litres_per_pct` is
+  over 100%), the shot is cut to what the reservoir has above its minimum, floored to 0.01%. Its reason
+  gets a segment, `reservoir 13%, too low for this shot and too full for its refill: 6% cut to 3.6%`,
+  which the decision's `fired` list carries to the dashboard and `log_words.shot` puts in words in the
+  log. `_batch_idle` no longer raises CS-703 for an automatic refill refused only as too full while
+  the fill fits at the minimum (`_fill_fits_at_minimum`). It notes once that it waits for the next
+  shot instead. `_fill_too_big`, in `_refill_cannot`, holds watering with CS-704 and says why on the
+  batch status's `watering_held` when the fill adds more than the reservoir holds above its minimum.
+  `_draw_rate`, the larger of the leak check's learned `draw_pct_per_l` (`_usual_draw`) and
+  `1 / litres_per_pct`, now plans `_reservoir_block`, `_refill_due`, `_refill_why` and CS-706's rounds
+  of shots, so a room filled by hand plans by its shots too. GR1, 26 Nov 2026: 13% after its 08:19
+  ramp shot, then CS-703 at 08:24, 08:55 and 09:25 with nothing watered. `test_reservoir_gap.py`.
+- Docs: CS-703, CS-704 and CS-706 in `docs/error-codes.json` and `ERROR_CODES.md` (the dashboard's
+  Help, rebuilt), `USER_GUIDE.md`.
+
 ## [1.9.2] - 2026-11-23
 
 Integration and controller **1.9.2**.

@@ -1,3 +1,7 @@
+# Unreleased
+
+- A reservoir too low for the next shot and too full for its refill no longer stops watering. That shot gives what the reservoir has above its minimum, and the refill follows. Shots and refills are planned with what the room's shots really take from the reservoir, as the leak check learns it. A fill that adds more than the reservoir holds above its minimum holds watering and says why (CS-704).
+
 # 1.9.2
 
 Pair with integration 1.9.2.
