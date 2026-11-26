@@ -1,3 +1,7 @@
+# Unreleased
+
+- Each zone's Auto setpoints line, on Irrigation strategy, shows when its Relearn peak button was last pressed, and how long ago.
+
 # 1.9.2
 
 Pair with integration 1.9.2.
