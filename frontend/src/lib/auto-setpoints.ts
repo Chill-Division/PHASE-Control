@@ -1,4 +1,5 @@
-import type { EntityState } from "./types";
+import { ageText } from "./controller-health";
+import type { EntityState, States } from "./types";
 
 const STATES = ["off", "learning", "tracking", "frozen"] as const;
 // "short": the ramp ended at its maximum shots while still rising, target not reached.
@@ -71,6 +72,21 @@ export function parseAutoSetpoints(entity: EntityState | undefined): AutoSetpoin
   };
 }
 export const autoStateLabel = (state: AutoSetpointState) => state[0].toUpperCase() + state.slice(1);
+/** When a zone's Relearn Peak button was last pressed, epoch ms, or null when it never was: the
+ * button's state, which Home Assistant keeps across restarts. It is the press, whoever made it, not
+ * what Auto setpoints changed since (its last change says that). Owner, 26 Nov 2026: "So I know when
+ * I last booped the button per-zone". */
+export function relearnedAt(states: States, prefix: string, zoneId: number): number | null {
+  const at = Date.parse(
+    states[`button.crop_steering_${prefix}zone_${zoneId}_relearn_peak`]?.state ?? "",
+  );
+  return Number.isFinite(at) ? at : null;
+}
+/** A zone's Last reset: when, and how long ago, as "24/11/26, 9:12 am (2 d ago)", or "never". */
+export const lastResetText = (at: number | null, now: number): string =>
+  at === null
+    ? "never"
+    : `${new Date(at).toLocaleString([], { dateStyle: "short", timeStyle: "short" })} (${ageText(now - at)} ago)`;
 /** Hold time beside a known learned peak: "held 3 days", or "probing higher" at 0. */
 export const autoHoldText = (status: AutoSetpointStatus): string | null =>
   status.learnedPeak === null || status.holdDays === null
