@@ -1,3 +1,7 @@
+# Unreleased
+
+- In a room on one valve, each zone dries back from its own peak, overnight and in the morning, and the first zone to reach its own line waters them all. The Overnight dryback card gives tonight's line from the day's real peak, every zone's in a room on one valve.
+
 # 1.9.2
 
 Pair with integration 1.9.2.

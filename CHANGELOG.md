@@ -10,6 +10,41 @@ and code-level detail for developers and AI agents working on the repo.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+- **In a room on one valve, each zone dries back from its own peak.** One shot waters every zone in
+  such a room, and its overnight dryback was worked out from one peak for the room, made from its
+  zones' peaks the way its readings are made one. In one room the zones peaked at 99.4% and 86.4% on
+  27 Nov, and a 30% dryback held both to one 60.5% line. Now each zone holds its own line, 30% below
+  its own peak, and the room is watered as soon as the first zone reaches its own, so no zone dries
+  back further than asked. The morning dryback works the same way: the ramp starts as soon as the
+  first zone has dried its amount from its own lights-on reading. The zone cards say which zone is
+  closest to its line.
+- **The Overnight dryback card says tonight's line.** It worked the line out from the Peak target, so
+  on a day that peaked higher it showed a lower line than the controller held. Once a zone has had its
+  peak for the day, the card gives the line from that peak, and in a room on one valve every zone's
+  line. Before then it still works the line out from the Peak target, as a plan.
+
+### 🔧 Technical notes
+
+- Engine: `ZoneSnapshot.dryback_vwc` and `dryback_zone` (None unless given, as before). With them, the
+  zone furthest into its own dryback gives `peak_vwc`, `dryback_pct` and the reading that P0's exit,
+  P2's early move to P3 and P3's hold compare (`dryback_reading`). The absolute rules stay on `vwc`.
+  P0's transition and the hold's reason end with ` Z<n>`, and `waiting_for`'s `p0_dryback` and
+  `p3_hold` carry `zone`, with that zone's reading as `now`. `test_zone_drybacks.py`. The add-on's copy
+  of the engine is in step.
+- Controller: `_group_dryback` picks the zone of a one-valve room furthest into its own dryback, by its
+  own reading and its `own_peak`, among the zones in the room's reading, and `_snapshot` passes it.
+  `log_words.transition` and `shot` name the zone (`names`, from `_log_names`). `_publish_waiting_for`
+  adds `zone_name` to a condition with a `zone` and publishes `peak`, the zone's own highest reading of
+  the day (each zone's `own_peak` on one valve, else its `peak`). `next_text` names the zone, and picks
+  the P0 level drying reaches first by how far it is under its own reading. GT1, 27 Nov 2026: the
+  room's Lowest peak was GT1-BP's 86.4%, while GT1-AT's was 99.4%. `test_zone_own_dryback.py`.
+- Dashboard: `waitingText` names the zone, and `readWaiting` reads `peak`. `drybackWords`
+  (`dryback-words.ts`) gives the P3 dryback card's line, tonight's from each zone's published peak in
+  P2 or P3, else the Peak target's. Tests in `waiting-for.test.ts` and `dryback-words.test.ts`.
+- Docs: `USER_GUIDE.md`, `ENTITIES.md`, `CLAUDE.md`.
+
 ## [1.9.2] - 2026-11-23
 
 Integration and controller **1.9.2**.
