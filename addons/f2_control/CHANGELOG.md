@@ -1,3 +1,7 @@
+# Unreleased
+
+- A zone's moisture that holds still is steered by for up to 2 hours in every room, as in a one-valve room, so a quiet night no longer gets a zone watered on its dead-probe timer. A still reading at 100% or under the rescue level, or one a shot hasn't moved, still counts as gone after 20 minutes.
+
 # 1.9.2
 
 Pair with integration 1.9.2.

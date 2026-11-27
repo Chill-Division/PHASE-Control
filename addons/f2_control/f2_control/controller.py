@@ -272,6 +272,14 @@ _WORKING_ADVICE = {
 }
 
 
+# What CS-101 advises for a reading that didn't move when its zone was watered (_unchanged).
+_WATERED_ADVICE = (
+    "Check the probe is pushed into its cube and connected, and that the dripper on that cube runs. "
+    "Watering goes back to normal by itself once the reading changes (this notification stays until you "
+    "dismiss it)."
+)
+
+
 def _probe_why(code, sentence, advice=None):
     """What Controller._unreadable says: (code, sentence, advice), the code's own advice unless another
     fits better."""
@@ -499,13 +507,15 @@ PLUMBING_LAYOUTS = {
 # fertigation valve for three zones). The zones keep their own probes and readings, and share one phase,
 # one set of targets and every shot (_valve_group).
 ONE_VALVE_LAYOUTS = frozenset({"pump_one_valve"})
-# How long a one-valve room keeps a zone's moisture that has stopped changing, in minutes. A reading that
-# has stayed the same for 20 minutes is not steered by (_read_sensor), and in a one-valve room its zone
-# left the room's reading, which jumped to the others': GR1's probes held still for up to 80 minutes on
-# quiet nights (30 Oct 2026) and the jumps passed for drybacks, and GT1's 100% made the day's peak while
-# its other zone was out (3 Nov). Two readings still leave after 20 minutes (_group_readings): 100%, the
-# top of the scale, which a probe sitting in water reads, and one under the room's rescue level, which
-# would fire rescue shots that no daily limit stops.
+# How long a zone's moisture that has stopped changing is still steered by, in minutes. A reading that
+# had stayed the same for 20 minutes was not steered by (_read_sensor). In a one-valve room its zone left
+# the room's reading, which jumped to the others': GR1's probes held still for up to 80 minutes on quiet
+# nights (30 Oct 2026) and the jumps passed for drybacks, and GT1's 100% made the day's peak while its
+# other zone was out (3 Nov). A zone with a valve of its own went blind and was watered on its timer:
+# GR2's held still at 69.8% for 36 minutes on a quiet night in early veg (25 Nov), its EC still moving,
+# and the timer's shot wet it back up to its peak 2.5 hours before lights-on. Two readings still leave
+# after 20 minutes (_group_readings, _own_moisture): 100%, the top of the scale, which a probe sitting
+# in water reads, and one under the rescue level, which would fire rescue shots that no daily limit stops.
 STILL_KEEP_MIN = 120
 # How long a zone's EC may stay the same and still be steered by, in minutes. Moisture that hasn't changed
 # for 20 minutes is not steered by (_read_sensor), but a root-zone EC holds still for hours: a THC-S
@@ -2317,6 +2327,43 @@ class Controller:
                 zone=zone,
             )
 
+    def _own_moisture(self, room, zone, now):
+        """The moisture a zone with a valve of its own is steered by, or None. A reading that has stopped
+        changing still counts for up to STILL_KEEP_MIN, as in a one-valve room (_group_readings), but
+        not at 100% or under the zone's rescue level. Nor once it hasn't moved in the 20 minutes since
+        a shot (_unanswered_shot): the zone's own reading decides its shots, so a probe stuck low would
+        ask for water shot after shot (in a one-valve room the other zones' readings move the room's)."""
+        vwc, minutes = self._read_aged(
+            self._fused_id(room.prefix, "vwc", zone, room.zones[zone].get("vwc")),
+            lo=0,
+            hi=100,
+            max_age_min=STILL_KEEP_MIN,
+        )
+        unanswered = self._unanswered_shot(room, zone, now, minutes)
+        if vwc is None or minutes <= 20:  # 20 minutes, _read_sensor's: a reading that moves
+            return vwc
+        if vwc >= 100 or vwc < self._zone_num(room, zone, "p3_emergency_vwc_threshold", 40):
+            return None
+        if unanswered is not None and unanswered > 20:
+            return None
+        return vwc
+
+    @staticmethod
+    def _unanswered_shot(room, zone, now, minutes=None):
+        """Minutes since the zone's first shot its moisture hasn't moved for, or None. Every delivered shot
+        is noted, the first of a run of them kept (_advance_shot_counters); a reading that has changed
+        since (`minutes`, how long it has stayed the same) answers it. Counted from the first, a probe
+        stuck low can't keep itself in with a shot every few minutes. Kept in memory only: after a
+        restart the next shot is the first."""
+        shots = room.__dict__.setdefault("_unanswered", {})
+        first = shots.get(zone)
+        if first is None:
+            return None
+        if minutes is not None and now - timedelta(minutes=minutes) > first:
+            shots.pop(zone)  # the reading has moved since
+            return None
+        return (now - first).total_seconds() / 60.0
+
     def _snapshot(self, room, zone, now, lights_on, lights_just_on, readings=None):
         """The zone as decide() sees it, from its own moisture and EC, or from `readings` (a one-valve
         room's, read for all its zones: _group_readings)."""
@@ -2324,16 +2371,12 @@ class Controller:
         if readings is not None:
             vwc, ec = readings
         else:
-            vwc = self._read_sensor(
-                self._fused_id(room.prefix, "vwc", zone, room.zones[zone].get("vwc")),
-                lo=0,
-                hi=100,
-            )
+            vwc = self._own_moisture(room, zone, now)
             ec = self._read_sensor(
                 self._fused_id(room.prefix, "ec", zone, room.zones[zone].get("ec")),
                 lo=0,
                 hi=20,
-                max_age_min=EC_STILL_KEEP_MIN,  # a root-zone EC holds still for hours; moisture doesn't
+                max_age_min=EC_STILL_KEEP_MIN,  # a root-zone EC holds still for hours
             )
         if vwc is None:
             return None, self._params(room, zone)
@@ -4214,10 +4257,11 @@ class Controller:
             ha_call(dom, svc, title=title, message=message)
         return True
 
-    def _unreadable(self, entity, lo=0.0, hi=100.0, max_age_min=20, ec_entity=None):
+    def _unreadable(self, entity, lo=0.0, hi=100.0, max_age_min=20, ec_entity=None, watered_min=None):
         """Why `_read_sensor` found no usable moisture reading at `entity`, as (code, sentence, advice).
         The same tests in the same order, on one more read of the entity. A reading that hasn't changed
-        is said with what the zone's EC (`ec_entity`) did meanwhile (_unchanged)."""
+        is said with what the zone's EC (`ec_entity`) did meanwhile, or with the zone's shot it didn't
+        move for (`watered_min`, minutes since it: _unchanged)."""
         v, _attrs, lu = ha_get(entity)
         if v is None:
             return _probe_why("CS-102", "This zone's moisture sensor can't be found in Home Assistant, so the controller has no reading to steer by.")
@@ -4235,7 +4279,7 @@ class Controller:
         except (ValueError, TypeError, OverflowError):
             ts = age_min = None
         if age_min is not None and age_min > max_age_min:
-            return self._unchanged(f, age_min, hi, max_age_min, ec_entity)
+            return self._unchanged(f, age_min, hi, max_age_min, ec_entity, watered_min)
         if age_min is not None and age_min < -1.0:  # _read_sensor: age < -60 s
             return _probe_why("CS-102", (
                 f"This zone's moisture reading is stamped {-age_min:.0f} minutes in the future, so "
@@ -4245,12 +4289,14 @@ class Controller:
             return _probe_why("CS-102", "This zone's moisture sensor has no valid time for its last reading, so the controller has no reading to steer by.")
         return _probe_why("CS-102", "This zone's moisture sensor had no usable reading a moment ago, so the controller had nothing to steer by.")
 
-    def _unchanged(self, f, age_min, top, max_age_min, ec_entity):
+    def _unchanged(self, f, age_min, top, max_age_min, ec_entity, watered_min=None):
         """CS-101 for a moisture reading of `f` that has stayed the same for `age_min` minutes, said with
         what the zone's EC did meanwhile. Moisture and EC come from one probe in most rooms, so an EC that
         has changed within `max_age_min` says that probe is probably still working: its moisture is
         steady, or stuck at `top`, the top of its scale (GT1-AT, 3 Nov 2026: 100% for over an hour, said
-        as a probe that might have stopped). An EC that has stayed the same too is said as well."""
+        as a probe that might have stopped). An EC that has stayed the same too is said as well. A shot it
+        hasn't moved for, more than `max_age_min` ago (`watered_min`, _unanswered_shot), is said before
+        the EC: a working probe moves when its zone is watered."""
         age = f"{age_min:.0f} minutes" if age_min < 120 else f"{age_min / 60:.1f} hours"
         stayed = f"This zone's moisture reading has stayed at {f:g}% for {age}"
         ec, ec_min = (
@@ -4262,6 +4308,13 @@ class Controller:
                 f"{f:g}% is the top of its scale, which a probe reads sitting in water, or reading wetter "
                 "than it was calibrated for."
             ), _WORKING_ADVICE["top"])
+        if watered_min is not None and max_age_min < watered_min < age_min:
+            watered = f"{watered_min:.0f} minutes" if watered_min < 120 else f"{watered_min / 60:.1f} hours"
+            return _probe_why("CS-101", (
+                f"{stayed}, though the zone was watered {watered} ago. A working probe moves when its "
+                "zone is watered, so this one may have stopped, or its dripper may be blocked or out of "
+                "place."
+            ), _WATERED_ADVICE)
         if ec is not None:
             return _probe_why("CS-101", (
                 f"{stayed}, but its EC has kept changing, so the probe is probably still working and "
@@ -4361,6 +4414,7 @@ class Controller:
             st["shots"] += 1
         st["last_shot"] = now
         st["last_shot_is_anchor"] = False  # water was delivered: this one is an irrigation
+        room.__dict__.setdefault("_unanswered", {}).setdefault(zone, now)  # until the reading moves
         st["daily_vol"] += delivered_l
         self._save_state()
 
@@ -5789,7 +5843,9 @@ class Controller:
             # is unusable is read every tick, so a changed cause replaces the card's diagnosis.
             looking = self._fused_id(room.prefix, "vwc", zone, room.zones[zone].get("vwc"))
             code, what, advice = self._unreadable(
-                looking, ec_entity=self._fused_id(room.prefix, "ec", zone, room.zones[zone].get("ec"))
+                looking,
+                ec_entity=self._fused_id(room.prefix, "ec", zone, room.zones[zone].get("ec")),
+                watered_min=self._unanswered_shot(room, zone, now),
             )
             self._alert(
                 f"blind_{room.slug}_z{zone}",

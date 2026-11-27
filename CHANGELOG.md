@@ -10,6 +10,36 @@ and code-level detail for developers and AI agents working on the repo.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+- **A probe that holds still on a quiet night no longer gets its zone watered on a timer.** A zone's
+  moisture that hadn't changed for 20 minutes counted as a dead probe, and 15 minutes later the zone
+  was watered on a timer. One-valve rooms already kept a still reading for up to 2 hours. But on a
+  quiet night, and with plants too small to drink much, a probe can sit on one number for longer
+  than 20 minutes. In one room in early veg, a probe that held at 69.8% for 36 minutes, its EC still
+  moving, got its zone a 3.8 L shot at 04:29 that wet it back up to its peak before lights-on. Now
+  every room keeps steering by a still reading for up to 2 hours. A reading of 100% or one under the
+  rescue level still counts as gone after 20 minutes. So, on a zone's own valve, does one that hasn't
+  moved in the 20 minutes after a shot, so a probe stuck low can't keep asking for water. The
+  dashboard shows a still reading as current for as long as the controller steers by it.
+
+### 🔧 Technical notes
+
+- `_own_moisture` reads the moisture of a zone that isn't on a one-valve room's valve (`_snapshot`)
+  with `STILL_KEEP_MIN` (120), as `_group_readings` already did. A still reading at 100%, under the
+  rescue level, or one a shot hasn't moved for 20 minutes leaves after 20 minutes. Shots are noted in
+  memory (`room._unanswered`, set in `_advance_shot_counters`, the first of a run kept, dropped once
+  the reading changes), so a probe stuck low gets about 5 top-ups in the 20 minutes after its first
+  shot and then only the dead-probe timer (without the check it got 20). CS-101 says the shot the
+  reading didn't move for (`_unanswered_shot`, `_unreadable(watered_min=...)`), with its own advice.
+  One-valve rooms are unchanged. GR2 log, 21 to 25 Nov 2026: its probe was taken for dead 8 times in
+  3.5 days, and the 15-minute grace saved all but the last. `test_moisture_holds_still.py`, and the
+  two tests that held the old 20 minutes are updated.
+- The dashboard's `buildRoom` keeps a still moisture reading current while the controller steers by
+  it (`safety_status.vwc`) in every room, not only a one-valve room. `review-regressions.test.ts`.
+- CS-101 in `docs/error-codes.json` and `ERROR_CODES.md` (the dashboard's Help, rebuilt),
+  `troubleshooting.md` and `USER_GUIDE.md`.
+
 ## [1.9.2] - 2026-11-23
 
 Integration and controller **1.9.2**.

@@ -260,14 +260,31 @@ def test_a_still_zone_is_said_when_it_would_have_been_out_as_long(monkeypatch):
     assert "100% is the top of its scale" in said(3)[0]
 
 
-def test_a_still_probe_on_its_own_valve_is_out_after_20_minutes_as_before(monkeypatch):
+def test_a_still_probe_on_its_own_valve_is_kept_for_2_hours_too(monkeypatch):
+    # Out after 20 minutes until GR2's quiet night on 25 Nov 2026 (test_moisture_holds_still.py).
     c, fake, room = _room(monkeypatch, plumbing="pump_valves",
                           valves={str(z): f"switch.v{z}" for z in ZONES})
     for zone in ZONES:
         probe(fake, zone, 50)
-    still(fake, 2, 50, minutes=21)
+    still(fake, 2, 50, minutes=119)
+    pub = c._loop_room(room, Clock.now())
+    assert pub[2]["vwc"] == 50 and not pub[2]["blind"]
+    still(fake, 2, 50, minutes=121)
     pub = c._loop_room(room, Clock.now())
     assert pub[2]["vwc"] is None and pub[2]["blind"]
+
+
+def test_a_one_valve_rooms_still_zone_stays_in_after_a_shot_as_before(monkeypatch):
+    # The other zones' readings move the room's, so a zone a shot didn't move isn't taken out of it:
+    # out, it made the room's reading jump (GR1, 30 Oct 2026).
+    c, fake, room = _room(monkeypatch)
+    for zone in ZONES:
+        room.state[zone]["last_shot"] = Clock.now() - timedelta(minutes=25)
+    probe(fake, 1, 50)
+    probe(fake, 3, 62)
+    still(fake, 2, 56, minutes=60)
+    vwc, _ec, own, kept = c._group_readings(room, c._valve_group(room))
+    assert (vwc, own[2][0], kept) == (56, 56, {2})
 
 
 def gone(fake, zone):
