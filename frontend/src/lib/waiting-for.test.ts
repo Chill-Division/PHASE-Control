@@ -11,6 +11,7 @@ const waiting = (...conditions: Partial<WaitingCondition>[]): Waiting => ({
   at: AT,
   conditions: conditions.map((item) => ({ shot: false, to: null, rule: "", ...item })),
   ecSizing: null,
+  peak: null,
 });
 const sensor = (
   at: string,
@@ -41,6 +42,13 @@ describe("reading what a zone waits for", () => {
     expect(readWaiting(sensor(at), AT)?.ecSizing).toBeNull();
     expect(readWaiting(sensor(at, undefined, { ec_sizing: { ec: 1 } }), AT)?.ecSizing).toBeNull();
   });
+  it("takes the zone's own peak of the day beside them, from a controller that says it", () => {
+    const at = new Date(AT).toISOString();
+    expect(readWaiting(sensor(at, undefined, { peak: 99.4 }), AT)?.peak).toBe(99.4);
+    expect(readWaiting(sensor(at, undefined, { peak: null }), AT)?.peak).toBeNull();
+    expect(readWaiting(sensor(at), AT)?.peak).toBeNull(); // an older controller
+    expect(readWaiting(sensor(at, undefined, { peak: 0 }), AT)?.peak).toBeNull(); // none yet
+  });
   it("takes it only for the phase shown beside it", () => {
     const at = new Date(AT).toISOString();
     expect(readWaiting(sensor(at), AT, "P2")?.conditions).toHaveLength(1);
@@ -56,6 +64,26 @@ describe("saying what a zone waits for", () => {
       { rule: "p0_dryback", to: "P1", metric: "vwc", op: "<=", value: 42.9, now: 84.1 },
     );
     expect(waitingText(p0, format)).toBe("P1 by 08:06, or sooner at VWC ≤ 70% (now 84.1%)");
+  });
+  it("P0 in a room on one valve: the zone furthest into its own dryback, when it is nearer", () => {
+    // Owner, 27 Nov 2026: each zone dries back from its own peak, the first to get there for them all.
+    const p0 = waiting(
+      { rule: "p0_timeout", to: "P1", in_min: 30 },
+      { rule: "p0_bypass", to: "P1", metric: "vwc", op: "<=", value: 61, now: 66.4 },
+      {
+        rule: "p0_dryback",
+        to: "P1",
+        metric: "vwc",
+        op: "<=",
+        value: 69.84,
+        now: 70.5,
+        zone: 2,
+        zone_name: "GT1-BP",
+      },
+    );
+    expect(waitingText(p0, format)).toBe(
+      "P1 by 08:06, or sooner at GT1-BP's VWC ≤ 69.84% (now 70.5%)",
+    );
   });
   it("P1: the next ramp shot and what hands over to P2", () => {
     const p1 = waiting(
@@ -172,6 +200,11 @@ describe("saying what a zone waits for", () => {
     const under = { ...hold, now: 60.4, in_min: 3 };
     expect(waitingText(waiting(rescue as Partial<WaitingCondition>, under, on), format)).toBe(
       "shot at 07:39 (VWC 60.4% under 60.55%, the 30% dryback from the 86.5% peak) · rescue shot if VWC < 50% · P0 at 17:36",
+    );
+    // In a room on one valve: the zone furthest into its own dryback, from its own peak.
+    const own = { ...hold, value: 69.58, now: 70.2, peak: 99.4, zone: 1, zone_name: "GT1-AT" };
+    expect(waitingText(waiting(rescue as Partial<WaitingCondition>, own, on), format)).toBe(
+      "shot when GT1-AT's VWC < 69.58% (now 70.2%), the 30% dryback from its own 99.4% peak · rescue shot if VWC < 50% · P0 at 17:36",
     );
     // A rescue level at or over the dryback's end fires first, so it is the only shot to say.
     const high = { ...rescue, value: 40 } as Partial<WaitingCondition>;
