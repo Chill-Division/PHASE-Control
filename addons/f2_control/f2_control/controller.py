@@ -418,6 +418,16 @@ def next_text(conditions, at):
     def more(count, word):
         return f"{count} more {word}{'' if count == 1 else 's'}"
 
+    def whose(item):
+        # A one-valve room's dryback goes by the zone furthest into its own: that zone's reading.
+        return f"{item['zone_name']}'s VWC" if item.get("zone_name") else "VWC"
+
+    def nearest(levels):
+        # Whichever level drying reaches first: the nearest under its reading, which may be the room's
+        # (the trigger) or one zone's (its dryback). On one reading, the higher level.
+        return min(levels, key=lambda c: (c["now"] - c["value"]) if c.get("now") is not None else -c["value"],
+                   default=None)
+
     timer = find("blind_timer")
     if timer:  # no moisture reading: watered on a timer
         due = when(timer)
@@ -426,10 +436,10 @@ def next_text(conditions, at):
     if timeout:
         # Whichever moisture level drying reaches first: the trigger, or the P3 dryback's level.
         levels = [c for c in (find("p0_bypass"), find("p0_dryback")) if c and c.get("value") is not None]
-        first = max(levels, key=lambda c: c["value"], default=None)
+        first = nearest(levels)
         by = when(timeout)
         text = f"P1 by {by}" if by else "P1 now"
-        return text + (f", or sooner at {test(first, '%', 'VWC')}{reading(first, '%')}" if first else "")
+        return text + (f", or sooner at {test(first, '%', whose(first))}{reading(first, '%')}" if first else "")
     done = find("p1_done")
     if done:
         parts = []
@@ -480,11 +490,14 @@ def next_text(conditions, at):
         due = when(rescue) if rescue else None
         rescuing = due and rescue.get("now") is not None and rescue["now"] < (rescue.get("value") or 0)
         # Which dryback, from which peak: never a dryback from the reading beside it.
+        mine = hold and hold.get("zone_name")
         dryback = (f"the {_num(hold.get('dryback'))}% dryback"
-                   + (f" from the {_num(hold['peak'])}% peak" if hold.get("peak") else "")) if hold else ""
+                   + (f" from {'its own' if mine else 'the'} {_num(hold['peak'])}% peak" if hold.get("peak") else "")
+                   ) if hold else ""
         parts = [
-            (f"shot at {wait} (VWC {_num(hold['now'])}% under {_num(hold.get('value'))}%, {dryback})" if below
-             else f"shot when {test(hold, '%', 'VWC')}{reading(hold, '%')}, {dryback}") if hold else None,
+            (f"shot at {wait} ({whose(hold)} {_num(hold['now'])}% under {_num(hold.get('value'))}%, {dryback})"
+             if below
+             else f"shot when {test(hold, '%', whose(hold))}{reading(hold, '%')}, {dryback}") if hold else None,
             # The reading is said once: with the hold, beside it.
             (f"rescue shot at {due} (VWC {_num(rescue['now'])}% under {_num(rescue.get('value'))}%)" if rescuing
              else f"rescue shot if {test(rescue, '%', 'VWC')}{'' if hold else reading(rescue, '%')}") if rescue else None,
@@ -2261,6 +2274,24 @@ class Controller:
         if peak is not None:
             lead["peak"] = peak
 
+    @staticmethod
+    def _group_dryback(room, group, own):
+        """The zone of a one-valve room furthest into its own dryback, by its own reading and its own
+        peak of the day: (zone, reading, peak, dryback %), or None while no zone in the room's reading
+        has both. Each zone dries back from its own peak (owner, 27 Nov 2026: GT1-AT peaked at 99.4%,
+        GT1-BP at 86.4%, and one 60.5% line from the room's 86.4% held both). P0's and P3's relative
+        rules go by this zone (ZoneSnapshot.dryback_vwc), so the first zone to reach its own line waters
+        them all, and none dries back further than asked."""
+        lead = None
+        for zone in group:
+            vwc, peak = own.get(zone, (None, None))[0], room.state[zone].get("own_peak") or 0.0
+            if vwc is None or peak <= 0:
+                continue
+            dried = (peak - vwc) / peak * 100.0
+            if lead is None or dried > lead[3]:
+                lead = (zone, vwc, peak, dried)
+        return lead
+
     def _restart_own_peaks(self, room, own=None):
         """A new day for a one-valve room's peak: each zone's own starts again from its reading now (`own`,
         _group_readings), or from the next one it gives."""
@@ -2364,9 +2395,10 @@ class Controller:
             return None
         return (now - first).total_seconds() / 60.0
 
-    def _snapshot(self, room, zone, now, lights_on, lights_just_on, readings=None):
+    def _snapshot(self, room, zone, now, lights_on, lights_just_on, readings=None, dryback=None):
         """The zone as decide() sees it, from its own moisture and EC, or from `readings` (a one-valve
-        room's, read for all its zones: _group_readings)."""
+        room's, read for all its zones: _group_readings). `dryback`, a one-valve room's zone furthest
+        into its own dryback (_group_dryback), gives its peak and dryback and the reading they go by."""
         st = room.state[zone]
         if readings is not None:
             vwc, ec = readings
@@ -2398,10 +2430,13 @@ class Controller:
             vwc=vwc,
             ec=ec,
             phase=st["phase"],
-            peak_vwc=st["peak"],
+            peak_vwc=st["peak"] if dryback is None else dryback[2],
             dryback_pct=(
-                (st["peak"] - vwc) / st["peak"] * 100 if st["peak"] > 0 else 0
+                ((st["peak"] - vwc) / st["peak"] * 100 if st["peak"] > 0 else 0)
+                if dryback is None else dryback[3]
             ),
+            dryback_vwc=None if dryback is None else dryback[1],
+            dryback_zone=None if dryback is None else dryback[0],
             dryback_rate=rate,
             shot_count=st["shots"],
             phase_minutes=(now - st["last_phase_change"]).total_seconds() / 60.0,
@@ -4067,13 +4102,15 @@ class Controller:
         )
 
     @staticmethod
-    def _publish_waiting_for(room, zone, snap, p, now, timer=None):
+    def _publish_waiting_for(room, zone, snap, p, now, timer=None, peak=None):
         """What would move the zone next (crop_steering_engine.waiting_for), for the dashboard's zone
         card and grow-day line, and how pore EC sizes its shots now (ec_sizing), for the shot sizes on
         Today. No snapshot (no probe, or the room is off): an empty list and no sizing, so an old one
         never lingers, unless the zone is watered on a timer for want of a reading (`timer`: the
         minutes to its next timer shot, and to each after it): then that shot, in the zone's phase.
-        A wait's clock time is `at` plus its in_min."""
+        A wait's clock time is `at` plus its in_min. A condition one zone of a one-valve room goes by
+        carries that zone's name, and `peak` is the zone's own highest reading of the day, its P3
+        dryback's peak (the dashboard's Overnight dryback card says the line it holds tonight)."""
         if snap is not None:
             conditions = waiting_for(snap, p)
         elif timer is not None:
@@ -4081,6 +4118,10 @@ class Controller:
                            "in_min": round(max(0.0, timer[0]), 1), "every_min": timer[1]}]
         else:
             conditions = []
+        names = getattr(room, "zone_names", {}) or {}
+        for item in conditions:
+            if item.get("zone") is not None:
+                item["zone_name"] = names.get(item["zone"]) or f"Zone {item['zone']}"
         # Kept for the vitals notification's "Next:" lines (_maybe_notify).
         if getattr(room, "_waiting", None) is None:
             room._waiting = {}
@@ -4091,6 +4132,7 @@ class Controller:
             {
                 "conditions": conditions,
                 "ec_sizing": ec_sizing(snap, p) if snap is not None and p is not None else None,
+                "peak": round(peak, 1) if peak else None,
                 "at": now.astimezone().isoformat(timespec="seconds"),
                 "friendly_name": f"Zone {zone} waiting for (controller)",
                 "engine": "crop-steering-controller",
@@ -4273,6 +4315,12 @@ class Controller:
         ec = "" if snap is None else " · EC —" if snap.ec is None else f" · EC {snap.ec:.1f}"
         water = float(room.state.get(zone, {}).get("daily_vol") or 0.0)
         return f"{vwc}{ec} · {water:.1f} L today"
+
+    @staticmethod
+    def _log_names(room):
+        """Each zone's name for the log, by number: the operator's, else "Zone N"."""
+        names = getattr(room, "zone_names", {}) or {}
+        return {zone: names.get(zone) or f"Zone {zone}" for zone in room.zones}
 
     @staticmethod
     def _zone_title(room, zone):
@@ -5387,7 +5435,7 @@ class Controller:
                 zone=zone,
             )
         if fire and block:
-            what, why = log_words.shot(reason)
+            what, why = log_words.shot(reason, self._log_names(room))
             self._say(room, zone, f"{st['phase']} · {self._readings(room, zone, snap)} · held: {block}, "
                                   f"instead of a {what} ({why})")
         elif fire:
@@ -5448,7 +5496,7 @@ class Controller:
                     self._say(room, zone, f"shot cut from {dur} s to {allowed} s: {left_l:.2f} L of the "
                                           "daily water limit left")
                     size, dur = round(size * allowed / dur, 2), allowed
-            what, why = log_words.shot(reason)
+            what, why = log_words.shot(reason, self._log_names(room))
             mates = self._valve_mates(room, zone)
             litres = flow * dur if len(mates) == 1 else sum(self._zone_flow_lps(room, z) for z in mates) * dur
             every = f" for {len(mates)} zones" if len(mates) > 1 else ""
@@ -5767,13 +5815,14 @@ class Controller:
         # One valve for every zone: the first zone's pass decides for them all, on all their readings.
         group = self._valve_group(room)
         followers = set(group[1:]) if group else set()
-        readings, own, waiting = None, {}, {}
+        readings, own, waiting, dryback = None, {}, {}, None
         if group:
             for zone in group[1:]:  # a phase picked on any of them moves them all
                 self._apply_phase_request(room, zone, room.state[group[0]], now)
             vwc, ec, own, still = self._group_readings(room, group)
             readings = (vwc, ec)
             self._group_peak(room, group, own)
+            dryback = self._group_dryback(room, group, own)
             self._report_unread_zones(room, own, still, now)
         for zone in room.zones:
             st = room.state[zone]
@@ -5787,7 +5836,7 @@ class Controller:
                 # below clears it as well, but only after decide() has read the P2 threshold (its P0
                 # bypass test) with yesterday's offset baked in.
                 st["ec_offset"], st["last_ec_steer"] = 0.0, None
-            snap, p = self._snapshot(room, zone, now, lights_on, lights_just_on, readings)
+            snap, p = self._snapshot(room, zone, now, lights_on, lights_just_on, readings, dryback)
             params[zone] = p
             if snap is None:
                 room._blind_since.setdefault(zone, now)
@@ -5821,7 +5870,8 @@ class Controller:
                 new_phase, new_thr, fire, size, reason = decide(snap, p)
             shown = snap  # what waiting_for reads: the snapshot, in the phase the zone is now in
             if new_phase != st["phase"]:
-                self._say(room, zone, f"{st['phase']} → {new_phase}: {log_words.transition(reason)}")
+                self._say(room, zone, f"{st['phase']} → {new_phase}: "
+                                      f"{log_words.transition(reason, self._log_names(room))}")
                 if new_phase == "P0":
                     st["daily_vol"], st["shots"], st["peak"] = 0.0, 0, snap.vwc
                     if group:
@@ -5837,10 +5887,12 @@ class Controller:
                 # The snapshot was taken in the old phase: what the new one starts from.
                 shown = dataclasses.replace(
                     snap, phase=new_phase, phase_minutes=0.0,
-                    **({"peak_vwc": snap.vwc} if new_phase == "P0" else {}),
+                    **({"peak_vwc": snap.vwc if snap.dryback_vwc is None else snap.dryback_vwc,
+                        "dryback_pct": 0.0} if new_phase == "P0" else {}),
                     **({"shot_count": 0} if new_phase == "P1" else {}),
                 )
-            self._publish_waiting_for(room, zone, shown, p, now)
+            self._publish_waiting_for(room, zone, shown, p, now,
+                                      peak=st.get("own_peak") if group else st.get("peak"))
             waiting[zone] = (shown, p)
             # The EC steer runs on ec_smooth, which only settled readings feed (see _settled_ec).
             if (snap.ec is not None and snap.ec_smooth is not None and p.stacking_on
@@ -5883,7 +5935,8 @@ class Controller:
             mss = self._minutes_since_shot(st, now)
             timers[zone] = None if healthy else (
                 max(BLIND_GRACE_MIN - out_min, self.blind_fallback_min - mss), self.blind_fallback_min)
-            self._publish_waiting_for(room, zone, None, p, now, timer=timers[zone])
+            self._publish_waiting_for(room, zone, None, p, now, timer=timers[zone],
+                                      peak=room.state[zone].get("own_peak" if group else "peak"))
             waiting[zone] = (None, p)
             if out_min < BLIND_GRACE_MIN:
                 # 25 Sep 2026: the probes read unknown for a minute, and a timer shot fired at once.
@@ -5944,7 +5997,8 @@ class Controller:
                 if group[0] in decisions:
                     decisions[zone] = decisions[group[0]]
                 if group[0] in waiting:
-                    self._publish_waiting_for(room, zone, *waiting[group[0]], now, timer=timers.get(group[0]))
+                    self._publish_waiting_for(room, zone, *waiting[group[0]], now, timer=timers.get(group[0]),
+                                              peak=room.state[zone].get("own_peak"))
         if room._beat is None or not room._beat[1]:
             self._report_before_acting(room, decisions, snaps, now)
         pub = {}

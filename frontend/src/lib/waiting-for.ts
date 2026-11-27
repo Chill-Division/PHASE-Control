@@ -20,6 +20,10 @@ export interface WaitingCondition {
   dryback?: number;
   /** p3_hold: that peak, the day's highest reading. */
   peak?: number;
+  /** p0_dryback and p3_hold in a room whose zones share one valve: the zone furthest into its own
+   * dryback, whose reading and own peak they go by (each zone dries back from its own), and its name. */
+  zone?: number;
+  zone_name?: string;
   /** blind_timer: a zone without a moisture reading, watered on a timer: how often its shots come. */
   every_min?: number;
 }
@@ -29,6 +33,8 @@ export interface Waiting {
   conditions: WaitingCondition[];
   /** How pore EC sizes the zone's shots now, published beside them; null without an EC reading. */
   ecSizing: EcSizing | null;
+  /** The zone's own highest reading of the day, its P3 dryback's peak; null from an older controller. */
+  peak: number | null;
 }
 
 /** A controller that stopped publishing has moved on without saying so: show nothing, not a stale
@@ -51,8 +57,14 @@ export function readWaiting(
   const conditions = entity.attributes.conditions;
   if (!Array.isArray(conditions)) return null;
   const valid = conditions.filter(isCondition);
+  const peak = Number(entity.attributes.peak);
   return valid.length
-    ? { at, conditions: valid, ecSizing: readEcSizing(entity.attributes.ec_sizing) }
+    ? {
+        at,
+        conditions: valid,
+        ecSizing: readEcSizing(entity.attributes.ec_sizing),
+        peak: entity.attributes.peak !== null && Number.isFinite(peak) && peak > 0 ? peak : null,
+      }
     : null;
 }
 
@@ -76,6 +88,8 @@ export function waitingText(waiting: Waiting, format: WaitingFormat): string {
     `${label} ${SIGN[item.op ?? ""] ?? item.op} ${n(item.value ?? NaN)}${unit}`;
   const now = (item: WaitingCondition, unit: string) =>
     item.now === null || item.now === undefined ? "" : `now ${n(item.now)}${unit}`;
+  // A one-valve room's dryback goes by the zone furthest into its own: that zone's reading.
+  const whose = (item: WaitingCondition) => (item.zone_name ? `${item.zone_name}'s VWC` : "VWC");
 
   // No moisture reading: watered on a timer (the controller's next_text says the same).
   const timer = find("blind_timer");
@@ -90,9 +104,15 @@ export function waitingText(waiting: Waiting, format: WaitingFormat): string {
     const levels = [find("p0_bypass"), find("p0_dryback")].filter(
       (item): item is WaitingCondition => item?.value !== undefined,
     );
-    const first = levels.sort((a, b) => (b.value ?? 0) - (a.value ?? 0))[0];
+    // The nearest under its reading, which may be the room's (the trigger) or one zone's (its
+    // dryback). On one reading, the higher level.
+    const margin = (item: WaitingCondition) =>
+      item.now === null || item.now === undefined
+        ? -(item.value ?? 0)
+        : item.now - (item.value ?? 0);
+    const first = levels.sort((a, b) => margin(a) - margin(b))[0];
     const at = when(timeout);
-    return `P1 ${at ? `by ${at}` : "now"}${first ? `, or sooner at ${test(first, "%", "VWC")} (${now(first, "%")})` : ""}`;
+    return `P1 ${at ? `by ${at}` : "now"}${first ? `, or sooner at ${test(first, "%", whose(first))} (${now(first, "%")})` : ""}`;
   }
 
   const done = find("p1_done");
@@ -173,12 +193,12 @@ export function waitingText(waiting: Waiting, format: WaitingFormat): string {
     // Which dryback, from which peak: never a dryback from the reading beside it.
     const dryback =
       `the ${n(hold?.dryback ?? NaN)}% dryback` +
-      (hold?.peak ? ` from the ${n(hold.peak)}% peak` : "");
+      (hold?.peak ? ` from ${hold.zone_name ? "its own" : "the"} ${n(hold.peak)}% peak` : "");
     return [
       hold
         ? below
-          ? `shot at ${wait} (VWC ${n(hold.now ?? NaN)}% under ${n(hold.value ?? NaN)}%, ${dryback})`
-          : `shot when ${test(hold, "%", "VWC")} (${now(hold, "%")}), ${dryback}`
+          ? `shot at ${wait} (${whose(hold)} ${n(hold.now ?? NaN)}% under ${n(hold.value ?? NaN)}%, ${dryback})`
+          : `shot when ${test(hold, "%", whose(hold))} (${now(hold, "%")}), ${dryback}`
         : null,
       // The reading is said once: with the hold, beside it.
       rescue

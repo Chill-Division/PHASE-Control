@@ -7,6 +7,7 @@ import { Empty, ReviewDialog, number, type ReviewItem } from "@/components/dashb
 import { TargetsBanner } from "@/components/targets-banner";
 import { zoneColor } from "@/lib/room-mode";
 import { oneValveRoom } from "@/lib/model";
+import { drybackWords } from "@/lib/dryback-words";
 import { duration } from "@/lib/day-timeline";
 import { estimatePercent, waterParameters } from "@/lib/water-delivery";
 import { ecSizedWords } from "@/lib/ec-sizing";
@@ -334,10 +335,19 @@ export function Strategy({
         : `${number(value)}% of each plant’s substrate.`;
     }
     if (param.endsWith("dryback_target")) {
-      const peak = preview.draft.parameters.p1_target_vwc;
-      return Number.isFinite(peak)
-        ? `${number(value)}% of the day’s peak: from a ${number(peak)}% peak, down to ${number(peak * (1 - value / 100))}%.`
-        : `${number(value)}% of the day’s peak.`;
+      // Tonight's line from the day's peak once a zone has had it: each zone's own, on one valve.
+      const shown = shared ? controller.room.zones : zone ? [zone] : [];
+      return drybackWords(
+        value,
+        preview.draft.parameters.p1_target_vwc,
+        shown.map((each) => ({
+          name: each.name,
+          phase: each.phase,
+          peak: each.waiting?.peak ?? null,
+        })),
+        shared,
+        (v) => number(v),
+      );
     }
     return `${number(value)}% of ${words.scaleOf}.`;
   };

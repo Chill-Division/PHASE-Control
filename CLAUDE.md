@@ -91,7 +91,7 @@ P3 (Pre-lights-off):  dry back to the dryback target and hold it there with resc
 - A "grow-day" is one **photoperiod**. The daily water + shot counters reset at the
   **P3→P0 transition (lights-on)**, not at calendar midnight.
 - Lights-off forces any P1/P2 zone to P3 (no zone strands mid-cycle overnight).
-- **Dryback semantics:** controller dryback_target is a relative percent of detected peak: (peak - VWC) / peak * 100. At 60% peak and 10% target, the reference is 54% VWC. Rate calculations use VWC percentage points/hour; convert units explicitly.
+- **Dryback semantics:** controller dryback_target is a relative percent of detected peak: (peak - VWC) / peak * 100. At 60% peak and 10% target, the reference is 54% VWC. In a room whose zones share one valve, each zone dries back from its own peak (its own reading against its own `own_peak`), and the first zone to reach its own line ends the room's P0 or fires its P3 hold shot. Absolute levels stay on the room's combined reading. Rate calculations use VWC percentage points/hour. Convert units explicitly.
 
 ## Hardware control sequence
 
