@@ -866,7 +866,7 @@ setup change (CS-201) and a hardware hold (CS-301, CS-308, CS-309) are still rep
 
 *Warning · Notification*
 
-**What it means.** A refill was asked for (a test refill, or the room's Mix a Batch Now button in Home Assistant), or was due because the room's next shots would take the reservoir under its minimum with automatic refills on, but could not start. The notification names why. Nothing was switched on.
+**What it means.** A refill was asked for (a test refill, or the room's Mix a Batch Now button in Home Assistant), or was due because the room's next shots would take the reservoir under its minimum with automatic refills on, but could not start. The notification names why. Nothing was switched on. A refill due by itself while the reservoir is too full for its fill raises nothing. It starts after the next shot, which gives only what the reservoir has above its minimum if it must.
 
 **Watering meanwhile.** Unchanged, until the reservoir reaches its minimum (CS-704).
 
@@ -890,7 +890,7 @@ setup change (CS-201) and a hardware hold (CS-301, CS-308, CS-309) are still rep
 
 *Critical · Notification*
 
-**What it means.** A shot would take the room's reservoir under its minimum (or, before a refill has shown how much 1% holds, it already reads under it), and no refill can start by itself: automatic refills are off, the last one did not raise it, or something stops one. A pump that runs the reservoir dry loses its prime.
+**What it means.** A shot would take the room's reservoir under its minimum (or, before the room's shots or a refill have shown how far a litre of shots takes its level, it already reads under it), and no refill can start by itself: automatic refills are off, the last one did not raise it, its fill adds more than the reservoir holds above its minimum, or something stops one. A pump that runs the reservoir dry loses its prime.
 
 **Watering meanwhile.** No zone in the room is watered from the reservoir until it reads enough again; then watering goes on by itself. The dashboard says so from the moment the room's next round of shots would take the reservoir under its minimum, before a shot waits: the room's line reads Not watering, Needs you lists it, and the Reservoir card turns orange and says Watering held.
 
@@ -898,12 +898,14 @@ setup change (CS-201) and a hardware hold (CS-301, CS-308, CS-309) are still rep
 
 - The reservoir ran down with automatic refills switched off.
 - The last refill did not raise the level (CS-702).
+- The fill adds more than the reservoir holds above its minimum, so a refill could overflow it even there.
 - A refill could not start (the notification says why).
 
 **Suggested fixes**
 
 - Refill it: run a test refill (Settings → Rooms & hardware → Tests), or fill it by hand.
 - To refill by itself next time, turn on automatic refills on the Feed → Reservoir page.
+- If the fill adds more than the reservoir holds above its minimum, lower Fill litres or Minimum level on the Feed → Reservoir page.
 - A pump that primes itself can go lower: set the reservoir's minimum to 0% to turn this off.
 
 <a id="cs-705"></a>
@@ -934,7 +936,7 @@ setup change (CS-201) and a hardware hold (CS-301, CS-308, CS-309) are still rep
 
 *Information · Notification*
 
-**What it means.** The room's reservoir has read at or under its reminder level (Remind me at, on the Feed → Reservoir page) for 3 minutes, and nothing refills it by itself: automatic refills are off, or the room has no fresh-water or recirculation solenoid, pump or doser to refill it with. The notification gives the level, and once a refill has shown what 1% holds, the litres left and the rounds of shots before its minimum.
+**What it means.** The room's reservoir has read at or under its reminder level (Remind me at, on the Feed → Reservoir page) for 3 minutes, and nothing refills it by itself: automatic refills are off, or the room has no fresh-water or recirculation solenoid, pump or doser to refill it with. The notification gives the level, the litres left once a refill has shown what 1% holds, and the rounds of shots before its minimum once the room's shots or a refill have shown how far they take it.
 
 **Watering meanwhile.** Carries on as normal until the reservoir reaches its minimum. There it waits for a refill (CS-704).
 
