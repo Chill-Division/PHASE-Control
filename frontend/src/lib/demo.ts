@@ -294,6 +294,13 @@ export function createDemo(now = Date.now()): States {
       number(prefix, key + "maximum_ec", 9, 1, 20, 0.1, "mS/cm");
       number(prefix, key + "watchdog_hours", 3, 0, 12, 0.5, "h");
       const supervisor = index ? "off" : (["tracking", "learning", "frozen"][id - 1] ?? "off");
+      // Home Assistant keeps a button's last press as its state. Flower 2's zone 1 had its peak
+      // relearned four days ago and has held the one it found since. No other zone has been.
+      put(
+        `button.crop_steering_${prefix}${key}relearn_peak`,
+        !index && id === 1 ? new Date(now - 98 * 3_600_000).toISOString() : "unknown",
+        { friendly_name: `${name} Zone ${id} Relearn Peak` },
+      );
       put(`${base}${key}auto_setpoints`, supervisor, {
         friendly_name: `${name} Zone ${id} auto setpoints`,
         learned_peak: supervisor === "off" || supervisor === "learning" ? null : 58 + id * 2,

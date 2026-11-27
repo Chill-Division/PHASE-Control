@@ -1,5 +1,9 @@
 # Unreleased
 
+- A zone's moisture that holds still is steered by for up to 2 hours in every room, as in a one-valve room, so a quiet night no longer gets a zone watered on its dead-probe timer. A still reading at 100% or under the rescue level, or one a shot hasn't moved, still counts as gone after 20 minutes.
+- Earlier today, on the Overview, has Today and Yesterday buttons. Yesterday lists the grow-day before, from its lights-on to today's, so what happened in the night can still be seen once the lights are on.
+- A reservoir too low for the next shot and too full for its refill no longer stops watering. That shot gives what the reservoir has above its minimum, and the refill follows. Shots and refills are planned with what the room's shots really take from the reservoir, as the leak check learns it. A fill that adds more than the reservoir holds above its minimum holds watering and says why (CS-704).
+- Each zone's Auto setpoints line, on Irrigation strategy, shows when its Relearn peak button was last pressed, and how long ago.
 - In a room on one valve, each zone dries back from its own peak, overnight and in the morning, and the first zone to reach its own line waters them all. The Overnight dryback card gives tonight's line from the day's real peak, every zone's in a room on one valve.
 
 # 1.9.2

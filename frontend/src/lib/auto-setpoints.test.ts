@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { autoStatusText, managedBy, parseAutoSetpoints } from "./auto-setpoints";
+import {
+  autoStatusText,
+  lastResetText,
+  managedBy,
+  parseAutoSetpoints,
+  relearnedAt,
+} from "./auto-setpoints";
 import type { EntityState } from "./types";
 
 const entity = (state: string, attributes: Record<string, unknown> = {}): EntityState => ({
@@ -175,5 +181,31 @@ describe("auto setpoint status", () => {
     expect(managedBy([off], "number.crop_steering_zone_1_p1_target_vwc")).toBe(false);
     expect(managedBy([tracking], "number.crop_steering_zone_1_p2_vwc_threshold")).toBe(false);
     expect(managedBy([null, tracking], "number.crop_steering_zone_1_p1_target_vwc")).toBe(true);
+  });
+});
+
+describe("a zone's last reset", () => {
+  const pressed = "2026-11-24T20:12:00+00:00";
+  const button = (state: string): EntityState => ({
+    entity_id: "button.crop_steering_f1_zone_2_relearn_peak",
+    state,
+    attributes: {},
+  });
+  it("is when its Relearn Peak was last pressed, by its room's prefix and zone", () => {
+    const states = { "button.crop_steering_f1_zone_2_relearn_peak": button(pressed) };
+    expect(relearnedAt(states, "f1_", 2)).toBe(Date.parse(pressed));
+    expect(relearnedAt(states, "", 2)).toBeNull(); // another room's zone 2
+    expect(relearnedAt(states, "f1_", 1)).toBeNull(); // another zone
+    // Home Assistant's state for a button never pressed
+    const never = { "button.crop_steering_f1_zone_2_relearn_peak": button("unknown") };
+    expect(relearnedAt(never, "f1_", 2)).toBeNull();
+  });
+  it("says when, and how long ago, or never", () => {
+    const at = Date.parse(pressed);
+    const when = new Date(at).toLocaleString([], { dateStyle: "short", timeStyle: "short" });
+    expect(lastResetText(null, at)).toBe("never");
+    expect(lastResetText(at, at + 30_000)).toBe(`${when} (<1 min ago)`);
+    expect(lastResetText(at, at + 4 * 3_600_000)).toBe(`${when} (4 h ago)`);
+    expect(lastResetText(at, at + (2 * 24 + 5) * 3_600_000)).toBe(`${when} (2 d ago)`);
   });
 });

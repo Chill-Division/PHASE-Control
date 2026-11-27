@@ -23,6 +23,10 @@ version being released.
 
 ## Unreleased
 
+- A moisture probe that sits on one number on a quiet night is no longer taken for a dead one, so its zone isn't watered before lights-on.
+- Earlier today, on the Overview, now has a Yesterday button that lists the day before, from lights-on to lights-on, the night included.
+- When the reservoir is too low for the next shot but too full to refill, that shot now gives what the reservoir has above its minimum and the refill follows, instead of watering stopping.
+- Auto setpoints now shows when each zone's peak was last relearned, beside its Relearn peak button.
 - In a room on one valve, each zone now dries back from its own peak, and the Overnight dryback card shows tonight's line from the day's real peak.
 
 ## 1.9.2 - 2026-11-23

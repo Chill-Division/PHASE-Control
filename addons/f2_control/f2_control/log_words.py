@@ -246,6 +246,9 @@ _EC_WHERE = {
     "over 1.2x": "over 1.2 times",
     "over": "over",
 }
+# The controller's note on a shot it cut to what the reservoir has above its minimum, because the
+# reservoir was too full for its refill (controller._reservoir_part): the log says from what and why.
+_RESERVOIR_CUT = re.compile(r"reservoir (\S+)%, too low for this shot and too full for its refill: (\S+)% cut to (\S+)%")
 
 
 def shot(reason, names=None):
@@ -267,6 +270,11 @@ def shot(reason, names=None):
         said += f"; {done} from {size}% because root-zone EC {ec} is {_EC_WHERE[where]} its {target} target"
     if _EC_UNKNOWN in text:
         said += "; EC unknown, watering by moisture alone"
+    cut = _RESERVOIR_CUT.search(text)
+    if cut:
+        level, whole, _part = cut.groups()
+        said += (f"; cut from {whole}% because the reservoir, at {level}%, was too low for the whole shot "
+                 "and too full for its refill")
     return what, said
 
 
@@ -307,14 +315,15 @@ def hold(reason):
 
 
 def _segments(text):
-    """decide()'s reason in its parts, without the transition (said on its own line) and the EC
-    notes (said once)."""
+    """decide()'s reason in its parts, without the transition (said on its own line), the EC notes
+    and a reservoir cut (said once)."""
     return [
         part
         for part in str(text or "").split(" | ")
         if part
         and part != _EC_UNKNOWN
         and not _EC_SIZED.fullmatch(part)
+        and not _RESERVOIR_CUT.fullmatch(part)
         and not _is_transition(part)
     ]
 
