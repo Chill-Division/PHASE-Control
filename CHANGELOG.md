@@ -12,6 +12,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **A probe that holds still on a quiet night no longer gets its zone watered on a timer.** A zone's
+  moisture that hadn't changed for 20 minutes counted as a dead probe, and 15 minutes later the zone
+  was watered on a timer. One-valve rooms already kept a still reading for up to 2 hours. But on a
+  quiet night, and with plants too small to drink much, a probe can sit on one number for longer
+  than 20 minutes. In one room in early veg, a probe that held at 69.8% for 36 minutes, its EC still
+  moving, got its zone a 3.8 L shot at 04:29 that wet it back up to its peak before lights-on. Now
+  every room keeps steering by a still reading for up to 2 hours. A reading of 100% or one under the
+  rescue level still counts as gone after 20 minutes. So, on a zone's own valve, does one that hasn't
+  moved in the 20 minutes after a shot, so a probe stuck low can't keep asking for water. The
+  dashboard shows a still reading as current for as long as the controller steers by it.
+- **Earlier today has a Yesterday button.** Earlier today, on the Overview, lists the grow-day from
+  lights-on, so by the time the lights come on, the night's events have gone from it. A shot at
+  04:29 was out of sight by 07:00. Its new Today and Yesterday buttons switch it to the grow-day
+  before, from its lights-on to today's, the night included, newest first and in the same words:
+  phase changes, shots, holds, and setting changes with who made them. Yesterday is read from Home
+  Assistant's history the first time it's opened.
+- **A reservoir too low for the next shot and too full for its refill no longer stops watering.** In
+  one room a 145 L fill adds about 88% to the reservoir, so a refill fits only from about 12%, and
+  shots stop at its 5% minimum. A ramp shot left it at 13%. The next one, about 17 L, would have taken
+  it under the minimum, so it waited for a refill, and the refill was refused because it could
+  overflow. Only a shot lowers the level, so nothing was watered from then on, and every half hour a
+  notification said the refill could not start. Now that shot gives what the reservoir has above its
+  minimum, about 10 L there, and the refill starts once it reads that low, with nothing to raise. A
+  fill that adds more than the reservoir holds above its minimum can't go in even there, so watering
+  is held and the Overview says why, as for any refill that can't start.
+- **Shots are planned with what they really take from the reservoir.** Shots and refills were
+  planned with what a refill showed 1% of the reservoir holds. Now they use what the room's shots
+  really take, as the leak check learns it, whenever that is more. In that room the shots took about
+  1.3 times their litres, and four of its eight refills in four days started under its 5% minimum, at
+  0% to 4%.
 - **Auto setpoints says when each zone's peak was last relearned.** Beside each zone's Relearn peak
   button on Irrigation strategy, **Last reset** gives when it was last pressed and how long ago, or
   never. It is the press, from the dashboard or from Home Assistant, not the last time Auto setpoints
@@ -19,6 +49,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🔧 Technical notes
 
+- `_own_moisture` reads the moisture of a zone that isn't on a one-valve room's valve (`_snapshot`)
+  with `STILL_KEEP_MIN` (120), as `_group_readings` already did. A still reading at 100%, under the
+  rescue level, or one a shot hasn't moved for 20 minutes leaves after 20 minutes. Shots are noted in
+  memory (`room._unanswered`, set in `_advance_shot_counters`, the first of a run kept, dropped once
+  the reading changes), so a probe stuck low gets about 5 top-ups in the 20 minutes after its first
+  shot and then only the dead-probe timer (without the check it got 20). CS-101 says the shot the
+  reading didn't move for (`_unanswered_shot`, `_unreadable(watered_min=...)`), with its own advice.
+  One-valve rooms are unchanged. GR2 log, 21 to 25 Nov 2026: its probe was taken for dead 8 times in
+  3.5 days, and the 15-minute grace saved all but the last. `test_moisture_holds_still.py`, and the
+  two tests that held the old 20 minutes are updated.
+- The dashboard's `buildRoom` keeps a still moisture reading current while the controller steers by
+  it (`safety_status.vwc`) in every room, not only a one-valve room. `review-regressions.test.ts`.
+- CS-101 in `docs/error-codes.json` and `ERROR_CODES.md` (the dashboard's Help, rebuilt),
+  `troubleshooting.md` and `USER_GUIDE.md`.
+- `useYesterday` (`day-timeline.tsx`) loads the grow-day before today (`earlierDays(day, 1)`, at the
+  lights hours in force now) from the recorder the first time it's wanted, keeps it for the page
+  (`pastLoads`), and builds its events with the code today's use, now taken out of `useLanes`:
+  `zoneRecord`, `namedChanges` with the logbook (`useChangeAuthors` now takes the day's end),
+  `waterOf` and `dayEvents`. A shot or a hold still going at today's lights-on ends there. Nothing
+  is worked out while Today is shown. `EarlierToday` (`overview-parts.tsx`) has the two buttons
+  (`aria-pressed`), its heading follows them, and Yesterday shows its span. `verify-dashboard.mjs`
+  checks both days in the demo at 10:40, just after its lights-on.
+- `USER_GUIDE.md`.
+- Controller: `_reservoir_part` runs before `_reservoir_block` for any shot but a test shot. When a
+  shot would take the reservoir under its minimum, a refill could start by itself (`_refill_cannot`),
+  and the fill doesn't fit now (the level after this pass's shots plus `batch_l / litres_per_pct` is
+  over 100%), the shot is cut to what the reservoir has above its minimum, floored to 0.01%. Its reason
+  gets a segment, `reservoir 13%, too low for this shot and too full for its refill: 6% cut to 3.6%`,
+  which the decision's `fired` list carries to the dashboard and `log_words.shot` puts in words in the
+  log. `_batch_idle` no longer raises CS-703 for an automatic refill refused only as too full while
+  the fill fits at the minimum (`_fill_fits_at_minimum`). It notes once that it waits for the next
+  shot instead. `_fill_too_big`, in `_refill_cannot`, holds watering with CS-704 and says why on the
+  batch status's `watering_held` when the fill adds more than the reservoir holds above its minimum.
+  `_draw_rate`, the larger of the leak check's learned `draw_pct_per_l` (`_usual_draw`) and
+  `1 / litres_per_pct`, now plans `_reservoir_block`, `_refill_due`, `_refill_why` and CS-706's rounds
+  of shots, so a room filled by hand plans by its shots too. GR1, 26 Nov 2026: 13% after its 08:19
+  ramp shot, then CS-703 at 08:24, 08:55 and 09:25 with nothing watered. `test_reservoir_gap.py`.
+- Docs: CS-703, CS-704 and CS-706 in `docs/error-codes.json` and `ERROR_CODES.md` (the dashboard's
+  Help, rebuilt), `USER_GUIDE.md`.
 - Dashboard: `relearnedAt` and `lastResetText` (`auto-setpoints.ts`) read the zone's
   `button.crop_steering_<prefix>zone_<N>_relearn_peak` state, the press time Home Assistant keeps
   across restarts, so it needs nothing from the controller and shows on any install with the button

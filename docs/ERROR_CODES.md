@@ -83,9 +83,9 @@ setup change (CS-201) and a hardware hold (CS-301, CS-308, CS-309) are still rep
 
 *Warning · Notification*
 
-**What it means.** The zone's moisture reading has stayed exactly the same for more than 20 minutes. A working probe in a cube with a plant drinking from it moves all the time, so the controller cannot tell this one from a probe that has stopped updating or been pulled out. It does not steer by it, except for up to 2 hours in a room whose one valve waters every zone. The notification says what the zone's EC did meanwhile: moisture and EC come from one probe in most rooms, so an EC that kept changing means the probe is probably still working, its moisture steady or, at 100%, stuck at the top of its scale.
+**What it means.** The zone's moisture reading has stayed exactly the same for too long to steer by. A probe can hold still for an hour or more on a quiet night, or in a cube whose plant is too small to drink much, so the controller keeps steering by a still reading for up to 2 hours. A reading of 100%, or one under the rescue level, counts for 20 minutes only. So, in a zone with a valve of its own, does one that hasn't moved in the 20 minutes after a shot. The notification says what the zone's EC did meanwhile. Moisture and EC come from one probe in most rooms, so an EC that kept changing means the probe is probably still working, its moisture steady or, at 100%, stuck at the top of its scale.
 
-**Watering meanwhile.** Carries on without the probe while the engine is on. If another zone in the room has a working probe, this zone gets the same shots as that zone; otherwise it gets one shot every 90 minutes (the app's blind_fallback_min option), within its daily water limit. Phase changes that go by moisture wait until the reading moves. In a room whose one valve waters every zone, the reading stays in the room's for up to 2 hours, then the room is watered on its other zones' readings; a reading of 100%, or one under the rescue level, leaves after 20 minutes.
+**Watering meanwhile.** Carries on without the probe while the engine is on. If another zone in the room has a working probe, this zone gets the same shots as that zone. Otherwise it gets one shot every 90 minutes (the app's blind_fallback_min option), within its daily water limit. Phase changes that go by moisture wait until the reading moves. In a room whose one valve waters every zone, the room is watered on its other zones' readings instead.
 
 **Likely causes**
 
@@ -94,12 +94,14 @@ setup change (CS-201) and a hardware hold (CS-301, CS-308, CS-309) are still rep
 - The probe has been pulled out of the cube, or is lying in a tray.
 - The cube is soaked and the probe is pinned at its highest reading.
 - The probe's own integration has stopped updating and keeps showing its last value.
+- A blocked or moved dripper on the probe's cube, so its reading doesn't move when the zone is watered.
 
 **Suggested fixes**
 
 - With no plant in, or a plant not yet drinking: nothing to fix. Watering goes back to normal by itself once the reading changes; the notification stays until you dismiss it.
 - If the room is empty, switch its Room Active switch off: an empty room gets no watering and no notifications until it is switched back on.
 - Check the probe is pushed fully into the cube.
+- If the notification says the zone was watered and the reading didn't move, check the dripper on the probe's cube runs, and that the probe is pushed in and connected.
 - If the notification says the zone's EC kept changing and the reading is 100%, check the probe isn't sitting in water or run-off, and that it is calibrated for the substrate.
 - Open the sensor's history in Home Assistant. A flat line for hours while plants are drinking means the probe or its integration has stopped: reconnect or restart it.
 
@@ -864,7 +866,7 @@ setup change (CS-201) and a hardware hold (CS-301, CS-308, CS-309) are still rep
 
 *Warning · Notification*
 
-**What it means.** A refill was asked for (a test refill, or the room's Mix a Batch Now button in Home Assistant), or was due because the room's next shots would take the reservoir under its minimum with automatic refills on, but could not start. The notification names why. Nothing was switched on.
+**What it means.** A refill was asked for (a test refill, or the room's Mix a Batch Now button in Home Assistant), or was due because the room's next shots would take the reservoir under its minimum with automatic refills on, but could not start. The notification names why. Nothing was switched on. A refill due by itself while the reservoir is too full for its fill raises nothing. It starts after the next shot, which gives only what the reservoir has above its minimum if it must.
 
 **Watering meanwhile.** Unchanged, until the reservoir reaches its minimum (CS-704).
 
@@ -888,7 +890,7 @@ setup change (CS-201) and a hardware hold (CS-301, CS-308, CS-309) are still rep
 
 *Critical · Notification*
 
-**What it means.** A shot would take the room's reservoir under its minimum (or, before a refill has shown how much 1% holds, it already reads under it), and no refill can start by itself: automatic refills are off, the last one did not raise it, or something stops one. A pump that runs the reservoir dry loses its prime.
+**What it means.** A shot would take the room's reservoir under its minimum (or, before the room's shots or a refill have shown how far a litre of shots takes its level, it already reads under it), and no refill can start by itself: automatic refills are off, the last one did not raise it, its fill adds more than the reservoir holds above its minimum, or something stops one. A pump that runs the reservoir dry loses its prime.
 
 **Watering meanwhile.** No zone in the room is watered from the reservoir until it reads enough again; then watering goes on by itself. The dashboard says so from the moment the room's next round of shots would take the reservoir under its minimum, before a shot waits: the room's line reads Not watering, Needs you lists it, and the Reservoir card turns orange and says Watering held.
 
@@ -896,12 +898,14 @@ setup change (CS-201) and a hardware hold (CS-301, CS-308, CS-309) are still rep
 
 - The reservoir ran down with automatic refills switched off.
 - The last refill did not raise the level (CS-702).
+- The fill adds more than the reservoir holds above its minimum, so a refill could overflow it even there.
 - A refill could not start (the notification says why).
 
 **Suggested fixes**
 
 - Refill it: run a test refill (Settings → Rooms & hardware → Tests), or fill it by hand.
 - To refill by itself next time, turn on automatic refills on the Feed → Reservoir page.
+- If the fill adds more than the reservoir holds above its minimum, lower Fill litres or Minimum level on the Feed → Reservoir page.
 - A pump that primes itself can go lower: set the reservoir's minimum to 0% to turn this off.
 
 <a id="cs-705"></a>
@@ -932,7 +936,7 @@ setup change (CS-201) and a hardware hold (CS-301, CS-308, CS-309) are still rep
 
 *Information · Notification*
 
-**What it means.** The room's reservoir has read at or under its reminder level (Remind me at, on the Feed → Reservoir page) for 3 minutes, and nothing refills it by itself: automatic refills are off, or the room has no fresh-water or recirculation solenoid, pump or doser to refill it with. The notification gives the level, and once a refill has shown what 1% holds, the litres left and the rounds of shots before its minimum.
+**What it means.** The room's reservoir has read at or under its reminder level (Remind me at, on the Feed → Reservoir page) for 3 minutes, and nothing refills it by itself: automatic refills are off, or the room has no fresh-water or recirculation solenoid, pump or doser to refill it with. The notification gives the level, the litres left once a refill has shown what 1% holds, and the rounds of shots before its minimum once the room's shots or a refill have shown how far they take it.
 
 **Watering meanwhile.** Carries on as normal until the reservoir reaches its minimum. There it waits for a refill (CS-704).
 

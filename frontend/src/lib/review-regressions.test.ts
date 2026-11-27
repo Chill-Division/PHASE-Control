@@ -116,7 +116,9 @@ describe("adapter review regressions", () => {
     expect(ec().value).toBeNull();
   });
 
-  it("keeps a still moisture reading current in a one-valve room while the controller steers by it", () => {
+  it("keeps a still moisture reading current while the controller steers by it, in every room", () => {
+    // GR2, 25 Nov 2026: on its own valve, 69.8% for 36 minutes on a quiet night was taken for a dead
+    // probe. The controller now keeps steering by a still reading for up to two hours in every room.
     const states = createDemo();
     const room = discoverRooms(states)[0];
     const ago = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString();
@@ -127,10 +129,12 @@ describe("adapter review regressions", () => {
     const vwc = () => buildRoom(states, room).zones[0].vwc.value;
     states["sensor.crop_steering_vwc_zone_1"].last_updated = ago(40);
     steered(56);
-    expect(vwc()).toBeNull(); // on its own valve: out after 20 minutes, as before
+    expect(vwc()).toBe(56); // on its own valve
     states["sensor.crop_steering_engine_config"].attributes.plumbing = "pump_one_valve";
-    expect(vwc()).toBe(56);
-    steered(null); // the controller doesn't steer by it (at 100%, or under the rescue level)
+    expect(vwc()).toBe(56); // and in a one-valve room, as before
+    // The controller doesn't steer by it: at 100%, under the rescue level, one a shot didn't move, or a
+    // controller from before this, which dropped it after 20 minutes on a valve of its own.
+    steered(null);
     expect(vwc()).toBeNull();
     steered(56);
     states["sensor.crop_steering_vwc_zone_1"].last_updated = ago(121); // two hours the same

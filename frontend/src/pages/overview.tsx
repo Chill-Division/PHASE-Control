@@ -169,7 +169,12 @@ export function Overview({
                   open={() => navigate("reservoir")}
                   configure={() => navigate("setup")}
                 />
-                <EarlierToday events={lanes?.events ?? []} loading={loading} />
+                <EarlierToday
+                  controller={controller}
+                  data={data}
+                  events={lanes?.events ?? []}
+                  loading={loading}
+                />
               </div>
             </>
           );

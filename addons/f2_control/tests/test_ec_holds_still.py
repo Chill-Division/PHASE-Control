@@ -4,7 +4,7 @@ GT site, 20-22 Nov 2026: the THC-S probes report EC in coarse steps, and Home As
 that repeats the last, so a steady EC looked like a dead probe once it had stayed the same for 20
 minutes, as moisture does. GT3's EC held still for up to 3.9 hours, and was dropped for 40% of its P2
 time: EC shot sizing, dilution, flushes and EC learning paused, and CS-104 was raised over and over and
-never taken down. Moisture keeps its 20 minutes."""
+never taken down. Moisture keeps its own limit, 2 hours (test_moisture_holds_still.py)."""
 from datetime import timedelta, timezone
 
 import controller
@@ -33,9 +33,9 @@ def test_an_ec_that_has_held_still_for_hours_is_still_steered_by(rig):  # noqa: 
     assert not _ec_alerts(fake)
 
 
-def test_moisture_still_counts_as_gone_after_20_minutes(rig):  # noqa: F811
+def test_moisture_still_counts_as_gone_after_2_hours(rig):  # noqa: F811
     c, fake, room, _ = rig
-    probe(fake, VWC, "60", _ago(21))
+    probe(fake, VWC, "60", _ago(121))
     probe(fake, EC, "0.2")
     pub = c._loop_room(room, FixedDateTime.now())
     assert pub[1]["vwc"] is None and pub[1]["blind"]
