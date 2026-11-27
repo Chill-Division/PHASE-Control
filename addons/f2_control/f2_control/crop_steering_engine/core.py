@@ -127,6 +127,12 @@ class ZoneSnapshot:
     steering_held: bool = False   # the caller holds routine steering (a grow-strategy plan that is held,
     #                               stale or missing): only the water-safety rules fire, the P3 emergency
     #                               and the watchdog. Phases still move.
+    dryback_vwc: float | None = None  # zones one valve waters together each dry back from their own peak
+    #                                   (owner, 27 Nov 2026): the reading of the zone furthest into its own
+    #                                   dryback, whose own peak and dryback are then peak_vwc and
+    #                                   dryback_pct. P0's and P3's relative rules go by it, the absolute
+    #                                   ones by `vwc`, the room's reading. None: the zone's own, `vwc`.
+    dryback_zone: int | None = None   # that zone's number, for the reasons; None on a zone's own valve
 
 
 def p0_dryback(p: ZoneParams) -> float:
@@ -140,6 +146,17 @@ def p3_gaps(p: ZoneParams) -> tuple[float, float]:
     if p.p3_time_between_min is None:
         return p.p2_time_between_min, 0.0
     return p.p3_time_between_min, p.p3_time_between_min
+
+
+def dryback_reading(s: ZoneSnapshot) -> float:
+    """The reading P0's and P3's relative rules compare with the peak they dry back from: in a room
+    whose zones share one valve, the zone furthest into its own dryback (`dryback_vwc`), else `vwc`."""
+    return s.vwc if s.dryback_vwc is None else s.dryback_vwc
+
+
+def _zone_tag(s: ZoneSnapshot) -> str:
+    """ " Z2" after a reason that went by one zone of several on one valve (dryback_zone), else ""."""
+    return "" if s.dryback_zone is None else f" Z{s.dryback_zone}"
 
 
 def p3_hold_level(s: ZoneSnapshot, p: ZoneParams) -> float | None:
@@ -251,7 +268,7 @@ def decide(s: ZoneSnapshot, p: ZoneParams):
         if s.vwc <= p.p2_threshold:
             phase, treason = "P1", f"P0 bypass VWC {s.vwc:.0f}<=rewater {p.p2_threshold:.0f}"
         elif s.dryback_pct >= p0_dryback(p):
-            phase, treason = "P1", f"P0 dryback done {s.dryback_pct:.1f}%"
+            phase, treason = "P1", f"P0 dryback done {s.dryback_pct:.1f}%{_zone_tag(s)}"
         elif s.phase_minutes >= p.p0_max_wait_min:
             phase, treason = "P1", f"P0 timeout {s.phase_minutes:.0f}min"
     elif phase == "P1":
@@ -280,7 +297,7 @@ def decide(s: ZoneSnapshot, p: ZoneParams):
             # Target is relative % of detected peak; measured rate is VWC
             # percentage points/hour. Predict only the still-needed point drop.
             target_vwc = s.peak_vwc * (1.0 - p.dryback_target / 100.0)
-            remaining_points = max(0.0, s.vwc - target_vwc)
+            remaining_points = max(0.0, dryback_reading(s) - target_vwc)
             hours_needed = remaining_points / rate if s.peak_vwc > 0 else float("inf")
             if hours_needed <= 12 and s.hours_to_lights_on <= hours_needed:
                 phase, treason = "P3", f"predictive P3 (need {hours_needed:.1f}h, {s.hours_to_lights_on:.1f}h to on)"
@@ -367,10 +384,11 @@ def decide(s: ZoneSnapshot, p: ZoneParams):
     # apart. The P2 early move to P3 only ever starts the dryback sooner; this is what stops it. It
     # steers, so a held plan stops it and the daily budget holds it (CAP_EXEMPT); the rescue stays the
     # floor beneath it.
-    hold = p3_hold_level(s, p)
-    if (not fire and phase == "P3" and not s.steering_held and hold is not None and s.vwc < hold
+    hold, dried = p3_hold_level(s, p), dryback_reading(s)
+    if (not fire and phase == "P3" and not s.steering_held and hold is not None and dried < hold
             and s.minutes_since_shot >= hold_gap):
-        why = f"P3 hold dryback VWC {s.vwc:.1f}<{hold:.1f} ({p.dryback_target:g}% of peak {s.peak_vwc:.1f})"
+        why = (f"P3 hold dryback VWC {dried:.1f}<{hold:.1f} ({p.dryback_target:g}% of peak {s.peak_vwc:.1f})"
+               f"{_zone_tag(s)}")
         fire, size, ir, kind = True, p.p3_emergency_shot, why, "p3_hold"
 
     # PRIORITY 3 — LIGHTS-ON WATERING WATCHDOG: backstop so no enabled zone ever starves. Never in P0: at
@@ -448,7 +466,8 @@ def waiting_for(s: ZoneSnapshot, p: ZoneParams) -> list:
         add("p0_bypass", to="P1", metric="vwc", op="<=", value=p.p2_threshold, now=s.vwc)
         if s.peak_vwc > 0:
             add("p0_dryback", to="P1", metric="vwc", op="<=",
-                value=s.peak_vwc * (1.0 - p0_dryback(p) / 100.0), now=s.vwc)
+                value=s.peak_vwc * (1.0 - p0_dryback(p) / 100.0), now=dryback_reading(s),
+                **({} if s.dryback_zone is None else {"zone": s.dryback_zone}))
     elif s.phase == "P1":
         ceiling = min(p.p1_target, p.field_capacity)
         if s.shot_count < p.p1_max_shots and not s.steering_held:
@@ -475,9 +494,10 @@ def waiting_for(s: ZoneSnapshot, p: ZoneParams) -> list:
             in_min=rescue_gap - s.minutes_since_shot if rescue_gap > 0 else None)
         hold = p3_hold_level(s, p)
         if hold is not None and not s.steering_held:
-            add("p3_hold", shot=True, metric="vwc", op="<", value=hold, now=s.vwc,
+            add("p3_hold", shot=True, metric="vwc", op="<", value=hold, now=dryback_reading(s),
                 in_min=hold_gap - s.minutes_since_shot if hold_gap > 0 else None,
-                dryback=round(p.dryback_target, 2), peak=round(s.peak_vwc, 1))
+                dryback=round(p.dryback_target, 2), peak=round(s.peak_vwc, 1),
+                **({} if s.dryback_zone is None else {"zone": s.dryback_zone}))
         add("lights_on", to="P0", in_min=s.hours_to_lights_on * 60.0)
     return items
 
