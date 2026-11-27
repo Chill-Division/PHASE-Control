@@ -136,13 +136,26 @@ _TRANSITIONS = [
 ]
 
 
-def transition(text):
-    """Why a zone changed phase, from decide()'s reason (its transition comes first)."""
+# A reason that went by one zone of several on one valve ends its rule's text with that zone: " Z2"
+# (crop_steering_engine's dryback_zone).
+_ZONE_TAG = re.compile(r" Z(\d+)$")
+
+
+def _zone_name(names, zone):
+    return (names or {}).get(int(zone)) or f"zone {zone}"
+
+
+def transition(text, names=None):
+    """Why a zone changed phase, from decide()'s reason (its transition comes first). `names`: the
+    room's zone names by number, for a transition one zone of several on one valve made."""
     first = str(text or "").split(" | ")[0]
+    tag = _ZONE_TAG.search(first)
+    if tag:
+        first = first[: tag.start()]
     for pattern, words in _TRANSITIONS:
         found = re.fullmatch(pattern, first)
         if found:
-            return words(found)
+            return words(found) + (f", first in {_zone_name(names, tag[1])}" if tag else "")
     return first
 
 
@@ -235,12 +248,19 @@ _EC_WHERE = {
 }
 
 
-def shot(reason):
-    """A shot in words: (what it is, why), as "ramp shot", "VWC 61% under the 88% peak target"."""
+def shot(reason, names=None):
+    """A shot in words: (what it is, why), as "ramp shot", "VWC 61% under the 88% peak target".
+    `names`: the room's zone names by number, for a dryback hold one zone of several on one valve
+    called for, which is said by that zone's own reading and peak."""
     text = str(reason or "")
-    what, pattern, why = _SHOTS.get(getattr(reason, "kind", None), ("shot", None, None))
+    kind = getattr(reason, "kind", None)
+    what, pattern, why = _SHOTS.get(kind, ("shot", None, None))
     found = re.search(pattern, text) if pattern else None
     said = why(found) if found else "; ".join(_rule(part) for part in _segments(text)) or text
+    zone = re.match(r" Z(\d+)", text[found.end():]) if found and kind == "p3_hold" else None
+    if zone:
+        said = (f"{_zone_name(names, zone[1])} at {found[1]}%, under {found[2]}%, the {found[3]}% P3 "
+                f"dryback from its own {found[4]}% peak")
     sized = _EC_SIZED.search(text)
     if sized:
         ec, where, target, size, done, _now = sized.groups()
@@ -308,4 +328,5 @@ def _rule(text):
 
 
 def _is_transition(text):
+    text = _ZONE_TAG.sub("", text)
     return any(re.fullmatch(pattern, text) for pattern, _ in _TRANSITIONS)
