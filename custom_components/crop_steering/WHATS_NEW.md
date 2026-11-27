@@ -21,7 +21,7 @@ people who build the system:
 `tests/test_whats_new.py` checks the shape and the plain words, and that the newest section is the
 version being released.
 
-## Unreleased
+## 1.10.0 - 2026-11-28
 
 - Each zone in a room on one valve now dries back from its own peak, and the Overnight dryback card shows tonight's line from the day's real peak.
 - Earlier today, on the Overview, has a Yesterday button, so the night's events can still be seen after lights-on.

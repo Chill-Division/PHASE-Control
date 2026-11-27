@@ -10,7 +10,9 @@ and code-level detail for developers and AI agents working on the repo.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.10.0] - 2026-11-28
+
+Integration and controller **1.10.0**.
 
 - **In a room on one valve, each zone dries back from its own peak.** One shot waters every zone
   there, and the overnight line came from one peak for the whole room. Now each zone holds its own

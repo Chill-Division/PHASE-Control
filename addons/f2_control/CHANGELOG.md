@@ -1,4 +1,6 @@
-# Unreleased
+# 1.10.0
+
+Pair with integration 1.10.0.
 
 - In a room on one valve, each zone dries back from its own peak, overnight and in the morning, and the first zone to reach its own line waters them all.
 - A reservoir too full to refill and too low for the next shot no longer stops watering. That shot gives what the reservoir has above its minimum, then the refill runs, and shots and refills are planned with what the room's shots really take.
