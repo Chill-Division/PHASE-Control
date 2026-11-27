@@ -29,7 +29,7 @@ import {
   ZoneActions,
   type Page,
 } from "@/components/dashboard";
-import { nextText, type Lane } from "@/components/day-timeline";
+import { nextText, useYesterday, type DayData, type Lane } from "@/components/day-timeline";
 import { ageText, holdNeedsSomeone } from "@/lib/controller-health";
 import type { DrybackTrend } from "@/lib/dryback";
 import { dayDryback, type GrowDay } from "@/lib/day-timeline";
@@ -1274,30 +1274,65 @@ export function ZoneMiniChart({
 }
 
 // ------------------------------------------------------------------ earlier today
+const weekday = (at: number) => new Date(at).toLocaleDateString([], { weekday: "short" });
 /** The day so far, newest first: phase changes, shots, holds and setting changes, each with its
- * zone or room first. */
+ * zone or room first. Yesterday lists the grow-day before in the same way, from its lights-on to
+ * today's, the night included, read from Home Assistant's history the first time it is asked for. */
 export function EarlierToday({
+  controller,
+  data,
   events,
   loading,
 }: {
+  controller: Controller;
+  data: DayData;
   events: { time: number; text: string }[];
   loading: boolean;
 }) {
+  const [past, setPast] = useState(false);
   const [all, setAll] = useState(false);
-  const newest = [...events].reverse();
+  const yesterday = useYesterday(controller, data, past);
+  const listed = past ? (yesterday.events ?? []) : events;
+  const newest = [...listed].reverse();
   const shown = all ? newest : newest.slice(0, 3);
+  const span = past ? yesterday.day : null;
+  const show = (value: boolean) => {
+    setPast(value);
+    setAll(false);
+  };
   return (
     <section className="card earlier-today" aria-labelledby="earlier-title" data-earlier-today>
       <div className="card-head">
-        <h2 id="earlier-title">Earlier today</h2>
-        {events.length > 3 && (
+        <h2 id="earlier-title">{past ? "Yesterday" : "Earlier today"}</h2>
+        <div className="earlier-days" role="group" aria-label="Which grow-day">
+          <button type="button" aria-pressed={!past} onClick={() => show(false)}>
+            Today
+          </button>
+          <button type="button" aria-pressed={past} onClick={() => show(true)}>
+            Yesterday
+          </button>
+        </div>
+        {listed.length > 3 && (
           <button type="button" className="link-button" onClick={() => setAll(!all)}>
-            {all ? "Fewer" : `All ${events.length}`}
+            {all ? "Fewer" : `All ${listed.length}`}
           </button>
         )}
       </div>
-      {loading ? (
-        <p className="muted">Loading today’s recorded history…</p>
+      {span && (
+        <p className="earlier-span">
+          Lights-on {weekday(span.start)} {clock(span.start)} to lights-on {weekday(span.end)}{" "}
+          {clock(span.end)}
+        </p>
+      )}
+      {past && yesterday.error ? (
+        <p className="muted">
+          Yesterday’s history could not be loaded. {yesterday.error}{" "}
+          <button type="button" className="link-button" onClick={yesterday.retry}>
+            Try again
+          </button>
+        </p>
+      ) : (past ? !yesterday.events && !!yesterday.day : loading) ? (
+        <p className="muted">Loading {past ? "yesterday’s" : "today’s"} recorded history…</p>
       ) : shown.length ? (
         <ol className="earlier-list">
           {shown.map((event, index) => {
@@ -1320,7 +1355,9 @@ export function EarlierToday({
           })}
         </ol>
       ) : (
-        <p className="muted">Nothing recorded yet today.</p>
+        <p className="muted">
+          {past ? "Nothing recorded yesterday." : "Nothing recorded yet today."}
+        </p>
       )}
     </section>
   );

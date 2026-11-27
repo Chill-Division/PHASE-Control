@@ -24,6 +24,7 @@ version being released.
 ## Unreleased
 
 - A moisture probe that sits on one number on a quiet night is no longer taken for a dead one, so its zone isn't watered before lights-on.
+- Earlier today, on the Overview, now has a Yesterday button that lists the day before, from lights-on to lights-on, the night included.
 
 ## 1.9.2 - 2026-11-23
 

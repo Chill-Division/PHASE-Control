@@ -1,6 +1,7 @@
 # Unreleased
 
 - A zone's moisture that holds still is steered by for up to 2 hours in every room, as in a one-valve room, so a quiet night no longer gets a zone watered on its dead-probe timer. A still reading at 100% or under the rescue level, or one a shot hasn't moved, still counts as gone after 20 minutes.
+- Earlier today, on the Overview, has Today and Yesterday buttons. Yesterday lists the grow-day before, from its lights-on to today's, so what happened in the night can still be seen once the lights are on.
 
 # 1.9.2
 

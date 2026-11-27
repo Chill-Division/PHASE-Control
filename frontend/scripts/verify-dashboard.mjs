@@ -1535,6 +1535,85 @@ try {
     }
     await pinned.close();
   });
+  await check("overview: Yesterday lists the grow-day before, lights-on to lights-on", async () => {
+    // Owner, 2026-11-25: a shot before lights-on had left Earlier today by the time they looked.
+    // The demo room's lights come on at 10:00: at 10:40 its day so far is that morning's phase
+    // changes, and the day before ran from its 10:00 to today's. In a context of its own, since a
+    // page's clock is its context's.
+    const own = await browser.newContext({
+      viewport: { width: 1440, height: 1000 },
+      reducedMotion: "reduce",
+    });
+    await own.route("**/*", guard);
+    await own.clock.setFixedTime(new Date(2026, 8, 20, 10, 40, 0));
+    const room = await own.newPage();
+    room.on("pageerror", (error) => pageErrors.push(error.message));
+    await room.goto(`${base}/dashboard.html?demo&room=room:#/overview`, {
+      waitUntil: "networkidle",
+    });
+    const earlier = room.locator("[data-earlier-today]");
+    const pressed = (name) =>
+      earlier.getByRole("button", { name, exact: true }).getAttribute("aria-pressed");
+    // All of the day shown, once its setting changes say who made them (the logbook comes after
+    // the history): each line its time, then its zone's.
+    const listed = async () => {
+      await earlier.locator("li").first().waitFor();
+      const more = earlier.getByRole("button", { name: /^All \d+$/ });
+      if (await more.count()) await more.click();
+      await room.waitForFunction(() =>
+        [...document.querySelectorAll("[data-earlier-today] li")].some((item) =>
+          item.textContent.includes(" Auto setpoints "),
+        ),
+      );
+      return earlier.locator("li").evaluateAll((items) =>
+        items.map(
+          (item) =>
+            `${item.querySelector("time").textContent} · ${item.querySelector("span").textContent}`,
+        ),
+      );
+    };
+    await earlier.getByRole("heading", { name: "Earlier today" }).waitFor();
+    assert.equal(await pressed("Today"), "true");
+    const today = await listed();
+    assert.ok(
+      today.every((line) => / · P3 → P0$| · Auto setpoints /.test(line)),
+      today.join("\n"),
+    );
+    await earlier.getByRole("button", { name: "Yesterday", exact: true }).click();
+    await earlier.getByRole("heading", { name: "Yesterday" }).waitFor();
+    assert.equal(await pressed("Yesterday"), "true");
+    assert.equal(await pressed("Today"), "false");
+    const [saturday, sunday] = await room.evaluate(() =>
+      [19, 20].map((date) =>
+        new Date(2026, 8, date).toLocaleDateString([], { weekday: "short" }),
+      ),
+    );
+    const span = await earlier.locator(".earlier-span").textContent();
+    assert.ok(span.startsWith(`Lights-on ${saturday} `), span);
+    assert.ok(span.includes(` to lights-on ${sunday} `), span);
+    const day = await listed();
+    // Newest first: the evening's P2 → P3 at the top, the first change after lights-on at the
+    // bottom, the ramp and the top-ups between, and nothing left going.
+    assert.match(day[0], / · P2 → P3$/);
+    assert.match(day.at(-1), / · Zone 1 · Auto setpoints lowered Peak target to 64% \(was 66%\)$/);
+    for (const pattern of [
+      / · Zone 2 · Alex raised Maximum EC to 9 mS\/cm \(was 8\.5 mS\/cm\)$/,
+      / · P1 shot .+ · P1 ramp shot 1\/6 \(demo\)$/,
+      / · P2 shot .+ · P2 top-up \(demo\)$/,
+    ])
+      assert.ok(
+        day.some((line) => pattern.test(line)),
+        `${pattern} in:\n${day.join("\n")}`,
+      );
+    assert.ok(day.every((line) => !/ so far\b/.test(line)), day.join("\n"));
+    assert.ok(day.length > today.length);
+    // And back to today, as it was.
+    await earlier.getByRole("button", { name: "Today", exact: true }).click();
+    await earlier.getByRole("heading", { name: "Earlier today" }).waitFor();
+    assert.equal(await earlier.locator(".earlier-span").count(), 0);
+    assert.deepEqual(await listed(), today);
+    await own.close();
+  });
   await check("overview: the clock draws in red where a shot was held for something that needs someone", async () => {
     // Owner, 2026-11-18: the clock should tell a held shot from one given. The demo's day at 4 PM, in
     // a context of its own, since a page's clock is its context's: Flower 1's zone 3 has been paused
