@@ -12,52 +12,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- **A probe that holds still on a quiet night no longer gets its zone watered on a timer.** A zone's
-  moisture that hadn't changed for 20 minutes counted as a dead probe, and 15 minutes later the zone
-  was watered on a timer. One-valve rooms already kept a still reading for up to 2 hours. But on a
-  quiet night, and with plants too small to drink much, a probe can sit on one number for longer
-  than 20 minutes. In one room in early veg, a probe that held at 69.8% for 36 minutes, its EC still
-  moving, got its zone a 3.8 L shot at 04:29 that wet it back up to its peak before lights-on. Now
-  every room keeps steering by a still reading for up to 2 hours. A reading of 100% or one under the
-  rescue level still counts as gone after 20 minutes. So, on a zone's own valve, does one that hasn't
-  moved in the 20 minutes after a shot, so a probe stuck low can't keep asking for water. The
-  dashboard shows a still reading as current for as long as the controller steers by it.
-- **Earlier today has a Yesterday button.** Earlier today, on the Overview, lists the grow-day from
-  lights-on, so by the time the lights come on, the night's events have gone from it. A shot at
-  04:29 was out of sight by 07:00. Its new Today and Yesterday buttons switch it to the grow-day
-  before, from its lights-on to today's, the night included, newest first and in the same words:
-  phase changes, shots, holds, and setting changes with who made them. Yesterday is read from Home
-  Assistant's history the first time it's opened.
-- **A reservoir too low for the next shot and too full for its refill no longer stops watering.** In
-  one room a 145 L fill adds about 88% to the reservoir, so a refill fits only from about 12%, and
-  shots stop at its 5% minimum. A ramp shot left it at 13%. The next one, about 17 L, would have taken
-  it under the minimum, so it waited for a refill, and the refill was refused because it could
-  overflow. Only a shot lowers the level, so nothing was watered from then on, and every half hour a
-  notification said the refill could not start. Now that shot gives what the reservoir has above its
-  minimum, about 10 L there, and the refill starts once it reads that low, with nothing to raise. A
-  fill that adds more than the reservoir holds above its minimum can't go in even there, so watering
-  is held and the Overview says why, as for any refill that can't start.
-- **Shots are planned with what they really take from the reservoir.** Shots and refills were
-  planned with what a refill showed 1% of the reservoir holds. Now they use what the room's shots
-  really take, as the leak check learns it, whenever that is more. In that room the shots took about
-  1.3 times their litres, and four of its eight refills in four days started under its 5% minimum, at
-  0% to 4%.
-- **Auto setpoints says when each zone's peak was last relearned.** Beside each zone's Relearn peak
-  button on Irrigation strategy, **Last reset** gives when it was last pressed and how long ago, or
-  never. It is the press, from the dashboard or from Home Assistant, not the last time Auto setpoints
-  changed a target, which Last change still shows.
-- **In a room on one valve, each zone dries back from its own peak.** One shot waters every zone in
-  such a room, and its overnight dryback was worked out from one peak for the room, made from its
-  zones' peaks the way its readings are made one. In one room the zones peaked at 99.4% and 86.4% on
-  27 Nov, and a 30% dryback held both to one 60.5% line. Now each zone holds its own line, 30% below
-  its own peak, and the room is watered as soon as the first zone reaches its own, so no zone dries
-  back further than asked. The morning dryback works the same way: the ramp starts as soon as the
-  first zone has dried its amount from its own lights-on reading. The zone cards say which zone is
-  closest to its line.
-- **The Overnight dryback card says tonight's line.** It worked the line out from the Peak target, so
-  on a day that peaked higher it showed a lower line than the controller held. Once a zone has had its
-  peak for the day, the card gives the line from that peak, and in a room on one valve every zone's
-  line. Before then it still works the line out from the Peak target, as a plan.
+- **In a room on one valve, each zone dries back from its own peak.** One shot waters every zone
+  there, and the overnight line came from one peak for the whole room. Now each zone holds its own
+  line below its own peak, and the room is watered as soon as the first zone reaches its own, so no
+  zone dries back further than asked. The morning dryback works the same way. The Overnight dryback
+  card says tonight's line from the day's real peak, every zone's in a room on one valve.
+- **A reservoir too full to refill no longer stops watering.** When the next shot would take the
+  reservoir under its minimum and a refill wouldn't fit yet, the shot now gives what the reservoir
+  has above its minimum, and the refill follows. Shots and refills are also planned with what the
+  room's shots really take from it, so refills no longer start under the minimum.
+- **A probe that holds still on a quiet night is no longer taken for a dead one.** Every room now
+  steers by a still moisture reading for up to 2 hours, as one-valve rooms did, so a zone isn't
+  watered on its timer before lights-on.
+- **Earlier today has a Yesterday button**, for what happened in the night once the lights are on,
+  and **Auto setpoints says when each zone's peak was last relearned**.
 
 ### 🔧 Technical notes
 
