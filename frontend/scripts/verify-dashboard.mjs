@@ -367,6 +367,22 @@ try {
     assert.equal(await target.locator("[data-auto-dryback]").innerText(), `Auto setpoints: ${note}.`);
     assert.match(await page.locator(".auto-chip").first().innerText(), /Tonight/);
   });
+  await check("irrigation plan: auto setpoints says when each zone's peak was last relearned", async () => {
+    // Owner, 26 Nov 2026: "So I know when I last booped the button per-zone". The zone's Relearn Peak
+    // press, as its button keeps it, not when Auto setpoints last changed a target.
+    await go("strategy");
+    await page.getByRole("group", { name: "Targets of" }).getByRole("button", { name: "Whole room" }).click();
+    const chip = (zone) => page.locator(".auto-chip", { hasText: `${zone} · Auto` });
+    const last = async (zone) => (await chip(zone).locator("[data-relearn-last]").innerText()).replace(/\s+/g, " ");
+    assert.match(await last("Zone 1"), /^Last reset \S.* \(4 d ago\)$/);
+    assert.equal(await last("Zone 2"), "Last reset never");
+    await chip("Zone 2").getByRole("button", { name: "Relearn peak…" }).click();
+    const dialog = page.getByRole("dialog");
+    await dialog.getByRole("button", { name: "Relearn the peak" }).click();
+    await dialog.waitFor({ state: "detached" });
+    assert.match(await last("Zone 2"), /^Last reset \S.* \(<1 min ago\)$/);
+    assert.equal(await last("Zone 3"), "Last reset never");
+  });
   await check("Watching only says so, and starts steering where it says it", async () => {
     // Watching only: the room on, its watering (engine) switch off. GT1, 2026-10-17: the Overview
     // said Not watering with no way back but the mode pill, beside a Critical "needs attention"

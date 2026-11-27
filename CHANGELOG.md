@@ -42,6 +42,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   really take, as the leak check learns it, whenever that is more. In that room the shots took about
   1.3 times their litres, and four of its eight refills in four days started under its 5% minimum, at
   0% to 4%.
+- **Auto setpoints says when each zone's peak was last relearned.** Beside each zone's Relearn peak
+  button on Irrigation strategy, **Last reset** gives when it was last pressed and how long ago, or
+  never. It is the press, from the dashboard or from Home Assistant, not the last time Auto setpoints
+  changed a target, which Last change still shows.
 
 ### 🔧 Technical notes
 
@@ -84,6 +88,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   ramp shot, then CS-703 at 08:24, 08:55 and 09:25 with nothing watered. `test_reservoir_gap.py`.
 - Docs: CS-703, CS-704 and CS-706 in `docs/error-codes.json` and `ERROR_CODES.md` (the dashboard's
   Help, rebuilt), `USER_GUIDE.md`.
+- Dashboard: `relearnedAt` and `lastResetText` (`auto-setpoints.ts`) read the zone's
+  `button.crop_steering_<prefix>zone_<N>_relearn_peak` state, the press time Home Assistant keeps
+  across restarts, so it needs nothing from the controller and shows on any install with the button
+  (1.8.0 and later). `RelearnPeak` shows it after the button (`data-relearn-last`). The demo's Flower 2
+  zone 1 was relearned four days ago. Tests in `auto-setpoints.test.ts`, and a `verify-dashboard.mjs`
+  check that presses it on zone 2.
+- `USER_GUIDE.md`.
 
 ## [1.9.2] - 2026-11-23
 

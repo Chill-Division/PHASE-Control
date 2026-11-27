@@ -10,7 +10,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { SettingHelp } from "@/components/setting-help";
-import type { AutoSetpointStatus } from "@/lib/auto-setpoints";
+import { lastResetText, relearnedAt, type AutoSetpointStatus } from "@/lib/auto-setpoints";
 import type { SettingDetail } from "@/lib/setting-words";
 import type { Controller } from "@/lib/types";
 import { errorText } from "@/lib/utils";
@@ -75,8 +75,8 @@ export function RelearnPeak({
     }
   }
 
-  // A fragment: in the zone's Auto setpoints line the button sits beside the learned peak, and the
-  // answer takes a line of its own under it.
+  // A fragment: in the zone's Auto setpoints line the button sits beside the learned peak, with
+  // when it was last pressed after it, and the answer takes a line of its own under it.
   return (
     <>
       <span className="relearn-peak">
@@ -93,6 +93,15 @@ export function RelearnPeak({
           Relearn peak…
         </Button>
         <SettingHelp label="Relearn peak" param="relearn_peak" detail={RELEARN_HELP} />
+      </span>
+      <span data-relearn-last>
+        Last reset{" "}
+        <b>
+          {lastResetText(
+            relearnedAt(controller.states, controller.room.room.prefix, zoneId),
+            Date.now(),
+          )}
+        </b>
       </span>
       {notice && (
         <span className="relearn-peak-notice" role="status">
